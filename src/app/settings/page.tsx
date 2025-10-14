@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { UserSettings } from '@/components/UserSettings'
 import { Navbar } from '@/components/Navbar'
 
