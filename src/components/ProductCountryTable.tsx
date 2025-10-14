@@ -83,33 +83,19 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
       console.log('🆔 Product ID:', product.id)
       console.log('🌍 Country Code:', countryCode)
 
-      // Primero intentar actualizar
-      const { data: updateData, error: updateError } = await supabase
+      // Usar UPSERT para insertar o actualizar automáticamente
+      const { data, error } = await supabase
         .from('product_country_overrides')
-        .update({ overrides: newOverrides })
-        .eq('product_id', product.id)
-        .eq('country_code', countryCode)
+        .upsert({
+          product_id: product.id,
+          country_code: countryCode,
+          overrides: newOverrides
+        }, {
+          onConflict: 'product_id,country_code'
+        })
         .select()
 
-      console.log('🔄 Resultado del update:', { updateData, updateError })
-
-      let error = updateError
-
-      // Si no existe el registro, insertarlo
-      if (updateError && updateError.code === 'PGRST116') {
-        console.log('📝 No existe el registro, creando uno nuevo...')
-        const { data: insertData, error: insertError } = await supabase
-          .from('product_country_overrides')
-          .insert({
-            product_id: product.id,
-            country_code: countryCode,
-            overrides: newOverrides
-          })
-          .select()
-        
-        console.log('➕ Resultado del insert:', { insertData, insertError })
-        error = insertError
-      }
+      console.log('✅ Resultado del upsert:', { data, error })
 
       if (error) {
         console.error('❌ Error en base de datos:', error)
@@ -167,28 +153,22 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
         salesCommissionUSD: 0
       }
 
-      // Primero intentar actualizar
-      const { error: updateError } = await supabase
+      // Usar UPSERT para insertar o actualizar automáticamente
+      const { error } = await supabase
         .from('product_country_overrides')
-        .update({ overrides: resetOverrides })
-        .eq('product_id', product.id)
-        .eq('country_code', countryCode)
+        .upsert({
+          product_id: product.id,
+          country_code: countryCode,
+          overrides: resetOverrides
+        }, {
+          onConflict: 'product_id,country_code'
+        })
+        .select()
 
-      let error = updateError
-
-      // Si no existe el registro, insertarlo
-      if (updateError && updateError.code === 'PGRST116') {
-        const { error: insertError } = await supabase
-          .from('product_country_overrides')
-          .insert({
-            product_id: product.id,
-            country_code: countryCode,
-            overrides: resetOverrides
-          })
-        error = insertError
+      if (error) {
+        console.error('Error en upsert:', error)
+        throw error
       }
-
-      if (error) throw error
 
       setOverrides(resetOverrides)
       onOverridesChange?.(resetOverrides)
@@ -283,31 +263,24 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
 
       console.log('💾 Guardando múltiples overrides:', newOverrides)
 
-      // Intentar actualizar
-      const { data: updateData, error: updateError } = await supabase
+      // Usar UPSERT para insertar o actualizar automáticamente
+      const { data, error } = await supabase
         .from('product_country_overrides')
-        .update({ overrides: newOverrides })
-        .eq('product_id', product.id)
-        .eq('country_code', countryCode)
+        .upsert({
+          product_id: product.id,
+          country_code: countryCode,
+          overrides: newOverrides
+        }, {
+          onConflict: 'product_id,country_code'
+        })
         .select()
 
-      let error = updateError
-
-      // Si no existe el registro, insertarlo
-      if (updateError && updateError.code === 'PGRST116') {
-        const { data: insertData, error: insertError } = await supabase
-          .from('product_country_overrides')
-          .insert({
-            product_id: product.id,
-            country_code: countryCode,
-            overrides: newOverrides
-          })
-          .select()
-        
-        error = insertError
+      if (error) {
+        console.error('❌ Error en upsert:', error)
+        throw error
       }
-
-      if (error) throw error
+      
+      console.log('✅ Data guardada:', data)
 
       console.log('✅ Overrides guardados exitosamente')
       setOverrides(newOverrides)
