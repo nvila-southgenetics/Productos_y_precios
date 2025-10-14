@@ -49,7 +49,7 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
         throw error
       }
 
-      const newOverrides = data?.overrides || {}
+      const newOverrides = (data?.overrides as OverrideFields) || {}
       console.log('Loading overrides for', countryCode, ':', newOverrides)
       setOverrides(newOverrides)
     } catch (error) {
