@@ -21,6 +21,24 @@ async function seedDatabase() {
   console.log('🌱 Iniciando seed de la base de datos...')
 
   try {
+    // Obtener el primer usuario de la base de datos
+    console.log('👤 Obteniendo usuario...')
+    const { data: users, error: usersError } = await supabase.auth.admin.listUsers()
+
+    if (usersError) {
+      throw usersError
+    }
+
+    if (!users || users.users.length === 0) {
+      console.error('❌ No hay usuarios en la base de datos.')
+      console.error('Por favor, crea un usuario primero registrándote en la aplicación.')
+      console.error('Luego ejecuta el seed nuevamente.')
+      process.exit(1)
+    }
+
+    const userId = users.users[0].id
+    console.log(`✅ Usuario encontrado: ${users.users[0].email}`)
+
     // Crear productos de ejemplo
     console.log('📦 Creando productos de ejemplo...')
     
@@ -30,21 +48,24 @@ async function seedDatabase() {
         sku: 'ONCO-001',
         description: 'Panel básico de oncología con análisis genético fundamental',
         base_price: 4000,
-        currency: 'USD'
+        currency: 'USD',
+        user_id: userId
       },
       {
         name: 'Onco Plus',
         sku: 'ONCO-002',
         description: 'Panel avanzado de oncología con análisis completo y seguimiento',
         base_price: 6000,
-        currency: 'USD'
+        currency: 'USD',
+        user_id: userId
       },
       {
         name: 'NIPT',
         sku: 'NIPT-001',
         description: 'Prueba prenatal no invasiva para detección de anomalías cromosómicas',
         base_price: 300,
-        currency: 'USD'
+        currency: 'USD',
+        user_id: userId
       }
     ]
 
