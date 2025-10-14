@@ -71,7 +71,7 @@ export default function ProductDetailPage() {
         throw error
       }
 
-      setOverrides(data?.overrides || {})
+      setOverrides((data?.overrides as OverrideFields) || {})
     } catch (error) {
       console.error('Error fetching overrides:', error)
       setOverrides({})
@@ -132,7 +132,7 @@ export default function ProductDetailPage() {
               <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
                 <span>SKU: {product.sku}</span>
                 <span>•</span>
-                <span>Precio base: {formatCurrency(product.base_price, product.currency)}</span>
+                <span>Precio base: {formatCurrency(product.base_price, product.currency || undefined)}</span>
               </div>
             </div>
             <Button 
@@ -190,7 +190,7 @@ export default function ProductDetailPage() {
                   </div>
                   <div>
                     <span className="text-sm text-muted-foreground">Precio base:</span>
-                    <p className="font-medium">{formatCurrency(product.base_price, product.currency)}</p>
+                    <p className="font-medium">{formatCurrency(product.base_price, product.currency || undefined)}</p>
                   </div>
                   {product.description && (
                     <div>

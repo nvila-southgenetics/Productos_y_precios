@@ -149,7 +149,7 @@ export default function ProductsPage() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-              {Object.keys(COUNTRY_NAMES).map((countryCode) => (
+              {(Object.keys(COUNTRY_NAMES) as Array<keyof typeof COUNTRY_NAMES>).map((countryCode) => (
                 <Button
                   key={countryCode}
                   variant="outline"
@@ -198,7 +198,7 @@ export default function ProductsPage() {
                         <div className="flex justify-between">
                           <span className="text-sm text-muted-foreground">Precio base:</span>
                           <span className="font-semibold">
-                            {formatCurrency(product.base_price, product.currency)}
+                            {formatCurrency(product.base_price, product.currency || undefined)}
                           </span>
                         </div>
                         {product.description && (
@@ -291,7 +291,7 @@ export default function ProductsPage() {
                               </code>
                             </td>
                             <td className="p-4 font-semibold text-gray-900">
-                              {formatCurrency(product.base_price, product.currency)}
+                              {formatCurrency(product.base_price, product.currency || undefined)}
                             </td>
                             <td className="p-4">
                               <div className="max-w-xs truncate text-sm text-gray-600">
@@ -299,7 +299,7 @@ export default function ProductsPage() {
                               </div>
                             </td>
                             <td className="p-4 text-sm text-gray-600">
-                              {new Date(product.created_at).toLocaleDateString('es-ES')}
+                              {product.created_at ? new Date(product.created_at).toLocaleDateString('es-ES') : '-'}
                             </td>
                             <td className="p-4">
                               <div className="flex items-center justify-center gap-2">

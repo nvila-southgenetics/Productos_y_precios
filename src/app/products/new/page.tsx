@@ -28,6 +28,13 @@ export default function NewProductPage() {
     setError('')
 
     try {
+      // Obtener el usuario autenticado
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      
+      if (userError || !user) {
+        throw new Error('No estás autenticado')
+      }
+
       const { error } = await supabase
         .from('products')
         .insert([{
@@ -35,7 +42,8 @@ export default function NewProductPage() {
           sku: formData.sku,
           description: formData.description || null,
           base_price: parseFloat(formData.base_price),
-          currency: formData.currency
+          currency: formData.currency,
+          user_id: user.id
         }])
 
       if (error) {

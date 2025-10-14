@@ -77,7 +77,7 @@ export default function CountryViewPage() {
 
       const overridesMap: Record<string, OverrideFields> = {}
       data?.forEach(override => {
-        overridesMap[override.product_id] = override.overrides || {}
+        overridesMap[override.product_id] = (override.overrides as OverrideFields) || {}
       })
       setOverrides(overridesMap)
     } catch (error) {
@@ -192,7 +192,7 @@ export default function CountryViewPage() {
                         <div>
                           <CardTitle className="text-xl">{product.name}</CardTitle>
                           <CardDescription>
-                            SKU: {product.sku} • Precio base: {formatCurrency(product.base_price, product.currency)}
+                            SKU: {product.sku} • Precio base: {formatCurrency(product.base_price, product.currency || undefined)}
                           </CardDescription>
                         </div>
                         <Button 
