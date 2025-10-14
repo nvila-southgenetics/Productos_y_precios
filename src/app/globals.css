@@ -1,0 +1,330 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Nunito:wght@300;400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 330 100% 97%;
+    --foreground: 330 30% 25%;
+    --card: 330 100% 98%;
+    --card-foreground: 330 30% 25%;
+    --popover: 330 100% 98%;
+    --popover-foreground: 330 30% 25%;
+    --primary: 329 85% 70%;
+    --primary-foreground: 330 100% 99%;
+    --secondary: 330 100% 95%;
+    --secondary-foreground: 330 30% 25%;
+    --muted: 330 80% 94%;
+    --muted-foreground: 330 20% 50%;
+    --accent: 329 95% 88%;
+    --accent-foreground: 330 30% 25%;
+    --destructive: 350 90% 65%;
+    --destructive-foreground: 330 100% 99%;
+    --border: 330 60% 90%;
+    --input: 330 60% 92%;
+    --ring: 329 85% 70%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 330 40% 12%;
+    --foreground: 330 100% 95%;
+    --card: 330 35% 15%;
+    --card-foreground: 330 100% 95%;
+    --popover: 330 35% 15%;
+    --popover-foreground: 330 100% 95%;
+    --primary: 329 85% 70%;
+    --primary-foreground: 330 40% 12%;
+    --secondary: 330 30% 20%;
+    --secondary-foreground: 330 100% 95%;
+    --muted: 330 30% 20%;
+    --muted-foreground: 330 40% 70%;
+    --accent: 329 85% 30%;
+    --accent-foreground: 330 100% 95%;
+    --destructive: 350 80% 50%;
+    --destructive-foreground: 330 100% 95%;
+    --border: 330 30% 25%;
+    --input: 330 30% 25%;
+    --ring: 329 85% 70%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewport='0 0 24 24' style='fill:rgb(236,72,153);'><path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'/></svg>") 12 12, auto;
+  }
+  body {
+    @apply bg-background text-foreground bg-sparkles;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Nunito', system-ui, sans-serif;
+  }
+  
+  /* Cursor de corazón para elementos interactivos */
+  button, a, [role="button"], input[type="button"], input[type="submit"] {
+    cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewport='0 0 24 24' style='fill:rgb(219,39,119);'><path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'/></svg>") 12 12, pointer;
+  }
+  
+  /* Cursor de corazón más oscuro para inputs */
+  input[type="text"], input[type="email"], input[type="password"], input[type="number"], textarea, select {
+    cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewport='0 0 24 24' style='fill:rgb(236,72,153);'><path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'/></svg>") 12 12, text;
+  }
+}
+
+@layer components {
+  .card-gradient {
+    @apply bg-gradient-to-br from-pink-100 to-rose-100 border border-pink-200;
+  }
+  
+  .btn-rose {
+    @apply bg-pink-500 hover:bg-pink-600 text-white shadow-lg hover:shadow-xl transition-all duration-200;
+  }
+  
+  .btn-rose-outline {
+    @apply border border-pink-300 text-pink-600 hover:bg-pink-100 transition-all duration-200;
+  }
+  
+  .country-chip {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-pink-200 text-pink-800 border border-pink-300;
+  }
+  
+  .table-header {
+    @apply bg-gradient-to-r from-pink-100 to-rose-100 border-b border-pink-300;
+  }
+  
+  .table-row {
+    @apply border-b border-pink-100 hover:bg-pink-50 transition-colors duration-150;
+  }
+  
+  .input-rose {
+    @apply border-pink-300 focus:border-pink-500 focus:ring-pink-500/30;
+  }
+  
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  
+  .bg-rose-25 {
+    background-color: rgb(255 244 249);
+  }
+  
+  .hover\:bg-rose-25:hover {
+    background-color: rgb(255 244 249);
+  }
+
+  /* Los inputs ahora son type="text" para permitir escritura libre */
+  
+  /* Temas personalizados */
+  [data-theme="pink"] {
+    --primary: 329 90% 68%;
+    --primary-foreground: 330 100% 99%;
+    --accent: 329 95% 88%;
+    --ring: 329 90% 68%;
+    --background: 330 100% 97%;
+    --card: 330 100% 98%;
+  }
+  
+  [data-theme="blue"] {
+    --primary: 214 95% 60%;
+    --primary-foreground: 210 40% 98%;
+    --accent: 214 95% 90%;
+    --ring: 214 95% 60%;
+  }
+  
+  [data-theme="green"] {
+    --primary: 142 76% 50%;
+    --primary-foreground: 210 40% 98%;
+    --accent: 142 76% 90%;
+    --ring: 142 76% 50%;
+  }
+  
+  [data-theme="purple"] {
+    --primary: 262 83% 60%;
+    --primary-foreground: 210 40% 98%;
+    --accent: 262 83% 90%;
+    --ring: 262 83% 60%;
+  }
+  
+  [data-theme="dark"] {
+    --background: 330 40% 12%;
+    --foreground: 330 100% 95%;
+    --card: 330 35% 15%;
+    --card-foreground: 330 100% 95%;
+    --primary: 329 85% 70%;
+    --primary-foreground: 330 40% 12%;
+    --accent: 329 85% 30%;
+    --accent-foreground: 330 100% 95%;
+    --border: 330 30% 25%;
+    --input: 330 30% 25%;
+  }
+  
+  /* Modo compacto */
+  .compact-mode {
+    --spacing-unit: 0.5rem;
+  }
+  
+  .compact-mode .container {
+    padding: 0.5rem;
+  }
+  
+  .compact-mode .card {
+    padding: 0.75rem;
+  }
+  
+  .compact-mode .text-lg {
+    font-size: 1rem;
+    line-height: 1.5rem;
+  }
+  
+  .compact-mode .text-xl {
+    font-size: 1.125rem;
+    line-height: 1.75rem;
+  }
+  
+  .compact-mode .text-2xl {
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+  }
+  
+  .compact-mode .text-3xl {
+    font-size: 1.5rem;
+    line-height: 2rem;
+  }
+  
+  /* Sidebar colapsado */
+  .sidebar-collapsed .sidebar {
+    width: 4rem;
+  }
+  
+  .sidebar-collapsed .sidebar-content {
+    display: none;
+  }
+  
+  .sidebar-collapsed .main-content {
+    margin-left: 4rem;
+  }
+  
+  /* Brillitos decorativos ✨ */
+  @keyframes sparkle {
+    0%, 100% {
+      opacity: 0;
+      transform: scale(0) rotate(0deg);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1) rotate(180deg);
+    }
+  }
+  
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0px) rotate(0deg);
+    }
+    50% {
+      transform: translateY(-10px) rotate(180deg);
+    }
+  }
+  
+  @keyframes twinkle {
+    0%, 100% {
+      opacity: 0.3;
+      transform: scale(0.8);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.2);
+    }
+  }
+  
+  .sparkle {
+    position: relative;
+  }
+  
+  .sparkle::before,
+  .sparkle::after {
+    content: '✨';
+    position: absolute;
+    font-size: 1rem;
+    pointer-events: none;
+    z-index: 1;
+  }
+  
+  .sparkle::before {
+    top: -8px;
+    right: -8px;
+    animation: sparkle 2s ease-in-out infinite;
+  }
+  
+  .sparkle::after {
+    bottom: -8px;
+    left: -8px;
+    animation: sparkle 2s ease-in-out infinite 1s;
+  }
+  
+  /* Brillito flotante para headers */
+  .sparkle-float::before {
+    content: '✨';
+    position: absolute;
+    top: 50%;
+    right: -30px;
+    font-size: 1.2rem;
+    animation: float 3s ease-in-out infinite;
+    pointer-events: none;
+  }
+  
+  /* Brillitos múltiples para elementos especiales */
+  .sparkles-multiple {
+    position: relative;
+  }
+  
+  .sparkles-multiple::before {
+    content: '✨';
+    position: absolute;
+    top: -12px;
+    right: -12px;
+    font-size: 0.9rem;
+    animation: twinkle 1.5s ease-in-out infinite;
+    pointer-events: none;
+  }
+  
+  .sparkles-multiple::after {
+    content: '💫';
+    position: absolute;
+    bottom: -12px;
+    left: -12px;
+    font-size: 0.9rem;
+    animation: twinkle 1.5s ease-in-out infinite 0.75s;
+    pointer-events: none;
+  }
+  
+  /* Efecto de brillo en hover para botones */
+  .btn-sparkle {
+    position: relative;
+    overflow: visible;
+  }
+  
+  .btn-sparkle:hover::before {
+    content: '✨';
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    font-size: 1rem;
+    animation: sparkle 0.6s ease-out;
+    pointer-events: none;
+  }
+  
+  /* Fondo con brillitos sutiles */
+  .bg-sparkles {
+    background-image: 
+      radial-gradient(circle at 20% 50%, rgba(236, 72, 153, 0.1) 0%, transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(219, 39, 119, 0.1) 0%, transparent 50%),
+      radial-gradient(circle at 40% 20%, rgba(244, 114, 182, 0.1) 0%, transparent 50%);
+    background-size: 100% 100%;
+  }
+}

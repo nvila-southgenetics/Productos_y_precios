@@ -1,0 +1,523 @@
+'use client'
+
+import React, { useState, useEffect } from 'react'
+import { Product, CountryCode, ComputedResult, OverrideFields } from '@/types'
+import { formatCurrency, formatPercentage, computePricing } from '@/lib/compute'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { supabase } from '@/lib/supabase'
+import { useNumericInput } from '@/hooks/useNumericInput'
+
+interface ProductCountryTableProps {
+  product: Product
+  countryCode: CountryCode
+  onOverridesChange?: (overrides: OverrideFields) => void
+}
+
+export function ProductCountryTable({ product, countryCode, onOverridesChange }: ProductCountryTableProps) {
+  const [editingCell, setEditingCell] = useState<string | null>(null)
+  const [overrides, setOverrides] = useState<OverrideFields>({})
+  const [isLoading, setIsLoading] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+
+  // Hook para el input de edición
+  const editInput = useNumericInput()
+
+  // Calcular el resultado usando los overrides actuales
+  const computedResult = computePricing(product, countryCode, overrides)
+  const { grossSales, discount, salesRevenue, costOfSales, costRows, totalCostOfSales, grossProfit } = computedResult
+
+  useEffect(() => {
+    loadOverrides()
+  }, [product.id, countryCode])
+
+  useEffect(() => {
+    console.log('Editing cell changed to:', editingCell)
+  }, [editingCell])
+
+  const loadOverrides = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('product_country_overrides')
+        .select('overrides')
+        .eq('product_id', product.id)
+        .eq('country_code', countryCode)
+        .single()
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+        throw error
+      }
+
+      const newOverrides = data?.overrides || {}
+      console.log('Loading overrides for', countryCode, ':', newOverrides)
+      setOverrides(newOverrides)
+    } catch (error) {
+      console.error('Error loading overrides:', error)
+      setOverrides({})
+    }
+  }
+
+  const saveOverride = async (field: keyof OverrideFields, value: number | undefined) => {
+    setIsLoading(true)
+    setSaveStatus('saving')
+    
+    try {
+      // Verificar autenticación primero
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user) {
+        console.error('❌ Usuario no autenticado:', authError)
+        throw new Error('Usuario no autenticado')
+      }
+      console.log('👤 Usuario autenticado:', user.id)
+
+      const newOverrides = { ...overrides, [field]: value }
+      
+      // Si el valor es undefined, lo eliminamos del objeto
+      if (value === undefined) {
+        delete newOverrides[field]
+      }
+
+      console.log('💾 Guardando override:', field, '=', value, 'para', countryCode)
+      console.log('📊 Nuevos overrides:', newOverrides)
+      console.log('🆔 Product ID:', product.id)
+      console.log('🌍 Country Code:', countryCode)
+
+      // Primero intentar actualizar
+      const { data: updateData, error: updateError } = await supabase
+        .from('product_country_overrides')
+        .update({ overrides: newOverrides })
+        .eq('product_id', product.id)
+        .eq('country_code', countryCode)
+        .select()
+
+      console.log('🔄 Resultado del update:', { updateData, updateError })
+
+      let error = updateError
+
+      // Si no existe el registro, insertarlo
+      if (updateError && updateError.code === 'PGRST116') {
+        console.log('📝 No existe el registro, creando uno nuevo...')
+        const { data: insertData, error: insertError } = await supabase
+          .from('product_country_overrides')
+          .insert({
+            product_id: product.id,
+            country_code: countryCode,
+            overrides: newOverrides
+          })
+          .select()
+        
+        console.log('➕ Resultado del insert:', { insertData, insertError })
+        error = insertError
+      }
+
+      if (error) {
+        console.error('❌ Error en base de datos:', error)
+        console.error('❌ Detalles del error:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
+        throw error
+      }
+
+      console.log('✅ Override guardado exitosamente en la base de datos')
+      setOverrides(newOverrides)
+      setSaveStatus('saved')
+      onOverridesChange?.(newOverrides)
+      
+      // Resetear el estado de guardado después de 2 segundos
+      setTimeout(() => setSaveStatus('idle'), 2000)
+    } catch (error) {
+      console.error('❌ Error guardando override:', error)
+      setSaveStatus('error')
+      
+      // Resetear el estado de error después de 3 segundos
+      setTimeout(() => setSaveStatus('idle'), 3000)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const resetAllToZero = async () => {
+    setIsLoading(true)
+    try {
+      // Poner todos los valores en cero EXCEPTO Gross Sales (que no se puede modificar)
+      const resetOverrides: OverrideFields = {
+        commercialDiscountPct: 0,
+        commercialDiscountUSD: 0,
+        productCostPct: 0,
+        productCostUSD: 0,
+        kitCostPct: 0,
+        kitCostUSD: 0,
+        paymentFeePct: 0,
+        paymentFeeUSD: 0,
+        bloodDrawSamplePct: 0,
+        bloodDrawSampleUSD: 0,
+        sanitaryPermitsPct: 0,
+        sanitaryPermitsUSD: 0,
+        externalCourierPct: 0,
+        externalCourierUSD: 0,
+        internalCourierPct: 0,
+        internalCourierUSD: 0,
+        physiciansFeesPct: 0,
+        physiciansFeesUSD: 0,
+        salesCommissionPct: 0,
+        salesCommissionUSD: 0
+      }
+
+      // Primero intentar actualizar
+      const { error: updateError } = await supabase
+        .from('product_country_overrides')
+        .update({ overrides: resetOverrides })
+        .eq('product_id', product.id)
+        .eq('country_code', countryCode)
+
+      let error = updateError
+
+      // Si no existe el registro, insertarlo
+      if (updateError && updateError.code === 'PGRST116') {
+        const { error: insertError } = await supabase
+          .from('product_country_overrides')
+          .insert({
+            product_id: product.id,
+            country_code: countryCode,
+            overrides: resetOverrides
+          })
+        error = insertError
+      }
+
+      if (error) throw error
+
+      setOverrides(resetOverrides)
+      onOverridesChange?.(resetOverrides)
+    } catch (error) {
+      console.error('Error resetting overrides:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const startEditing = (cellId: string, currentValue: number) => {
+    console.log('🎯 Starting to edit cell:', cellId, 'with value:', currentValue)
+    console.log('📦 Product ID:', product.id)
+    console.log('🌍 Country Code:', countryCode)
+    setEditingCell(cellId)
+    editInput.setValueFromNumber(Math.round(currentValue), 0) // Valores enteros
+    console.log('✅ Editing cell set to:', cellId)
+  }
+
+  const finishEditing = async (cellId: string) => {
+    const newValue = editInput.getNumericValue()
+    
+    console.log('🏁 Finishing edit for cellId:', cellId, 'newValue:', newValue)
+    console.log('📦 Product ID:', product.id)
+    console.log('🌍 Country Code:', countryCode)
+    
+    // Determinar si es edición de USD o porcentaje
+    const isPercentageEdit = cellId.endsWith('-pct')
+    const baseCellId = cellId.replace('-usd', '').replace('-pct', '')
+    
+    // Mapear cellId base a sus campos USD y Pct correspondientes
+    const fieldPairMap: Record<string, { usd: keyof OverrideFields; pct: keyof OverrideFields }> = {
+      'commercial-discount': { usd: 'commercialDiscountUSD', pct: 'commercialDiscountPct' },
+      'product-cost': { usd: 'productCostUSD', pct: 'productCostPct' },
+      'kit-cost': { usd: 'kitCostUSD', pct: 'kitCostPct' },
+      'payment-fee': { usd: 'paymentFeeUSD', pct: 'paymentFeePct' },
+      'blood-draw': { usd: 'bloodDrawSampleUSD', pct: 'bloodDrawSamplePct' },
+      'sanitary-permits': { usd: 'sanitaryPermitsUSD', pct: 'sanitaryPermitsPct' },
+      'external-courier': { usd: 'externalCourierUSD', pct: 'externalCourierPct' },
+      'internal-courier': { usd: 'internalCourierUSD', pct: 'internalCourierPct' },
+      'physicians-fees': { usd: 'physiciansFeesUSD', pct: 'physiciansFeesPct' },
+      'sales-commission': { usd: 'salesCommissionUSD', pct: 'salesCommissionPct' }
+    }
+
+    const fieldPair = fieldPairMap[baseCellId]
+    if (fieldPair) {
+      console.log('Field pair:', fieldPair, 'isPercentageEdit:', isPercentageEdit, 'newValue:', newValue)
+      
+      // Calcular la base de referencia (salesRevenue para la mayoría, basePrice para commercial-discount)
+      const baseAmount = baseCellId === 'commercial-discount' 
+        ? product.base_price 
+        : computedResult.salesRevenue.amount
+      
+      // Guardar ambos valores (USD y Pct) calculándolos entre sí
+      const newOverrides = { ...overrides }
+      
+      if (isPercentageEdit) {
+        // Editamos porcentaje -> calcular USD
+        const pctValue = newValue ? newValue / 100 : 0
+        const usdValue = baseAmount * pctValue
+        
+        console.log('💾 Guardando % como:', pctValue, 'y calculando USD como:', usdValue)
+        newOverrides[fieldPair.pct] = pctValue
+        newOverrides[fieldPair.usd] = usdValue
+      } else {
+        // Editamos USD -> calcular %
+        const usdValue = newValue || 0
+        const pctValue = baseAmount > 0 ? usdValue / baseAmount : 0
+        
+        console.log('💾 Guardando USD como:', usdValue, 'y calculando % como:', pctValue)
+        newOverrides[fieldPair.usd] = usdValue
+        newOverrides[fieldPair.pct] = pctValue
+      }
+      
+      // Guardar todos los overrides actualizados
+      await saveMultipleOverrides(newOverrides)
+    }
+
+    setEditingCell(null)
+  }
+  
+  const saveMultipleOverrides = async (newOverrides: OverrideFields) => {
+    setIsLoading(true)
+    setSaveStatus('saving')
+    
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user) {
+        console.error('❌ Usuario no autenticado:', authError)
+        throw new Error('Usuario no autenticado')
+      }
+
+      console.log('💾 Guardando múltiples overrides:', newOverrides)
+
+      // Intentar actualizar
+      const { data: updateData, error: updateError } = await supabase
+        .from('product_country_overrides')
+        .update({ overrides: newOverrides })
+        .eq('product_id', product.id)
+        .eq('country_code', countryCode)
+        .select()
+
+      let error = updateError
+
+      // Si no existe el registro, insertarlo
+      if (updateError && updateError.code === 'PGRST116') {
+        const { data: insertData, error: insertError } = await supabase
+          .from('product_country_overrides')
+          .insert({
+            product_id: product.id,
+            country_code: countryCode,
+            overrides: newOverrides
+          })
+          .select()
+        
+        error = insertError
+      }
+
+      if (error) throw error
+
+      console.log('✅ Overrides guardados exitosamente')
+      setOverrides(newOverrides)
+      setSaveStatus('saved')
+      onOverridesChange?.(newOverrides)
+      
+      setTimeout(() => setSaveStatus('idle'), 2000)
+    } catch (error) {
+      console.error('❌ Error guardando overrides:', error)
+      setSaveStatus('error')
+      setTimeout(() => setSaveStatus('idle'), 3000)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleKeyPress = (e: React.KeyboardEvent, cellId: string) => {
+    if (e.key === 'Enter') {
+      finishEditing(cellId)
+    } else if (e.key === 'Escape') {
+      setEditingCell(null)
+    }
+  }
+
+  const renderEditableCell = (cellId: string, value: number, isPercentage = false, isPercentageColumn = false) => {
+    if (editingCell === cellId) {
+      return (
+        <Input
+          type="text"
+          value={editInput.stringValue}
+          onChange={(e) => editInput.updateValue(e.target.value)}
+          onBlur={() => finishEditing(cellId)}
+          onKeyDown={(e) => handleKeyPress(e, cellId)}
+          className="w-20 text-right font-mono text-sm"
+          autoFocus
+        />
+      )
+    }
+
+    let displayValue: string
+    if (isPercentageColumn) {
+      displayValue = formatPercentage(value * 100)
+    } else {
+      displayValue = formatCurrency(value)
+    }
+
+    return (
+      <span 
+        className="cursor-pointer hover:bg-rose-100 px-2 py-1 rounded"
+        onDoubleClick={() => {
+          console.log('🖱️ Double click detected on cell:', cellId)
+          console.log('📊 Value:', value, 'isPercentage:', isPercentageColumn)
+          console.log('📦 Product ID:', product.id)
+          console.log('🌍 Country Code:', countryCode)
+          
+          if (isPercentageColumn) {
+            console.log('📈 Starting percentage edit with value:', value * 100)
+            startEditing(cellId, value * 100) // Para porcentajes, mostrar como porcentaje (0-100)
+          } else {
+            console.log('💰 Starting USD edit with value:', isPercentage ? value * 100 : value)
+            startEditing(cellId, isPercentage ? value * 100 : value) // Para USD, mostrar como USD
+          }
+        }}
+      >
+        {displayValue}
+      </span>
+    )
+  }
+
+  const renderRow = (row: any, isHeader = false, isTotal = false, cellId?: string) => {
+    const rowClasses = isHeader 
+      ? "table-header font-semibold" 
+      : isTotal 
+        ? "table-row bg-rose-50 font-semibold border-t-2 border-rose-200" 
+        : "table-row"
+
+    return (
+      <tr className={rowClasses}>
+        <td className="px-4 py-3 text-left">{row.label}</td>
+        <td className="px-4 py-3 text-right font-mono">
+          {cellId && !isHeader && !isTotal ? (
+            renderEditableCell(`${cellId}-usd`, Math.abs(row.amount))
+          ) : (
+            row.amount >= 0 ? formatCurrency(row.amount) : formatCurrency(Math.abs(row.amount))
+          )}
+        </td>
+        <td className="px-4 py-3 text-right font-mono text-sm">
+          {cellId && !isHeader && !isTotal && row.pct !== undefined ? (
+            renderEditableCell(`${cellId}-pct`, row.pct / 100, false, true)
+          ) : (
+            row.pct !== undefined ? formatPercentage(row.pct) : '-'
+          )}
+        </td>
+        <td className="px-4 py-3 text-right text-xs text-muted-foreground font-mono">
+          {row.account || '-'}
+        </td>
+      </tr>
+    )
+  }
+
+  return (
+    <Card className="w-full">
+      <CardContent className="p-0">
+        {/* Header con botón de reiniciar y estado de guardado */}
+        <div className="px-6 py-4 border-b border-rose-100 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <h3 className="text-lg font-semibold text-rose-900">Cálculo de Costos</h3>
+            {saveStatus === 'saving' && (
+              <div className="flex items-center gap-1 text-sm text-blue-600">
+                <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                Guardando...
+              </div>
+            )}
+            {saveStatus === 'saved' && (
+              <div className="flex items-center gap-1 text-sm text-green-600">
+                <span>✅</span>
+                Guardado
+              </div>
+            )}
+            {saveStatus === 'error' && (
+              <div className="flex items-center gap-1 text-sm text-red-600">
+                <span>❌</span>
+                Error al guardar
+              </div>
+            )}
+          </div>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={resetAllToZero}
+            disabled={isLoading}
+            className="text-rose-600 border-rose-200 hover:bg-rose-50"
+          >
+            {isLoading ? 'Guardando...' : 'Reiniciar Parámetros'}
+          </Button>
+        </div>
+        
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="table-header">
+                <th className="px-4 py-3 text-left text-sm font-semibold">Concepto</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold">USD</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold">%</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold">Cuenta</th>
+              </tr>
+            </thead>
+            <tbody>
+              {/* Sección principal - Gross Sales no es editable */}
+              {renderRow(grossSales)}
+              
+              {/* Commercial Discount - editable, siempre visible */}
+              {renderRow(discount, false, false, 'commercial-discount')}
+              
+              {/* Sales Revenue - no editable (calculado) */}
+              {renderRow(salesRevenue, false, true)}
+              
+              {/* Separador Cost of Sales - siempre visible */}
+              <tr className="table-row">
+                <td colSpan={4} className="px-4 py-2 text-sm font-medium text-muted-foreground bg-rose-25">
+                  Cost of Sales
+                </td>
+              </tr>
+              
+              {/* Componentes de Cost of Sales - todos editables */}
+              {costRows.map((row, index) => {
+                // Mapear cada fila a su cellId correspondiente
+                const cellIdMap: Record<string, string> = {
+                  'Product Cost': 'product-cost',
+                  'Kit Cost': 'kit-cost',
+                  'Payment Fee Costs': 'payment-fee',
+                  'Blood Drawn & Sample Handling': 'blood-draw',
+                  'Sanitary Permits to export blood': 'sanitary-permits',
+                  'External Courier': 'external-courier',
+                  'Internal Courier': 'internal-courier',
+                  'Physicians Fees': 'physicians-fees',
+                  'Sales Commission': 'sales-commission'
+                }
+                
+                const cellId = cellIdMap[row.label]
+                return (
+                  <React.Fragment key={index}>
+                    {renderRow(row, false, false, cellId)}
+                  </React.Fragment>
+                )
+              })}
+              
+              {/* Totales - no editables */}
+              {renderRow(totalCostOfSales, false, true)}
+              {renderRow(grossProfit, false, true)}
+            </tbody>
+          </table>
+        </div>
+        
+        {/* Instrucciones */}
+        <div className="px-6 py-3 bg-rose-25 border-t border-rose-100">
+          <p className="text-xs text-muted-foreground">
+            💡 Haz doble clic en cualquier valor USD o % para editarlo. Al editar uno, el otro se calcula automáticamente.
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            💰 Si ingresas USD → se calcula el % automáticamente | Si ingresas % → se calcula el USD automáticamente
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            🔄 "Reiniciar Parámetros" pone todos los valores en cero excepto Gross Sales.
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            ⌨️ Presiona Enter para guardar o Escape para cancelar la edición.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
