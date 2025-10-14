@@ -1,6 +1,6 @@
-# SG Contadora
+# SG Contadora ✨
 
-Una aplicación web minimalista y femenina para la gestión contable de productos por país, construida con Next.js 14, TypeScript, TailwindCSS y Supabase.
+Una aplicación web rosa y femenina para la gestión contable de productos por país, construida con Next.js 14, TypeScript, TailwindCSS y Supabase.
 
 ## 🌸 Características
 
@@ -9,11 +9,13 @@ Una aplicación web minimalista y femenina para la gestión contable de producto
   - ✅ Ver productos en vista grid o tabla estilo base de datos
   - ✅ Editar productos existentes
   - ✅ Eliminar productos con confirmación
+- **Comparación de Países**: Vista lado a lado para comparar hasta 4 países simultáneamente ✨
+- **Conversión Automática USD ↔ %**: Todos los impuestos pueden ingresarse en dólares o porcentaje y se convierten automáticamente 💰
 - **Vista Dual**: Alternar entre vista de tarjetas (grid) y tabla de base de datos
-- **Vista por País**: Calcula automáticamente costos, comisiones e impuestos por país (Uruguay, Argentina, México)
+- **Vista por País**: Calcula automáticamente costos, comisiones e impuestos por país (UY, AR, MX, CL, VE, CO)
 - **Overrides Personalizados**: Configura valores específicos por producto y país
-- **Autenticación Simple**: Sistema de login/registro con email y contraseña usando Supabase por defecto
-- **Diseño Minimalista**: Interfaz femenina con paleta de rosas y bordes redondeados
+- **Autenticación Simple**: Sistema de login/registro con email y contraseña usando Supabase
+- **Diseño Rosa y Femenino**: Interfaz con paleta rosa pastel, header fucsia, cursor de corazón 💕 y brillitos ✨
 - **Cálculos Automáticos**: Replica la lógica de Google Sheets para cálculos contables
 
 ## 🚀 Instalación Rápida
@@ -55,19 +57,7 @@ SUPABASE_SERVICE_ROLE_KEY=tu_service_role_key_aqui
 pnpm db:seed
 ```
 
-### 4. Configurar Autenticación (Opcional)
-
-El sistema usa la configuración por defecto de Supabase. Si quieres personalizar:
-
-1. **Ve a tu Dashboard de Supabase**: https://supabase.com/dashboard/project/cdrmxjcdgxjyakrcpxnp
-2. **Authentication > Settings** para configurar:
-   - Email confirmations (habilitado por defecto)
-   - Site URL: `http://localhost:3000`
-   - Redirect URLs: `http://localhost:3000`
-
-**Nota**: El sistema funciona con la configuración por defecto de Supabase sin necesidad de configuraciones adicionales.
-
-### 5. Iniciar la aplicación
+### 4. Iniciar la aplicación
 
 ```bash
 pnpm dev
@@ -84,87 +74,65 @@ La aplicación estará disponible en [http://localhost:3000](http://localhost:30
 - Para registro: confirma tu email cuando recibas el correo (revisa spam)
 - Para login: ingresa tus credenciales y accede directamente
 
-**✅ Sistema Simple**: Usa la configuración por defecto de Supabase. No requiere configuraciones adicionales.
-
 ### 2. Crear Productos
 - Ve a `/products`
 - Haz clic en "Nuevo Producto"
 - Completa los datos del producto (nombre, SKU, precio base)
 
-### 3. Ver Cálculos por País
-- Haz clic en cualquier producto
-- Usa las pestañas para alternar entre países (UY, AR, MX)
-- La tabla muestra automáticamente:
-  - Gross Sales (precio base)
-  - Commercial Discount
-  - Sales Revenue
-  - Cost of Sales (desglosado)
-  - Gross Profit
+### 3. Comparar Países ✨
+- En la lista de productos, haz clic en "Comparar Países"
+- Selecciona hasta 4 países para ver lado a lado
+- Compara campo por campo fácilmente
 
-### 4. Configurar Overrides
-- En la vista del producto, haz clic en "Editar Parámetros"
-- Modifica valores específicos para ese país
-- Los cambios se aplican inmediatamente al cálculo
+### 4. Editar Impuestos en USD o %
+- Haz doble clic en cualquier valor USD o %
+- Si editas USD → se calcula el % automáticamente
+- Si editas % → se calcula el USD automáticamente
+- Los cambios se guardan automáticamente
 
 ## 🏗️ Arquitectura
 
 ```
 src/
 ├── app/                    # App Router de Next.js 14
-│   ├── (auth)/            # Rutas de autenticación
 │   ├── products/          # Páginas de productos
-│   └── globals.css        # Estilos globales
+│   │   ├── compare/[id]/ # Vista de comparación de países
+│   │   └── [id]/         # Vista detallada de producto
+│   └── globals.css        # Estilos globales con brillitos ✨
 ├── components/            # Componentes React
 │   ├── ui/               # Componentes base (shadcn/ui)
-│   └── *.tsx             # Componentes específicos
+│   ├── Navbar.tsx        # Header fucsia con brillitos
+│   └── ProductCountryTable.tsx  # Tabla editable USD/% 
 ├── lib/                  # Utilidades y lógica
 │   ├── supabase.ts       # Cliente Supabase
 │   ├── countryRates.ts   # Datos hardcodeados por país
-│   ├── compute.ts        # Lógica de cálculos
+│   ├── compute.ts        # Lógica de cálculos con conversión USD/% 
 │   └── utils.ts          # Utilidades generales
 └── types/                # Definiciones de TypeScript
 ```
 
-## 🎨 Diseño
+## 🎨 Diseño Rosa y Femenino
 
-- **Paleta**: Rosa como color primario, con variantes suaves
+- **Fondo**: Rosa pastel en lugar de blanco
+- **Header**: Fucsia con gradiente (fuchsia-500 a pink-500)
+- **Cursor**: Forma de corazón 💕
+- **Brillitos**: Animaciones ✨ y 💫 por toda la app
+- **Paleta**: Rosa/fucsia/pink en todos los componentes
 - **Tipografía**: Inter para texto, Nunito para títulos
-- **Componentes**: Bordes redondeados (rounded-2xl), sombras suaves
-- **Microinteracciones**: Transiciones suaves, hover states
+- **Componentes**: Bordes redondeados, sombras suaves
 - **Responsive**: Diseño adaptable a móviles y desktop
 
 ## 🔧 Configuración Avanzada
 
 ### Países Soportados
-Actualmente soporta Uruguay (UY), Argentina (AR) y México (MX). Para agregar más países:
+Actualmente soporta Uruguay (UY), Argentina (AR), México (MX), Chile (CL), Venezuela (VE) y Colombia (CO). Para agregar más países:
 
 1. Actualiza `CountryCode` en `src/types.ts`
 2. Agrega datos en `src/lib/countryRates.ts`
 3. Actualiza la validación en la base de datos
 
 ### Cálculos Personalizados
-La lógica de cálculo está en `src/lib/compute.ts`. Puedes modificar:
-- Fórmulas de cálculo
-- Nuevos tipos de costos
-- Lógica de porcentajes
-
-### Roles de Usuario
-- **User**: Puede ver productos y cálculos
-- **Admin**: Puede crear, editar y eliminar productos
-
-## 🚨 Troubleshooting
-
-### Error de autenticación
-- Verifica que las variables de entorno estén correctas
-- Asegúrate de que el proyecto de Supabase esté activo
-
-### Error de base de datos
-- Ejecuta el script `supabase.sql` completo
-- Verifica que las políticas RLS estén configuradas
-
-### Error de cálculos
-- Verifica que los datos del país estén en `countryRates.ts`
-- Revisa que los overrides estén en formato JSON válido
+La lógica de cálculo está en `src/lib/compute.ts` con soporte completo de conversión USD/Pct bidireccional
 
 ## 📝 Scripts Disponibles
 
@@ -186,8 +154,8 @@ pnpm db:seed      # Poblar con datos de ejemplo
 
 ## 📄 Licencia
 
-Este proyecto está bajo la Licencia MIT. Ver `LICENSE` para más detalles.
+Este proyecto está bajo la Licencia MIT.
 
 ---
 
-**SG Contadora** - Diseñado con 💕 para la gestión contable moderna
+**SG Contadora** - Diseñado con 💕✨ para la gestión contable moderna
