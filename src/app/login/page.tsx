@@ -71,13 +71,13 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-rose-50 to-pink-100 p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-rose-50 to-pink-100 bg-sparkles p-4">
+      <Card className="w-full max-w-md shadow-2xl">
         <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-heading text-rose-600">
-            SG Contadora
+          <CardTitle className="text-3xl font-heading text-pink-600 sparkles-multiple">
+            SG Contadora ✨
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-pink-500">
             {isLogin ? 'Inicia sesión en tu cuenta' : 'Crea una nueva cuenta'}
           </CardDescription>
         </CardHeader>
@@ -107,8 +107,8 @@ export default function LoginPage() {
               />
             </div>
             
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Procesando...' : (isLogin ? 'Iniciar Sesión' : 'Registrarse')}
+            <Button type="submit" className="w-full bg-pink-500 hover:bg-pink-600 text-white btn-sparkle" disabled={loading}>
+              {loading ? 'Procesando...' : (isLogin ? 'Iniciar Sesión ✨' : 'Registrarse ✨')}
             </Button>
             
             <div className="text-center">
@@ -118,9 +118,9 @@ export default function LoginPage() {
                   setIsLogin(!isLogin)
                   setMessage('')
                 }}
-                className="text-sm text-rose-600 hover:text-rose-700 underline"
+                className="text-sm text-pink-600 hover:text-pink-700 underline font-medium"
               >
-                {isLogin ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión'}
+                {isLogin ? '¿No tienes cuenta? Regístrate 💕' : '¿Ya tienes cuenta? Inicia sesión 💕'}
               </button>
             </div>
             
