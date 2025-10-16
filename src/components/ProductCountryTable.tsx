@@ -129,8 +129,9 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
   const resetAllToZero = async () => {
     setIsLoading(true)
     try {
-      // Poner todos los valores en cero EXCEPTO Gross Sales (que no se puede modificar)
+      // Poner todos los valores en cero incluyendo Gross Sales
       const resetOverrides: OverrideFields = {
+        grossSalesUSD: product.base_price, // Resetear a precio base del producto
         commercialDiscountPct: 0,
         commercialDiscountUSD: 0,
         productCostPct: 0,
@@ -200,7 +201,8 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
     const baseCellId = cellId.replace('-usd', '').replace('-pct', '')
     
     // Mapear cellId base a sus campos USD y Pct correspondientes
-    const fieldPairMap: Record<string, { usd: keyof OverrideFields; pct: keyof OverrideFields }> = {
+    const fieldPairMap: Record<string, { usd: keyof OverrideFields; pct?: keyof OverrideFields }> = {
+      'gross-sales': { usd: 'grossSalesUSD' }, // Solo USD, no tiene %
       'commercial-discount': { usd: 'commercialDiscountUSD', pct: 'commercialDiscountPct' },
       'product-cost': { usd: 'productCostUSD', pct: 'productCostPct' },
       'kit-cost': { usd: 'kitCostUSD', pct: 'kitCostPct' },
@@ -217,30 +219,40 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
     if (fieldPair) {
       console.log('Field pair:', fieldPair, 'isPercentageEdit:', isPercentageEdit, 'newValue:', newValue)
       
-      // Calcular la base de referencia (salesRevenue para la mayoría, basePrice para commercial-discount)
-      const baseAmount = baseCellId === 'commercial-discount' 
-        ? product.base_price 
-        : computedResult.salesRevenue.amount
-      
-      // Guardar ambos valores (USD y Pct) calculándolos entre sí
+      // Guardar valores
       const newOverrides = { ...overrides }
       
-      if (isPercentageEdit) {
-        // Editamos porcentaje -> calcular USD
-        const pctValue = newValue ? newValue / 100 : 0
-        const usdValue = baseAmount * pctValue
-        
-        console.log('💾 Guardando % como:', pctValue, 'y calculando USD como:', usdValue)
-        newOverrides[fieldPair.pct] = pctValue
+      if (baseCellId === 'gross-sales') {
+        // Gross Sales solo tiene USD, no tiene %
+        const usdValue = newValue || 0
+        console.log('💾 Guardando Gross Sales USD como:', usdValue)
         newOverrides[fieldPair.usd] = usdValue
       } else {
-        // Editamos USD -> calcular %
-        const usdValue = newValue || 0
-        const pctValue = baseAmount > 0 ? usdValue / baseAmount : 0
+        // Calcular la base de referencia (salesRevenue para la mayoría, grossSalesAmount para commercial-discount)
+        const baseAmount = baseCellId === 'commercial-discount' 
+          ? computedResult.grossSales.amount 
+          : computedResult.salesRevenue.amount
         
-        console.log('💾 Guardando USD como:', usdValue, 'y calculando % como:', pctValue)
-        newOverrides[fieldPair.usd] = usdValue
-        newOverrides[fieldPair.pct] = pctValue
+        // Guardar ambos valores (USD y Pct) calculándolos entre sí
+        if (isPercentageEdit && fieldPair.pct) {
+          // Editamos porcentaje -> calcular USD
+          const pctValue = newValue ? newValue / 100 : 0
+          const usdValue = baseAmount * pctValue
+          
+          console.log('💾 Guardando % como:', pctValue, 'y calculando USD como:', usdValue)
+          newOverrides[fieldPair.pct] = pctValue
+          newOverrides[fieldPair.usd] = usdValue
+        } else {
+          // Editamos USD -> calcular %
+          const usdValue = newValue || 0
+          const pctValue = baseAmount > 0 ? usdValue / baseAmount : 0
+          
+          console.log('💾 Guardando USD como:', usdValue, 'y calculando % como:', pctValue)
+          newOverrides[fieldPair.usd] = usdValue
+          if (fieldPair.pct) {
+            newOverrides[fieldPair.pct] = pctValue
+          }
+        }
       }
       
       // Guardar todos los overrides actualizados
@@ -329,7 +341,7 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
 
     return (
       <span 
-        className="cursor-pointer hover:bg-rose-100 px-2 py-1 rounded"
+        className="cursor-pointer hover:bg-gray-950 px-2 py-1 rounded"
         onDoubleClick={() => {
           console.log('🖱️ Double click detected on cell:', cellId)
           console.log('📊 Value:', value, 'isPercentage:', isPercentageColumn)
@@ -353,8 +365,8 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
   const renderRow = (row: any, isHeader = false, isTotal = false, cellId?: string) => {
     const rowClasses = isHeader 
       ? "table-header font-semibold" 
-      : isTotal 
-        ? "table-row bg-rose-50 font-semibold border-t-2 border-rose-200" 
+      :       isTotal 
+        ? "table-row bg-black font-semibold border-t-2 border-gray-900"
         : "table-row"
 
     return (
@@ -385,23 +397,26 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
     <Card className="w-full">
       <CardContent className="p-0">
         {/* Header con botón de reiniciar y estado de guardado */}
-        <div className="px-6 py-4 border-b border-rose-100 flex justify-between items-center">
+        <div className="px-6 py-4 border-b border-gray-900 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <h3 className="text-lg font-semibold text-rose-900">Cálculo de Costos</h3>
+            <h3 className="text-lg font-semibold text-white">
+              <span className="inline-block w-1 h-4 bg-blue-600 mr-2"></span>
+              Cálculo de Costos
+            </h3>
             {saveStatus === 'saving' && (
-              <div className="flex items-center gap-1 text-sm text-blue-600">
-                <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+              <div className="flex items-center gap-1 text-sm text-orange-600 bg-orange-50 px-3 py-1 rounded-full">
+                <div className="w-3 h-3 border-2 border-orange-600 border-t-transparent rounded-full animate-spin"></div>
                 Guardando...
               </div>
             )}
             {saveStatus === 'saved' && (
-              <div className="flex items-center gap-1 text-sm text-green-600">
+              <div className="flex items-center gap-1 text-sm text-green-600 bg-green-50 px-3 py-1 rounded-full">
                 <span>✅</span>
                 Guardado
               </div>
             )}
             {saveStatus === 'error' && (
-              <div className="flex items-center gap-1 text-sm text-red-600">
+              <div className="flex items-center gap-1 text-sm text-red-600 bg-red-50 px-3 py-1 rounded-full">
                 <span>❌</span>
                 Error al guardar
               </div>
@@ -412,7 +427,7 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
             size="sm"
             onClick={resetAllToZero}
             disabled={isLoading}
-            className="text-rose-600 border-rose-200 hover:bg-rose-50"
+            className="text-yellow-500 border-yellow-600 hover:bg-yellow-950 hover:text-yellow-400 hover:border-yellow-500"
           >
             {isLoading ? 'Guardando...' : 'Reiniciar Parámetros'}
           </Button>
@@ -423,14 +438,24 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
             <thead>
               <tr className="table-header">
                 <th className="px-4 py-3 text-left text-sm font-semibold">Concepto</th>
-                <th className="px-4 py-3 text-right text-sm font-semibold">USD</th>
-                <th className="px-4 py-3 text-right text-sm font-semibold">%</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold">
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                    USD
+                  </span>
+                </th>
+                <th className="px-4 py-3 text-right text-sm font-semibold">
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                    %
+                  </span>
+                </th>
                 <th className="px-4 py-3 text-right text-sm font-semibold">Cuenta</th>
               </tr>
             </thead>
             <tbody>
-              {/* Sección principal - Gross Sales no es editable */}
-              {renderRow(grossSales)}
+              {/* Sección principal - Gross Sales ahora es editable */}
+              {renderRow(grossSales, false, false, 'gross-sales')}
               
               {/* Commercial Discount - editable, siempre visible */}
               {renderRow(discount, false, false, 'commercial-discount')}
@@ -440,7 +465,7 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
               
               {/* Separador Cost of Sales - siempre visible */}
               <tr className="table-row">
-                <td colSpan={4} className="px-4 py-2 text-sm font-medium text-muted-foreground bg-rose-25">
+                <td colSpan={4} className="px-4 py-2 text-sm font-medium text-muted-foreground bg-black">
                   Cost of Sales
                 </td>
               </tr>
@@ -476,15 +501,15 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
         </div>
         
         {/* Instrucciones */}
-        <div className="px-6 py-3 bg-rose-25 border-t border-rose-100">
+        <div className="px-6 py-3 bg-black border-t border-gray-900">
           <p className="text-xs text-muted-foreground">
-            💡 Haz doble clic en cualquier valor USD o % para editarlo. Al editar uno, el otro se calcula automáticamente.
+            💡 Haz doble clic en cualquier valor USD para editarlo. Los valores con % se calculan automáticamente.
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            💰 Si ingresas USD → se calcula el % automáticamente | Si ingresas % → se calcula el USD automáticamente
+            💰 <strong>Gross Sales es editable por país</strong> - cambia según el mercado local.
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            🔄 "Reiniciar Parámetros" pone todos los valores en cero excepto Gross Sales.
+            🔄 "Reiniciar Parámetros" pone todos los valores en cero y Gross Sales al precio base original.
           </p>
           <p className="text-xs text-muted-foreground mt-1">
             ⌨️ Presiona Enter para guardar o Escape para cancelar la edición.

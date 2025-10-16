@@ -95,7 +95,7 @@ export default function CountryViewPage() {
         <Navbar />
         <div className="container mx-auto px-4 py-8">
           <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-500"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-500"></div>
           </div>
         </div>
       </div>
@@ -108,7 +108,7 @@ export default function CountryViewPage() {
         <Navbar />
         <div className="container mx-auto px-4 py-8">
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-gray-900 mb-4">País no encontrado</h1>
+            <h1 className="text-2xl font-bold text-white mb-4">País no encontrado</h1>
             <Button onClick={() => router.push('/products')}>
               Volver a Productos
             </Button>
@@ -135,7 +135,7 @@ export default function CountryViewPage() {
               Volver
             </Button>
             <div className="flex-1">
-              <h1 className="text-3xl font-bold font-heading text-gray-900 flex items-center gap-3">
+              <h1 className="text-3xl font-bold font-heading text-white flex items-center gap-3">
                 <span>{COUNTRY_FLAGS[countryCode]}</span>
                 Vista por País - {COUNTRY_NAMES[countryCode]}
               </h1>
@@ -172,7 +172,7 @@ export default function CountryViewPage() {
               <Card>
                 <CardContent className="py-12">
                   <div className="text-center">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No hay productos</h3>
+                    <h3 className="text-lg font-semibold text-white mb-2">No hay productos</h3>
                     <p className="text-muted-foreground mb-4">
                       No se encontraron productos para mostrar.
                     </p>
@@ -242,9 +242,9 @@ function ProductSummaryCard({
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       {/* Gross Sales */}
-      <div className="text-center p-4 bg-rose-25 rounded-lg border border-rose-100">
+      <div className="text-center p-4 bg-gray-25 rounded-lg border border-gray-100">
         <div className="text-sm text-muted-foreground mb-1">Gross Sales</div>
-        <div className="text-lg font-semibold text-rose-900 font-mono">
+        <div className="text-lg font-semibold text-white font-mono">
           {formatCurrency(grossSales.amount)}
         </div>
       </div>

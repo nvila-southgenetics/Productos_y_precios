@@ -77,6 +77,9 @@ export type CountryRates = {
 }
 
 export type OverrideFields = {
+  // Gross Sales - puede ser editado por país
+  grossSalesUSD?: number
+  
   // Commercial Discount - ambos formatos
   commercialDiscountPct?: number
   commercialDiscountUSD?: number

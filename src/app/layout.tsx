@@ -14,7 +14,7 @@ const nunito = Nunito({
 })
 
 export const metadata: Metadata = {
-  title: 'SG Contadora',
+  title: 'SouthGenetics P&L',
   description: 'Sistema de gestión contable para productos por país',
 }
 

@@ -9,9 +9,10 @@ import { Product } from '@/types'
 import { Navbar } from '@/components/Navbar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { formatCurrency } from '@/lib/compute'
 import { COUNTRY_NAMES, COUNTRY_FLAGS } from '@/lib/countryRates'
-import { Plus, Package, Edit, Trash2, Grid3X3, List, Eye, Globe, GitCompare } from 'lucide-react'
+import { Plus, Package, Edit, Trash2, Grid3X3, List, Eye, Globe, GitCompare, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -22,11 +23,14 @@ import {
 } from '@/components/ui/dialog'
 
 type ViewMode = 'grid' | 'table'
+type SortOrder = 'none' | 'asc' | 'desc'
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [sortOrder, setSortOrder] = useState<SortOrder>('none')
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; product: Product | null }>({
     open: false,
     product: null
@@ -87,6 +91,33 @@ export default function ProductsPage() {
     router.push(`/products/edit/${product.id}`)
   }
 
+  const toggleSortOrder = () => {
+    if (sortOrder === 'none') {
+      setSortOrder('asc')
+    } else if (sortOrder === 'asc') {
+      setSortOrder('desc')
+    } else {
+      setSortOrder('none')
+    }
+  }
+
+  // Filtrar y ordenar productos
+  const filteredAndSortedProducts = products
+    .filter(product => {
+      if (!searchTerm) return true
+      const searchLower = searchTerm.toLowerCase()
+      return (
+        product.name.toLowerCase().includes(searchLower) ||
+        product.sku.toLowerCase().includes(searchLower) ||
+        product.description?.toLowerCase().includes(searchLower)
+      )
+    })
+    .sort((a, b) => {
+      if (sortOrder === 'none') return 0
+      if (sortOrder === 'asc') return a.base_price - b.base_price
+      return b.base_price - a.base_price
+    })
+
   if (loading) {
     return (
       <div className="min-h-screen">
@@ -105,20 +136,20 @@ export default function ProductsPage() {
       <Navbar />
       
       <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold font-heading text-gray-900 sparkles-multiple">Productos ✨</h1>
+            <h1 className="text-3xl font-semibold text-white">Productos</h1>
             <p className="text-muted-foreground mt-1">
               Gestiona tus productos y configura precios por país
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center bg-rose-50 rounded-lg p-1">
+            <div className="flex items-center bg-gray-950 rounded-lg p-1">
               <Button
                 variant={viewMode === 'grid' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setViewMode('grid')}
-                className={viewMode === 'grid' ? 'bg-rose-500 text-white' : 'text-rose-600'}
+                className={viewMode === 'grid' ? 'bg-white text-black' : 'text-gray-300'}
               >
                 <Grid3X3 className="w-4 h-4" />
               </Button>
@@ -126,23 +157,79 @@ export default function ProductsPage() {
                 variant={viewMode === 'table' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setViewMode('table')}
-                className={viewMode === 'table' ? 'bg-rose-500 text-white' : 'text-rose-600'}
+                className={viewMode === 'table' ? 'bg-white text-black' : 'text-gray-300'}
               >
                 <List className="w-4 h-4" />
               </Button>
             </div>
-            <Button onClick={() => router.push('/products/new')} className="btn-sparkle">
+            <Button onClick={() => router.push('/products/new')} className="bg-white text-black hover:bg-gray-200">
               <Plus className="w-4 h-4 mr-2" />
               Nuevo Producto
             </Button>
           </div>
         </div>
 
+        {/* Filtros y búsqueda */}
+        <Card className="mb-8">
+          <CardContent className="py-4">
+            <div className="flex flex-col md:flex-row gap-4 items-center">
+              {/* Buscador */}
+              <div className="relative flex-1 w-full">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
+                  type="text"
+                  placeholder="Buscar por nombre, SKU o descripción..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              
+              {/* Ordenar por precio */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600 whitespace-nowrap">Ordenar por precio:</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={toggleSortOrder}
+                  className="flex items-center gap-2 min-w-[120px] border-orange-600 text-orange-500 hover:bg-orange-950 hover:text-orange-400 hover:border-orange-500"
+                >
+                  {sortOrder === 'none' && (
+                    <>
+                      <ArrowUpDown className="w-4 h-4" />
+                      Sin orden
+                    </>
+                  )}
+                  {sortOrder === 'asc' && (
+                    <>
+                      <ArrowUp className="w-4 h-4" />
+                      Ascendente
+                    </>
+                  )}
+                  {sortOrder === 'desc' && (
+                    <>
+                      <ArrowDown className="w-4 h-4" />
+                      Descendente
+                    </>
+                  )}
+                </Button>
+              </div>
+              
+              {/* Contador de resultados */}
+              {(searchTerm || sortOrder !== 'none') && (
+                <div className="text-sm text-gray-600">
+                  {filteredAndSortedProducts.length} de {products.length} productos
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Quick Country Navigation */}
         <Card className="mb-8">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Globe className="w-5 h-5" />
+              <Globe className="w-5 h-5 text-blue-600" />
               Vista por País
             </CardTitle>
             <CardDescription>
@@ -156,7 +243,7 @@ export default function ProductsPage() {
                   key={countryCode}
                   variant="outline"
                   onClick={() => router.push(`/countries/${countryCode}`)}
-                  className="flex flex-col items-center gap-2 h-auto py-4 hover:bg-rose-50 hover:border-rose-200"
+                  className="flex flex-col items-center gap-2 h-auto py-4 hover:bg-gray-950 hover:border-gray-300"
                 >
                   <span className="text-2xl">{COUNTRY_FLAGS[countryCode]}</span>
                   <span className="text-sm font-medium">{COUNTRY_NAMES[countryCode]}</span>
@@ -166,25 +253,31 @@ export default function ProductsPage() {
           </CardContent>
         </Card>
 
-        {products.length === 0 ? (
+        {filteredAndSortedProducts.length === 0 ? (
           <Card className="text-center py-12">
             <CardContent>
               <Package className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No hay productos</h3>
+              <h3 className="text-lg font-semibold mb-2">
+                {products.length === 0 ? 'No hay productos' : 'No se encontraron productos'}
+              </h3>
               <p className="text-muted-foreground mb-4">
-                Comienza creando tu primer producto
+                {products.length === 0 
+                  ? 'Comienza creando tu primer producto' 
+                  : 'Intenta con otro término de búsqueda'}
               </p>
-              <Button onClick={() => router.push('/products/new')}>
-                <Plus className="w-4 h-4 mr-2" />
-                Crear Producto
-              </Button>
+              {products.length === 0 && (
+                <Button onClick={() => router.push('/products/new')} className="bg-white hover:bg-gray-200 text-black">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Crear Producto
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : (
           <>
             {viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {products.map((product) => (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {filteredAndSortedProducts.map((product) => (
                   <Card 
                     key={product.id} 
                     className="hover:shadow-xl transition-all duration-200"
@@ -196,19 +289,11 @@ export default function ProductsPage() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <div className="space-y-2">
-                        <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">Precio base:</span>
-                          <span className="font-semibold">
-                            {formatCurrency(product.base_price, product.currency || undefined)}
-                          </span>
-                        </div>
-                        {product.description && (
-                          <p className="text-sm text-muted-foreground line-clamp-2">
-                            {product.description}
-                          </p>
-                        )}
-                      </div>
+                      {product.description && (
+                        <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
+                          {product.description}
+                        </p>
+                      )}
                       <div className="flex flex-col gap-2 mt-4">
                         <Button
                           size="sm"
@@ -216,10 +301,10 @@ export default function ProductsPage() {
                             e.stopPropagation()
                             router.push(`/products/compare/${product.id}`)
                           }}
-                          className="w-full bg-pink-500 hover:bg-pink-600 text-white btn-sparkle"
+                          className="w-full bg-white hover:bg-gray-200 text-black"
                         >
                           <GitCompare className="w-4 h-4 mr-2" />
-                          Comparar Países ✨
+                          Comparar Países
                         </Button>
                         <div className="flex gap-2">
                           <Button
@@ -266,33 +351,33 @@ export default function ProductsPage() {
                 <CardContent className="p-0">
                   <div className="overflow-x-auto">
                     <table className="w-full">
-                      <thead className="bg-rose-50">
+                      <thead className="bg-black">
                         <tr>
-                          <th className="text-left p-4 font-semibold text-rose-900">Producto</th>
-                          <th className="text-left p-4 font-semibold text-rose-900">SKU</th>
-                          <th className="text-left p-4 font-semibold text-rose-900">Precio Base</th>
-                          <th className="text-left p-4 font-semibold text-rose-900">Descripción</th>
-                          <th className="text-left p-4 font-semibold text-rose-900">Fecha</th>
-                          <th className="text-center p-4 font-semibold text-rose-900">Acciones</th>
+                          <th className="text-left p-4 font-semibold text-white">Producto</th>
+                          <th className="text-left p-4 font-semibold text-white">SKU</th>
+                          <th className="text-left p-4 font-semibold text-white">Precio Base</th>
+                          <th className="text-left p-4 font-semibold text-white">Descripción</th>
+                          <th className="text-left p-4 font-semibold text-white">Fecha</th>
+                          <th className="text-center p-4 font-semibold text-white">Acciones</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {products.map((product, index) => (
+                        {filteredAndSortedProducts.map((product, index) => (
                           <tr 
                             key={product.id} 
-                            className={`border-b border-rose-100 hover:bg-rose-50/50 transition-colors ${
-                              index % 2 === 0 ? 'bg-white' : 'bg-rose-25'
+                            className={`border-b border-gray-950 hover:bg-black transition-colors ${
+                              index % 2 === 0 ? 'bg-black' : 'bg-gray-950'
                             }`}
                           >
                             <td className="p-4">
-                              <div className="font-medium text-gray-900">{product.name}</div>
+                              <div className="font-medium text-white">{product.name}</div>
                             </td>
                             <td className="p-4">
-                              <code className="bg-gray-100 px-2 py-1 rounded text-sm">
+                              <code className="bg-gray-950 px-2 py-1 rounded text-sm">
                                 {product.sku}
                               </code>
                             </td>
-                            <td className="p-4 font-semibold text-gray-900">
+                            <td className="p-4 font-semibold text-white">
                               {formatCurrency(product.base_price, product.currency || undefined)}
                             </td>
                             <td className="p-4">
@@ -309,7 +394,7 @@ export default function ProductsPage() {
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => router.push(`/products/compare/${product.id}`)}
-                                  className="text-pink-600 hover:text-pink-700 hover:bg-pink-50"
+                                  className="text-gray-300 hover:text-white hover:bg-gray-950"
                                   title="Comparar países"
                                 >
                                   <GitCompare className="w-4 h-4" />
@@ -318,7 +403,7 @@ export default function ProductsPage() {
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => router.push(`/products/${product.id}`)}
-                                  className="text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                                   title="Ver producto"
                                 >
                                   <Eye className="w-4 h-4" />
@@ -327,7 +412,7 @@ export default function ProductsPage() {
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => handleEditProduct(product)}
-                                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                  className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
                                   title="Editar"
                                 >
                                   <Edit className="w-4 h-4" />

@@ -43,17 +43,18 @@ export function computePricing(
   // Merge country rules with overrides
   const rules = { ...countryRates.rules, ...overrides }
 
-  // Gross Sales (sin IVA)
+  // Gross Sales (sin IVA) - puede ser editado por país
+  const grossSalesAmount = overrides?.grossSalesUSD !== undefined ? overrides.grossSalesUSD : basePrice
   const grossSales: ComputedRow = {
     label: 'Gross Sales (sin IVA)',
     account: countryRates.accounts.grossSales,
-    amount: basePrice,
+    amount: grossSalesAmount,
     pct: 100,
   }
 
   // Commercial Discount - puede ser porcentaje o monto fijo USD
   const discountCalc = calculateValue(
-    basePrice,
+    grossSalesAmount,
     overrides?.commercialDiscountUSD,
     overrides?.commercialDiscountPct,
     rules.commercialDiscountPct || 0
@@ -67,12 +68,12 @@ export function computePricing(
   }
 
   // Sales Revenue
-  const salesRevenueAmount = basePrice - discountCalc.amount
+  const salesRevenueAmount = grossSalesAmount - discountCalc.amount
   const salesRevenue: ComputedRow = {
     label: 'Sales Revenue',
     account: undefined,
     amount: salesRevenueAmount,
-    pct: (salesRevenueAmount / basePrice) * 100,
+    pct: grossSalesAmount > 0 ? (salesRevenueAmount / grossSalesAmount) * 100 : 0,
   }
 
   // Cost of Sales (separador visual)

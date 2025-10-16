@@ -23,12 +23,8 @@ export default function HomePage() {
 
   // Mostrar loading mientras verifica autenticación
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-rose-50 to-pink-100 bg-sparkles">
-      <div className="flex flex-col items-center gap-4">
-        <div className="text-4xl animate-pulse">✨</div>
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div>
-        <div className="text-4xl animate-pulse" style={{ animationDelay: '0.5s' }}>💫</div>
-      </div>
+    <div className="min-h-screen flex items-center justify-center bg-black">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
     </div>
   )
 }

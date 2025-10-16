@@ -1,4 +1,4 @@
-# SG Contadora ✨
+# SouthGenetics P&L ✨
 
 Una aplicación web rosa y femenina para la gestión contable de productos por país, construida con Next.js 14, TypeScript, TailwindCSS y Supabase.
 
@@ -158,4 +158,4 @@ Este proyecto está bajo la Licencia MIT.
 
 ---
 
-**SG Contadora** - Diseñado con 💕✨ para la gestión contable moderna
+**SouthGenetics P&L** - Diseñado con 💕✨ para la gestión contable moderna

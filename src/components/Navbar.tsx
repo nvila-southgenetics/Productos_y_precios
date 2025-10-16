@@ -35,16 +35,16 @@ export function Navbar() {
 
   if (loading) {
     return (
-      <nav className="border-b border-pink-400 bg-gradient-to-r from-fuchsia-500 to-pink-500 backdrop-blur-sm shadow-lg">
+      <nav className="border-b border-gray-900/50 bg-black">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <h1 
-              className="text-2xl font-bold font-heading text-white drop-shadow-md cursor-pointer hover:opacity-90 transition-opacity sparkle-float"
+              className="text-xl font-semibold text-white cursor-pointer hover:text-gray-400 transition-colors"
               onClick={() => router.push('/')}
             >
-              SG Contadora ✨
+              SouthGenetics P&L
             </h1>
-            <div className="w-20 h-8 bg-white/20 rounded animate-pulse" />
+            <div className="w-20 h-8 bg-gray-900 rounded animate-pulse" />
           </div>
         </div>
       </nav>
@@ -52,14 +52,14 @@ export function Navbar() {
   }
 
   return (
-    <nav className="border-b border-pink-400 bg-gradient-to-r from-fuchsia-500 to-pink-500 backdrop-blur-sm sticky top-0 z-40 shadow-lg">
+    <nav className="border-b border-gray-900/50 bg-black sticky top-0 z-40">
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <h1 
-            className="text-2xl font-bold font-heading text-white drop-shadow-md cursor-pointer hover:opacity-90 transition-opacity sparkle-float"
+            className="text-xl font-semibold text-white cursor-pointer hover:text-gray-400 transition-colors"
             onClick={() => router.push('/')}
           >
-            SG Contadora ✨
+            SouthGenetics P&L
           </h1>
           
           {user ? (
@@ -68,14 +68,14 @@ export function Navbar() {
                 variant="ghost" 
                 size="sm"
                 onClick={() => router.push('/settings')}
-                className="flex items-center gap-2 text-white hover:bg-white/20 hover:text-white"
+                className="flex items-center gap-2 text-gray-400 hover:text-white hover:bg-gray-900"
               >
                 <Settings className="w-4 h-4" />
                 Configuración
               </Button>
               <Button 
                 onClick={handleSignOut} 
-                className="flex items-center gap-2 bg-white text-fuchsia-600 hover:bg-fuchsia-100 hover:text-fuchsia-700 border-0"
+                className="flex items-center gap-2 bg-red-600 text-white hover:bg-red-700"
               >
                 <LogOut className="w-4 h-4" />
                 Cerrar Sesión
@@ -84,7 +84,7 @@ export function Navbar() {
           ) : (
             <Button 
               onClick={() => router.push('/login')}
-              className="bg-white text-fuchsia-600 hover:bg-white/90"
+              className="bg-blue-600 text-white hover:bg-blue-700"
             >
               Iniciar Sesión
             </Button>

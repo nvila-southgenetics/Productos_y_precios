@@ -16,9 +16,7 @@ export default function NewProductPage() {
   const [formData, setFormData] = useState({
     name: '',
     sku: '',
-    description: '',
-    base_price: '',
-    currency: 'USD'
+    description: ''
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -43,8 +41,8 @@ export default function NewProductPage() {
           name: formData.name,
           sku: formData.sku,
           description: formData.description || null,
-          base_price: parseFloat(formData.base_price),
-          currency: formData.currency,
+          base_price: 10, // Precio por defecto
+          currency: 'USD',
           user_id: user.id
         }])
 
@@ -83,9 +81,9 @@ export default function NewProductPage() {
               Volver
             </Button>
             <div>
-              <h1 className="text-3xl font-bold font-heading text-gray-900">Nuevo Producto</h1>
+              <h1 className="text-3xl font-semibold text-white">Nuevo Producto</h1>
               <p className="text-muted-foreground mt-1">
-                Crea un nuevo producto para gestionar precios por país
+                El precio base se podrá editar después desde la vista del producto
               </p>
             </div>
           </div>
@@ -133,28 +131,11 @@ export default function NewProductPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="base_price">Precio Base (Gross Sales) *</Label>
-                    <Input
-                      id="base_price"
-                      type="text"
-                      value={formData.base_price}
-                      onChange={(e) => handleInputChange('base_price', e.target.value)}
-                      placeholder="4000.00"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="currency">Moneda</Label>
-                    <Input
-                      id="currency"
-                      value={formData.currency}
-                      onChange={(e) => handleInputChange('currency', e.target.value)}
-                      placeholder="USD"
-                    />
-                  </div>
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    💡 El producto se creará con un precio base de <strong>$10.00 USD</strong>. 
+                    Podrás editarlo después desde la vista del producto.
+                  </p>
                 </div>
 
                 {error && (
@@ -164,7 +145,7 @@ export default function NewProductPage() {
                 )}
 
                 <div className="flex gap-4 pt-4">
-                  <Button type="submit" disabled={loading} className="flex-1">
+                  <Button type="submit" disabled={loading} className="flex-1 bg-white hover:bg-gray-200 text-black">
                     {loading ? 'Creando...' : 'Crear Producto'}
                   </Button>
                   <Button 
