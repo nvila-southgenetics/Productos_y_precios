@@ -202,7 +202,7 @@ export default function MetricsPage() {
               cx="50%" 
               cy="50%" 
               outerRadius={100}
-              label={(entry) => `${entry.country}: ${entry.percentage}%`}
+              label={(entry: any) => `${entry.country}: ${entry.percentage}%`}
             >
               {data.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill="#10b981" />
@@ -293,7 +293,7 @@ export default function MetricsPage() {
               cx="50%" 
               cy="50%" 
               outerRadius={100}
-              label={(entry) => `${entry.country}: $${entry.amount.toFixed(2)}`}
+              label={(entry: any) => `${entry.country}: $${entry.amount.toFixed(2)}`}
             >
               {data.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill="#2563eb" />
