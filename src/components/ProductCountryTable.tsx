@@ -341,7 +341,7 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
 
     return (
       <span 
-        className="cursor-pointer hover:bg-gray-950 px-2 py-1 rounded"
+        className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded"
         onDoubleClick={() => {
           console.log('🖱️ Double click detected on cell:', cellId)
           console.log('📊 Value:', value, 'isPercentage:', isPercentageColumn)
@@ -363,23 +363,29 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
   }
 
   const renderRow = (row: any, isHeader = false, isTotal = false, cellId?: string) => {
+    const isGrossProfit = row.label === "Gross Profit"
     const rowClasses = isHeader 
       ? "table-header font-semibold" 
-      :       isTotal 
-        ? "table-row bg-gray-100 font-semibold border-t-2 border-gray-300"
+      : isTotal 
+        ? isGrossProfit 
+          ? "table-row bg-emerald-50 font-semibold border-t-2 border-emerald-300"
+          : "table-row bg-gray-100 font-semibold border-t-2 border-gray-300"
         : "table-row"
+
+    const amountClasses = isGrossProfit ? "px-4 py-3 text-right font-mono text-emerald-700 font-bold" : "px-4 py-3 text-right font-mono"
+    const pctClasses = isGrossProfit ? "px-4 py-3 text-right font-mono text-sm text-emerald-600" : "px-4 py-3 text-right font-mono text-sm"
 
     return (
       <tr className={rowClasses}>
-        <td className="px-4 py-3 text-left">{row.label}</td>
-        <td className="px-4 py-3 text-right font-mono">
+        <td className={isGrossProfit ? "px-4 py-3 text-left text-emerald-700 font-semibold" : "px-4 py-3 text-left"}>{row.label}</td>
+        <td className={amountClasses}>
           {cellId && !isHeader && !isTotal ? (
             renderEditableCell(`${cellId}-usd`, Math.abs(row.amount))
           ) : (
             row.amount >= 0 ? formatCurrency(row.amount) : formatCurrency(Math.abs(row.amount))
           )}
         </td>
-        <td className="px-4 py-3 text-right font-mono text-sm">
+        <td className={pctClasses}>
           {cellId && !isHeader && !isTotal && row.pct !== undefined ? (
             renderEditableCell(`${cellId}-pct`, row.pct / 100, false, true)
           ) : (

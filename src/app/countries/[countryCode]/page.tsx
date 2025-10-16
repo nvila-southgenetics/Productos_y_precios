@@ -272,12 +272,12 @@ function ProductSummaryCard({
       </div>
       
       {/* Gross Profit */}
-      <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
+      <div className="text-center p-4 bg-emerald-50 rounded-lg border border-emerald-200">
         <div className="text-sm text-muted-foreground mb-1">Gross Profit</div>
-        <div className="text-lg font-semibold text-green-900 font-mono">
+        <div className="text-lg font-semibold text-emerald-700 font-mono">
           {formatCurrency(grossProfit.amount)}
         </div>
-        <div className="text-xs text-green-600">
+        <div className="text-xs text-emerald-600">
           {grossProfit.pct?.toFixed(1)}% del Revenue
         </div>
       </div>

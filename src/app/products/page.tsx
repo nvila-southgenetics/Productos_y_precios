@@ -193,7 +193,7 @@ export default function ProductsPage() {
                 variant={viewMode === 'grid' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setViewMode('grid')}
-                className={viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-900'}
+                className={viewMode === 'grid' ? 'bg-orange-600 text-white hover:bg-orange-700' : 'text-gray-600 hover:text-orange-600 hover:bg-orange-50'}
               >
                 <Grid3X3 className="w-4 h-4" />
               </Button>
@@ -201,7 +201,7 @@ export default function ProductsPage() {
                 variant={viewMode === 'table' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setViewMode('table')}
-                className={viewMode === 'table' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-900'}
+                className={viewMode === 'table' ? 'bg-orange-600 text-white hover:bg-orange-700' : 'text-gray-600 hover:text-orange-600 hover:bg-orange-50'}
               >
                 <List className="w-4 h-4" />
               </Button>
@@ -287,7 +287,7 @@ export default function ProductsPage() {
                   key={countryCode}
                   variant="outline"
                   onClick={() => router.push(`/countries/${countryCode}`)}
-                  className="flex flex-col items-center gap-2 h-auto py-4 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600"
+                  className="flex flex-col items-center gap-2 h-auto py-4 hover:bg-orange-50 hover:border-orange-300 hover:text-orange-600"
                 >
                   <span className="text-2xl">{COUNTRY_FLAGS[countryCode]}</span>
                   <span className="text-sm font-medium">{COUNTRY_NAMES[countryCode]}</span>
@@ -346,7 +346,7 @@ export default function ProductsPage() {
                             e.stopPropagation()
                             router.push(`/products/compare/${product.id}`)
                           }}
-                          className="w-full hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600"
+                          className="w-full hover:bg-orange-50 hover:border-orange-300 hover:text-orange-600"
                         >
                           <GitCompare className="w-4 h-4 mr-2" />
                           Comparar Países
@@ -354,12 +354,11 @@ export default function ProductsPage() {
                         <div className="flex gap-2">
                           <Button
                             size="sm"
-                            variant="outline"
                             onClick={(e) => {
                               e.stopPropagation()
                               router.push(`/products/${product.id}`)
                             }}
-                            className="flex-1"
+                            className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
                           >
                             <Eye className="w-4 h-4 mr-1" />
                             Ver
@@ -371,6 +370,7 @@ export default function ProductsPage() {
                               e.stopPropagation()
                               handleEditProduct(product)
                             }}
+                            className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
                           >
                             <Edit className="w-4 h-4" />
                           </Button>
@@ -439,16 +439,15 @@ export default function ProductsPage() {
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => router.push(`/products/compare/${product.id}`)}
-                                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                  className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
                                   title="Comparar países"
                                 >
                                   <GitCompare className="w-4 h-4" />
                                 </Button>
                                 <Button
                                   size="sm"
-                                  variant="ghost"
                                   onClick={() => router.push(`/products/${product.id}`)}
-                                  className="text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                                  className="bg-blue-600 text-white hover:bg-blue-700"
                                   title="Ver producto"
                                 >
                                   <Eye className="w-4 h-4" />
@@ -457,7 +456,7 @@ export default function ProductsPage() {
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => handleEditProduct(product)}
-                                  className="text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                                  className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
                                   title="Editar"
                                 >
                                   <Edit className="w-4 h-4" />
