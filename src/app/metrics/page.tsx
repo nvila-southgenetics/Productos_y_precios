@@ -14,10 +14,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
-import { TrendingUp, DollarSign, Calculator, Trophy } from 'lucide-react'
+import { BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
+import { TrendingUp, DollarSign, Calculator, Trophy, BarChart3, LineChart as LineChartIcon, PieChart as PieChartIcon } from 'lucide-react'
 
 const ALL_COUNTRIES: CountryCode[] = ['UY', 'AR', 'MX', 'CL', 'VE', 'CO']
+
+type ChartType = 'bar' | 'line' | 'area' | 'pie'
 
 interface ProductMetric {
   productName: string
@@ -32,6 +34,10 @@ export default function MetricsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [overrides, setOverrides] = useState<Record<string, Record<CountryCode, OverrideFields>>>({})
   const [loading, setLoading] = useState(true)
+  
+  // Chart type states
+  const [percentageChartType, setPercentageChartType] = useState<ChartType>('bar')
+  const [amountChartType, setAmountChartType] = useState<ChartType>('bar')
   
   // ROI Calculator states
   const [selectedProductId, setSelectedProductId] = useState<string>('')
@@ -164,6 +170,186 @@ export default function MetricsPage() {
   const topByAmount = getTopProductByCountry(false)
   const roiData = calculateROI()
 
+  const renderPercentageChart = () => {
+    const data = topByPercentage.map(m => ({ 
+      country: m.countryCode, 
+      percentage: Number(m.profitPercentage.toFixed(1)),
+      productName: m.productName,
+      fill: '#10b981'
+    }))
+
+    const tooltip = ({ active, payload }: any) => {
+      if (active && payload && payload.length) {
+        return (
+          <div className="bg-white p-3 border border-gray-200 rounded shadow-lg">
+            <p className="font-semibold text-sm">{payload[0].payload.productName}</p>
+            <p className="text-xs text-gray-600">{COUNTRY_NAMES[payload[0].payload.country as CountryCode]}</p>
+            <p className="text-emerald-600 font-semibold">{payload[0].value}% de rentabilidad</p>
+          </div>
+        )
+      }
+      return null
+    }
+
+    if (percentageChartType === 'pie') {
+      return (
+        <ResponsiveContainer width="100%" height={300}>
+          <PieChart>
+            <Pie 
+              data={data} 
+              dataKey="percentage" 
+              nameKey="country" 
+              cx="50%" 
+              cy="50%" 
+              outerRadius={100}
+              label={(entry) => `${entry.country}: ${entry.percentage}%`}
+            >
+              {data.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill="#10b981" />
+              ))}
+            </Pie>
+            <Tooltip content={tooltip} />
+          </PieChart>
+        </ResponsiveContainer>
+      )
+    }
+
+    if (percentageChartType === 'line') {
+      return (
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="country" />
+            <YAxis unit="%" />
+            <Tooltip content={tooltip} />
+            <Line type="monotone" dataKey="percentage" stroke="#10b981" strokeWidth={2} />
+          </LineChart>
+        </ResponsiveContainer>
+      )
+    }
+
+    if (percentageChartType === 'area') {
+      return (
+        <ResponsiveContainer width="100%" height={300}>
+          <AreaChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="country" />
+            <YAxis unit="%" />
+            <Tooltip content={tooltip} />
+            <Area type="monotone" dataKey="percentage" stroke="#10b981" fill="#10b981" fillOpacity={0.3} />
+          </AreaChart>
+        </ResponsiveContainer>
+      )
+    }
+
+    return (
+      <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="country" />
+          <YAxis unit="%" />
+          <Tooltip content={tooltip} />
+          <Bar dataKey="percentage" radius={[4, 4, 0, 0]}>
+            {data.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill="#10b981" />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    )
+  }
+
+  const renderAmountChart = () => {
+    const data = topByAmount.map(m => ({ 
+      country: m.countryCode, 
+      amount: Number(m.profitAmount.toFixed(2)),
+      productName: m.productName,
+      fill: '#2563eb'
+    }))
+
+    const tooltip = ({ active, payload }: any) => {
+      if (active && payload && payload.length) {
+        return (
+          <div className="bg-white p-3 border border-gray-200 rounded shadow-lg">
+            <p className="font-semibold text-sm">{payload[0].payload.productName}</p>
+            <p className="text-xs text-gray-600">{COUNTRY_NAMES[payload[0].payload.country as CountryCode]}</p>
+            <p className="text-blue-600 font-semibold">
+              ${payload[0].value.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            </p>
+          </div>
+        )
+      }
+      return null
+    }
+
+    if (amountChartType === 'pie') {
+      return (
+        <ResponsiveContainer width="100%" height={300}>
+          <PieChart>
+            <Pie 
+              data={data} 
+              dataKey="amount" 
+              nameKey="country" 
+              cx="50%" 
+              cy="50%" 
+              outerRadius={100}
+              label={(entry) => `${entry.country}: $${entry.amount.toFixed(2)}`}
+            >
+              {data.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill="#2563eb" />
+              ))}
+            </Pie>
+            <Tooltip content={tooltip} />
+          </PieChart>
+        </ResponsiveContainer>
+      )
+    }
+
+    if (amountChartType === 'line') {
+      return (
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="country" />
+            <YAxis unit=" $" />
+            <Tooltip content={tooltip} />
+            <Line type="monotone" dataKey="amount" stroke="#2563eb" strokeWidth={2} />
+          </LineChart>
+        </ResponsiveContainer>
+      )
+    }
+
+    if (amountChartType === 'area') {
+      return (
+        <ResponsiveContainer width="100%" height={300}>
+          <AreaChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="country" />
+            <YAxis unit=" $" />
+            <Tooltip content={tooltip} />
+            <Area type="monotone" dataKey="amount" stroke="#2563eb" fill="#2563eb" fillOpacity={0.3} />
+          </AreaChart>
+        </ResponsiveContainer>
+      )
+    }
+
+    return (
+      <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="country" />
+          <YAxis unit=" $" />
+          <Tooltip content={tooltip} />
+          <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
+            {data.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill="#2563eb" />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
@@ -180,95 +366,107 @@ export default function MetricsPage() {
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
           <Card>
             <CardHeader>
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-emerald-50 rounded-lg">
-                  <Trophy className="w-5 h-5 text-emerald-600" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-emerald-50 rounded-lg">
+                    <Trophy className="w-5 h-5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <CardTitle>Producto Más Rentable por País</CardTitle>
+                    <CardDescription>Por porcentaje de ganancia</CardDescription>
+                  </div>
                 </div>
-                <div>
-                  <CardTitle>Producto Más Rentable por País</CardTitle>
-                  <CardDescription>Por porcentaje de ganancia</CardDescription>
+                <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setPercentageChartType('bar')}
+                    className={percentageChartType === 'bar' ? 'bg-white shadow-sm' : ''}
+                  >
+                    <BarChart3 className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setPercentageChartType('line')}
+                    className={percentageChartType === 'line' ? 'bg-white shadow-sm' : ''}
+                  >
+                    <LineChartIcon className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setPercentageChartType('area')}
+                    className={percentageChartType === 'area' ? 'bg-white shadow-sm' : ''}
+                  >
+                    <TrendingUp className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setPercentageChartType('pie')}
+                    className={percentageChartType === 'pie' ? 'bg-white shadow-sm' : ''}
+                  >
+                    <PieChartIcon className="w-4 h-4" />
+                  </Button>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={topByPercentage.map(m => ({ 
-                  country: m.countryCode, 
-                  percentage: Number(m.profitPercentage.toFixed(1)),
-                  productName: m.productName
-                }))}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="country" />
-                  <YAxis unit="%" />
-                  <Tooltip 
-                    content={({ active, payload }) => {
-                      if (active && payload && payload.length) {
-                        return (
-                          <div className="bg-white p-3 border border-gray-200 rounded shadow-lg">
-                            <p className="font-semibold text-sm">{payload[0].payload.productName}</p>
-                            <p className="text-xs text-gray-600">{COUNTRY_NAMES[payload[0].payload.country as CountryCode]}</p>
-                            <p className="text-emerald-600 font-semibold">{payload[0].value}% de rentabilidad</p>
-                          </div>
-                        )
-                      }
-                      return null
-                    }}
-                  />
-                  <Bar dataKey="percentage" radius={[4, 4, 0, 0]}>
-                    {topByPercentage.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill="#10b981" />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              {renderPercentageChart()}
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-blue-50 rounded-lg">
-                  <DollarSign className="w-5 h-5 text-blue-600" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-blue-50 rounded-lg">
+                    <DollarSign className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <CardTitle>Producto que Más Dinero Deja por País</CardTitle>
+                    <CardDescription>Por ganancia absoluta en USD</CardDescription>
+                  </div>
                 </div>
-                <div>
-                  <CardTitle>Producto que Más Dinero Deja por País</CardTitle>
-                  <CardDescription>Por ganancia absoluta en USD</CardDescription>
+                <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setAmountChartType('bar')}
+                    className={amountChartType === 'bar' ? 'bg-white shadow-sm' : ''}
+                  >
+                    <BarChart3 className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setAmountChartType('line')}
+                    className={amountChartType === 'line' ? 'bg-white shadow-sm' : ''}
+                  >
+                    <LineChartIcon className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setAmountChartType('area')}
+                    className={amountChartType === 'area' ? 'bg-white shadow-sm' : ''}
+                  >
+                    <TrendingUp className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setAmountChartType('pie')}
+                    className={amountChartType === 'pie' ? 'bg-white shadow-sm' : ''}
+                  >
+                    <PieChartIcon className="w-4 h-4" />
+                  </Button>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={topByAmount.map(m => ({ 
-                  country: m.countryCode, 
-                  amount: Number(m.profitAmount.toFixed(2)),
-                  productName: m.productName
-                }))}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="country" />
-                  <YAxis unit=" $" />
-                  <Tooltip 
-                    content={({ active, payload }) => {
-                      if (active && payload && payload.length) {
-                        return (
-                          <div className="bg-white p-3 border border-gray-200 rounded shadow-lg">
-                            <p className="font-semibold text-sm">{payload[0].payload.productName}</p>
-                            <p className="text-xs text-gray-600">{COUNTRY_NAMES[payload[0].payload.country as CountryCode]}</p>
-                            <p className="text-blue-600 font-semibold">
-                              ${payload[0].value.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                            </p>
-                          </div>
-                        )
-                      }
-                      return null
-                    }}
-                  />
-                  <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
-                    {topByAmount.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill="#2563eb" />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              {renderAmountChart()}
             </CardContent>
           </Card>
         </div>
