@@ -10,6 +10,7 @@ import { Navbar } from '@/components/Navbar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { formatCurrency } from '@/lib/compute'
 import { COUNTRY_NAMES, COUNTRY_FLAGS } from '@/lib/countryRates'
 import { Plus, Package, Edit, Trash2, Grid3X3, List, Eye, Globe, GitCompare, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
@@ -36,6 +37,12 @@ export default function ProductsPage() {
     product: null
   })
   const [deleting, setDeleting] = useState(false)
+  const [editDialog, setEditDialog] = useState<{ open: boolean; product: Product | null }>({
+    open: false,
+    product: null
+  })
+  const [editForm, setEditForm] = useState({ name: '', description: '' })
+  const [updating, setUpdating] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -88,7 +95,44 @@ export default function ProductsPage() {
   }
 
   const handleEditProduct = (product: Product) => {
-    router.push(`/products/edit/${product.id}`)
+    setEditForm({
+      name: product.name,
+      description: product.description || ''
+    })
+    setEditDialog({ open: true, product })
+  }
+
+  const handleUpdateProduct = async () => {
+    if (!editDialog.product) return
+
+    setUpdating(true)
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({
+          name: editForm.name,
+          description: editForm.description || null
+        })
+        .eq('id', editDialog.product.id)
+
+      if (error) {
+        console.error('Error updating product:', error)
+        alert('Error al actualizar el producto')
+      } else {
+        // Actualizar la lista local
+        setProducts(products.map(p => 
+          p.id === editDialog.product!.id 
+            ? { ...p, name: editForm.name, description: editForm.description || null }
+            : p
+        ))
+        setEditDialog({ open: false, product: null })
+      }
+    } catch (error) {
+      console.error('Error updating product:', error)
+      alert('Error al actualizar el producto')
+    } finally {
+      setUpdating(false)
+    }
   }
 
   const toggleSortOrder = () => {
@@ -120,11 +164,11 @@ export default function ProductsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen">
+      <div className="min-h-screen bg-gray-50">
         <Navbar />
         <div className="container mx-auto px-4 py-8">
           <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-500"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           </div>
         </div>
       </div>
@@ -132,24 +176,24 @@ export default function ProductsPage() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-gray-50">
       <Navbar />
       
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-semibold text-white">Productos</h1>
+            <h1 className="text-3xl font-semibold text-gray-900">Productos</h1>
             <p className="text-muted-foreground mt-1">
               Gestiona tus productos y configura precios por país
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center bg-gray-950 rounded-lg p-1">
+            <div className="flex items-center bg-white border border-gray-200 rounded-lg p-1">
               <Button
                 variant={viewMode === 'grid' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setViewMode('grid')}
-                className={viewMode === 'grid' ? 'bg-white text-black' : 'text-gray-300'}
+                className={viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-900'}
               >
                 <Grid3X3 className="w-4 h-4" />
               </Button>
@@ -157,12 +201,12 @@ export default function ProductsPage() {
                 variant={viewMode === 'table' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setViewMode('table')}
-                className={viewMode === 'table' ? 'bg-white text-black' : 'text-gray-300'}
+                className={viewMode === 'table' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-900'}
               >
                 <List className="w-4 h-4" />
               </Button>
             </div>
-            <Button onClick={() => router.push('/products/new')} className="bg-white text-black hover:bg-gray-200">
+            <Button onClick={() => router.push('/products/new')} className="bg-blue-600 text-white hover:bg-blue-700">
               <Plus className="w-4 h-4 mr-2" />
               Nuevo Producto
             </Button>
@@ -192,7 +236,7 @@ export default function ProductsPage() {
                   variant="outline"
                   size="sm"
                   onClick={toggleSortOrder}
-                  className="flex items-center gap-2 min-w-[120px] border-orange-600 text-orange-500 hover:bg-orange-950 hover:text-orange-400 hover:border-orange-500"
+                  className="flex items-center gap-2 min-w-[120px] border-gray-300 text-gray-700 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300"
                 >
                   {sortOrder === 'none' && (
                     <>
@@ -243,7 +287,7 @@ export default function ProductsPage() {
                   key={countryCode}
                   variant="outline"
                   onClick={() => router.push(`/countries/${countryCode}`)}
-                  className="flex flex-col items-center gap-2 h-auto py-4 hover:bg-gray-950 hover:border-gray-300"
+                  className="flex flex-col items-center gap-2 h-auto py-4 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600"
                 >
                   <span className="text-2xl">{COUNTRY_FLAGS[countryCode]}</span>
                   <span className="text-sm font-medium">{COUNTRY_NAMES[countryCode]}</span>
@@ -266,7 +310,7 @@ export default function ProductsPage() {
                   : 'Intenta con otro término de búsqueda'}
               </p>
               {products.length === 0 && (
-                <Button onClick={() => router.push('/products/new')} className="bg-white hover:bg-gray-200 text-black">
+                <Button onClick={() => router.push('/products/new')} className="bg-blue-600 hover:bg-blue-700 text-white">
                   <Plus className="w-4 h-4 mr-2" />
                   Crear Producto
                 </Button>
@@ -297,11 +341,12 @@ export default function ProductsPage() {
                       <div className="flex flex-col gap-2 mt-4">
                         <Button
                           size="sm"
+                          variant="outline"
                           onClick={(e) => {
                             e.stopPropagation()
                             router.push(`/products/compare/${product.id}`)
                           }}
-                          className="w-full bg-white hover:bg-gray-200 text-black"
+                          className="w-full hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600"
                         >
                           <GitCompare className="w-4 h-4 mr-2" />
                           Comparar Países
@@ -351,33 +396,33 @@ export default function ProductsPage() {
                 <CardContent className="p-0">
                   <div className="overflow-x-auto">
                     <table className="w-full">
-                      <thead className="bg-black">
+                      <thead className="bg-gray-100">
                         <tr>
-                          <th className="text-left p-4 font-semibold text-white">Producto</th>
-                          <th className="text-left p-4 font-semibold text-white">SKU</th>
-                          <th className="text-left p-4 font-semibold text-white">Precio Base</th>
-                          <th className="text-left p-4 font-semibold text-white">Descripción</th>
-                          <th className="text-left p-4 font-semibold text-white">Fecha</th>
-                          <th className="text-center p-4 font-semibold text-white">Acciones</th>
+                          <th className="text-left p-4 font-semibold text-gray-900">Producto</th>
+                          <th className="text-left p-4 font-semibold text-gray-900">SKU</th>
+                          <th className="text-left p-4 font-semibold text-gray-900">Precio Base</th>
+                          <th className="text-left p-4 font-semibold text-gray-900">Descripción</th>
+                          <th className="text-left p-4 font-semibold text-gray-900">Fecha</th>
+                          <th className="text-center p-4 font-semibold text-gray-900">Acciones</th>
                         </tr>
                       </thead>
                       <tbody>
                         {filteredAndSortedProducts.map((product, index) => (
                           <tr 
                             key={product.id} 
-                            className={`border-b border-gray-950 hover:bg-black transition-colors ${
-                              index % 2 === 0 ? 'bg-black' : 'bg-gray-950'
+                            className={`border-b border-gray-200 hover:bg-gray-50 transition-colors ${
+                              index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                             }`}
                           >
                             <td className="p-4">
-                              <div className="font-medium text-white">{product.name}</div>
+                              <div className="font-medium text-gray-900">{product.name}</div>
                             </td>
                             <td className="p-4">
-                              <code className="bg-gray-950 px-2 py-1 rounded text-sm">
+                              <code className="bg-gray-100 px-2 py-1 rounded text-sm text-gray-900">
                                 {product.sku}
                               </code>
                             </td>
-                            <td className="p-4 font-semibold text-white">
+                            <td className="p-4 font-semibold text-gray-900">
                               {formatCurrency(product.base_price, product.currency || undefined)}
                             </td>
                             <td className="p-4">
@@ -394,7 +439,7 @@ export default function ProductsPage() {
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => router.push(`/products/compare/${product.id}`)}
-                                  className="text-gray-300 hover:text-white hover:bg-gray-950"
+                                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                                   title="Comparar países"
                                 >
                                   <GitCompare className="w-4 h-4" />
@@ -403,7 +448,7 @@ export default function ProductsPage() {
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => router.push(`/products/${product.id}`)}
-                                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                  className="text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                                   title="Ver producto"
                                 >
                                   <Eye className="w-4 h-4" />
@@ -412,7 +457,7 @@ export default function ProductsPage() {
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => handleEditProduct(product)}
-                                  className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                                  className="text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                                   title="Editar"
                                 >
                                   <Edit className="w-4 h-4" />
@@ -463,6 +508,56 @@ export default function ProductsPage() {
               disabled={deleting}
             >
               {deleting ? 'Eliminando...' : 'Eliminar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para editar producto */}
+      <Dialog open={editDialog.open} onOpenChange={(open) => setEditDialog({ open, product: null })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Producto</DialogTitle>
+            <DialogDescription>
+              Actualiza el nombre y la descripción del producto "{editDialog.product?.name}".
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Nombre del producto</Label>
+              <Input
+                id="edit-name"
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                placeholder="Nombre del producto"
+                disabled={updating}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-description">Descripción</Label>
+              <Input
+                id="edit-description"
+                value={editForm.description}
+                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                placeholder="Descripción del producto (opcional)"
+                disabled={updating}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditDialog({ open: false, product: null })}
+              disabled={updating}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleUpdateProduct}
+              disabled={updating || !editForm.name.trim()}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {updating ? 'Guardando...' : 'Guardar Cambios'}
             </Button>
           </DialogFooter>
         </DialogContent>

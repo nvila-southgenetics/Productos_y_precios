@@ -91,11 +91,11 @@ export default function CountryViewPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen">
+      <div className="min-h-screen bg-gray-50">
         <Navbar />
         <div className="container mx-auto px-4 py-8">
           <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-500"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           </div>
         </div>
       </div>
@@ -104,11 +104,11 @@ export default function CountryViewPage() {
 
   if (!COUNTRY_NAMES[countryCode]) {
     return (
-      <div className="min-h-screen">
+      <div className="min-h-screen bg-gray-50">
         <Navbar />
         <div className="container mx-auto px-4 py-8">
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-white mb-4">País no encontrado</h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-4">País no encontrado</h1>
             <Button onClick={() => router.push('/products')}>
               Volver a Productos
             </Button>
@@ -119,7 +119,7 @@ export default function CountryViewPage() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-gray-50">
       <Navbar />
       
       <div className="container mx-auto px-4 py-8">
@@ -135,7 +135,7 @@ export default function CountryViewPage() {
               Volver
             </Button>
             <div className="flex-1">
-              <h1 className="text-3xl font-bold font-heading text-white flex items-center gap-3">
+              <h1 className="text-3xl font-bold font-heading text-gray-900 flex items-center gap-3">
                 <span>{COUNTRY_FLAGS[countryCode]}</span>
                 Vista por País - {COUNTRY_NAMES[countryCode]}
               </h1>
@@ -172,7 +172,7 @@ export default function CountryViewPage() {
               <Card>
                 <CardContent className="py-12">
                   <div className="text-center">
-                    <h3 className="text-lg font-semibold text-white mb-2">No hay productos</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No hay productos</h3>
                     <p className="text-muted-foreground mb-4">
                       No se encontraron productos para mostrar.
                     </p>
@@ -242,15 +242,15 @@ function ProductSummaryCard({
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       {/* Gross Sales */}
-      <div className="text-center p-4 bg-gray-25 rounded-lg border border-gray-100">
+      <div className="text-center p-4 bg-gray-50 rounded-lg border border-gray-200">
         <div className="text-sm text-muted-foreground mb-1">Gross Sales</div>
-        <div className="text-lg font-semibold text-white font-mono">
+        <div className="text-lg font-semibold text-gray-900 font-mono">
           {formatCurrency(grossSales.amount)}
         </div>
       </div>
-
+      
       {/* Sales Revenue */}
-      <div className="text-center p-4 bg-blue-25 rounded-lg border border-blue-100">
+      <div className="text-center p-4 bg-blue-50 rounded-lg border border-blue-200">
         <div className="text-sm text-muted-foreground mb-1">Sales Revenue</div>
         <div className="text-lg font-semibold text-blue-900 font-mono">
           {formatCurrency(salesRevenue.amount)}
@@ -259,9 +259,9 @@ function ProductSummaryCard({
           {salesRevenue.pct?.toFixed(1)}% del Gross Sales
         </div>
       </div>
-
+      
       {/* Total Cost of Sales */}
-      <div className="text-center p-4 bg-orange-25 rounded-lg border border-orange-100">
+      <div className="text-center p-4 bg-orange-50 rounded-lg border border-orange-200">
         <div className="text-sm text-muted-foreground mb-1">Total Costs</div>
         <div className="text-lg font-semibold text-orange-900 font-mono">
           {formatCurrency(totalCostOfSales.amount)}
@@ -270,9 +270,9 @@ function ProductSummaryCard({
           {totalCostOfSales.pct?.toFixed(1)}% del Revenue
         </div>
       </div>
-
+      
       {/* Gross Profit */}
-      <div className="text-center p-4 bg-green-25 rounded-lg border border-green-100">
+      <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
         <div className="text-sm text-muted-foreground mb-1">Gross Profit</div>
         <div className="text-lg font-semibold text-green-900 font-mono">
           {formatCurrency(grossProfit.amount)}

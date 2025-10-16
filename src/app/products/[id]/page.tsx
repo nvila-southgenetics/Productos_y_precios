@@ -86,11 +86,11 @@ export default function ProductDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen">
+      <div className="min-h-screen bg-gray-50">
         <Navbar />
         <div className="container mx-auto px-4 py-8">
           <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           </div>
         </div>
       </div>
@@ -99,11 +99,11 @@ export default function ProductDetailPage() {
 
   if (!product) {
     return (
-      <div className="min-h-screen">
+      <div className="min-h-screen bg-gray-50">
         <Navbar />
         <div className="container mx-auto px-4 py-8">
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-white mb-4">Producto no encontrado</h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-4">Producto no encontrado</h1>
             <Button onClick={() => router.push('/products')}>
               Volver a Productos
             </Button>
@@ -114,7 +114,7 @@ export default function ProductDetailPage() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-gray-50">
       <Navbar />
       
       <div className="container mx-auto px-4 py-8">
@@ -130,7 +130,7 @@ export default function ProductDetailPage() {
               Volver
             </Button>
             <div className="flex-1">
-              <h1 className="text-3xl font-bold font-heading text-white">{product.name}</h1>
+              <h1 className="text-3xl font-bold font-heading text-gray-900">{product.name}</h1>
               <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
                 <span>SKU: {product.sku}</span>
                 <span>•</span>
@@ -138,8 +138,9 @@ export default function ProductDetailPage() {
               </div>
             </div>
             <Button 
+              variant="outline"
               onClick={() => router.push(`/products/compare/${product.id}`)}
-              className="bg-white hover:bg-gray-200 text-black"
+              className="hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600"
             >
               <GitCompare className="w-4 h-4 mr-2" />
               Comparar Países

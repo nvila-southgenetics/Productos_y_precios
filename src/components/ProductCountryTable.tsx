@@ -366,7 +366,7 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
     const rowClasses = isHeader 
       ? "table-header font-semibold" 
       :       isTotal 
-        ? "table-row bg-black font-semibold border-t-2 border-gray-900"
+        ? "table-row bg-gray-100 font-semibold border-t-2 border-gray-300"
         : "table-row"
 
     return (
@@ -397,9 +397,9 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
     <Card className="w-full">
       <CardContent className="p-0">
         {/* Header con botón de reiniciar y estado de guardado */}
-        <div className="px-6 py-4 border-b border-gray-900 flex justify-between items-center">
+        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
           <div className="flex items-center gap-3">
-            <h3 className="text-lg font-semibold text-white">
+            <h3 className="text-lg font-semibold text-gray-900">
               <span className="inline-block w-1 h-4 bg-blue-600 mr-2"></span>
               Cálculo de Costos
             </h3>
@@ -427,7 +427,7 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
             size="sm"
             onClick={resetAllToZero}
             disabled={isLoading}
-            className="text-yellow-500 border-yellow-600 hover:bg-yellow-950 hover:text-yellow-400 hover:border-yellow-500"
+            className="text-gray-700 border-gray-300 hover:bg-gray-100 hover:text-gray-900 hover:border-gray-400"
           >
             {isLoading ? 'Guardando...' : 'Reiniciar Parámetros'}
           </Button>
@@ -465,7 +465,7 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
               
               {/* Separador Cost of Sales - siempre visible */}
               <tr className="table-row">
-                <td colSpan={4} className="px-4 py-2 text-sm font-medium text-muted-foreground bg-black">
+                <td colSpan={4} className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100">
                   Cost of Sales
                 </td>
               </tr>
@@ -501,17 +501,17 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
         </div>
         
         {/* Instrucciones */}
-        <div className="px-6 py-3 bg-black border-t border-gray-900">
-          <p className="text-xs text-muted-foreground">
+        <div className="px-6 py-3 bg-gray-50 border-t border-gray-200">
+          <p className="text-xs text-gray-600">
             💡 Haz doble clic en cualquier valor USD para editarlo. Los valores con % se calculan automáticamente.
           </p>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-xs text-gray-600 mt-1">
             💰 <strong>Gross Sales es editable por país</strong> - cambia según el mercado local.
           </p>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-xs text-gray-600 mt-1">
             🔄 "Reiniciar Parámetros" pone todos los valores en cero y Gross Sales al precio base original.
           </p>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-xs text-gray-600 mt-1">
             ⌨️ Presiona Enter para guardar o Escape para cancelar la edición.
           </p>
         </div>

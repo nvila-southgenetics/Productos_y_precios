@@ -68,11 +68,11 @@ export default function ProductComparePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen">
+      <div className="min-h-screen bg-gray-50">
         <Navbar />
         <div className="container mx-auto px-4 py-8">
           <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           </div>
         </div>
       </div>
@@ -81,7 +81,7 @@ export default function ProductComparePage() {
 
   if (!product) {
     return (
-      <div className="min-h-screen">
+      <div className="min-h-screen bg-gray-50">
         <Navbar />
         <div className="container mx-auto px-4 py-8">
           <Card>
@@ -98,7 +98,7 @@ export default function ProductComparePage() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-gray-50">
       <Navbar />
       
       <div className="container mx-auto px-4 py-8">
@@ -107,7 +107,7 @@ export default function ProductComparePage() {
           <Button
             variant="ghost"
             onClick={() => router.push('/products')}
-            className="mb-4 text-gray-300 hover:text-white"
+            className="mb-4 text-gray-600 hover:text-gray-900"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Volver a Productos
@@ -115,7 +115,7 @@ export default function ProductComparePage() {
           
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold font-heading text-white ">
+              <h1 className="text-3xl font-bold font-heading text-gray-900">
                 Comparar: {product.name}
               </h1>
               <p className="text-muted-foreground mt-1">
@@ -144,8 +144,8 @@ export default function ProductComparePage() {
                     onClick={() => toggleCountry(country)}
                     className={`flex items-center gap-2 ${
                       isSelected 
-                        ? 'bg-white hover:bg-gray-200 text-black' 
-                        : 'hover:bg-gray-950 hover:border-gray-300'
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                        : 'hover:bg-blue-50 hover:border-blue-300'
                     }`}
                   >
                     <span className="text-xl">{COUNTRY_FLAGS[country]}</span>
@@ -171,13 +171,13 @@ export default function ProductComparePage() {
           {selectedCountries.map((country) => (
             <div key={country} className="flex flex-col">
               {/* Header del país */}
-              <Card className="mb-4 bg-black border-gray-900">
+              <Card className="mb-4 bg-blue-50 border-blue-200">
                 <CardHeader className="py-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <span className="text-3xl">{COUNTRY_FLAGS[country]}</span>
                       <div>
-                        <CardTitle className="text-xl text-white">
+                        <CardTitle className="text-xl text-gray-900">
                           {COUNTRY_NAMES[country]}
                         </CardTitle>
                         <CardDescription className="text-gray-600">
@@ -190,7 +190,7 @@ export default function ProductComparePage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => toggleCountry(country)}
-                        className="text-gray-400 hover:text-white hover:bg-gray-950"
+                        className="text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                       >
                         <X className="w-4 h-4" />
                       </Button>
@@ -209,9 +209,9 @@ export default function ProductComparePage() {
         </div>
 
         {/* Instrucciones */}
-        <Card className="mt-6 bg-black border-gray-900">
+        <Card className="mt-6 bg-blue-50 border-blue-200">
           <CardContent className="py-4">
-            <p className="text-sm text-gray-300">
+            <p className="text-sm text-gray-700">
               💡 <strong>Consejo:</strong> Puedes editar los valores en cualquier país haciendo doble clic. 
               Los cambios se guardan automáticamente y puedes comparar campo por campo fácilmente.
             </p>

@@ -35,16 +35,16 @@ export function Navbar() {
 
   if (loading) {
     return (
-      <nav className="border-b border-gray-900/50 bg-black">
+      <nav className="border-b border-gray-200 bg-white shadow-sm">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <h1 
-              className="text-xl font-semibold text-white cursor-pointer hover:text-gray-400 transition-colors"
+              className="text-xl font-semibold text-blue-600 cursor-pointer hover:text-blue-700 transition-colors"
               onClick={() => router.push('/')}
             >
               SouthGenetics P&L
             </h1>
-            <div className="w-20 h-8 bg-gray-900 rounded animate-pulse" />
+            <div className="w-20 h-8 bg-gray-100 rounded animate-pulse" />
           </div>
         </div>
       </nav>
@@ -52,11 +52,11 @@ export function Navbar() {
   }
 
   return (
-    <nav className="border-b border-gray-900/50 bg-black sticky top-0 z-40">
+    <nav className="border-b border-gray-200 bg-white shadow-sm sticky top-0 z-40">
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <h1 
-            className="text-xl font-semibold text-white cursor-pointer hover:text-gray-400 transition-colors"
+            className="text-xl font-semibold text-blue-600 cursor-pointer hover:text-blue-700 transition-colors"
             onClick={() => router.push('/')}
           >
             SouthGenetics P&L
@@ -68,7 +68,7 @@ export function Navbar() {
                 variant="ghost" 
                 size="sm"
                 onClick={() => router.push('/settings')}
-                className="flex items-center gap-2 text-gray-400 hover:text-white hover:bg-gray-900"
+                className="flex items-center gap-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50"
               >
                 <Settings className="w-4 h-4" />
                 Configuración

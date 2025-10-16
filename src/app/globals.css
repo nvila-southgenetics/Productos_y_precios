@@ -5,25 +5,25 @@
 
 @layer base {
   :root {
-    --background: 0 0% 0%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 8%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 8%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 0%;
-    --secondary: 0 0% 12%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 12%;
-    --muted-foreground: 0 0% 65%;
-    --accent: 0 0% 12%;
-    --accent-foreground: 0 0% 98%;
+    --background: 0 0% 100%;
+    --foreground: 0 0% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 10%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 10%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 217 91% 60%;
+    --accent-foreground: 0 0% 100%;
     --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 0%;
-    --border: 0 0% 15%;
-    --input: 0 0% 12%;
-    --ring: 0 0% 98%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 90%;
+    --input: 0 0% 96%;
+    --ring: 217 91% 60%;
     --radius: 0.5rem;
   }
 
@@ -66,31 +66,31 @@
 
 @layer components {
   .card-gradient {
-    @apply bg-gray-950 border border-gray-900;
+    @apply bg-white border border-gray-200 shadow-sm;
   }
   
   .btn-rose {
-    @apply bg-white hover:bg-gray-300 text-black shadow-sm hover:shadow-md transition-all duration-200;
+    @apply bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md transition-all duration-200;
   }
   
   .btn-rose-outline {
-    @apply border border-gray-800 text-gray-400 hover:bg-gray-950 transition-all duration-200;
+    @apply border border-gray-300 text-gray-700 hover:bg-gray-50 transition-all duration-200;
   }
   
   .country-chip {
-    @apply inline-flex items-center px-3 py-1 rounded text-sm font-medium bg-gray-900 text-gray-300 border border-gray-800;
+    @apply inline-flex items-center px-3 py-1 rounded text-sm font-medium bg-white text-gray-900 border border-gray-300 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300;
   }
   
   .table-header {
-    @apply bg-gray-950 border-b border-gray-900;
+    @apply bg-gray-100 border-b border-gray-200;
   }
   
   .table-row {
-    @apply border-b border-gray-900 hover:bg-gray-950 transition-colors duration-150;
+    @apply border-b border-gray-200 hover:bg-gray-50 transition-colors duration-150;
   }
   
   .input-rose {
-    @apply border-gray-800 focus:border-gray-600 focus:ring-gray-600/10;
+    @apply border-gray-300 focus:border-blue-500 focus:ring-blue-500/10;
   }
   
   .line-clamp-2 {
@@ -101,11 +101,11 @@
   }
   
   .bg-rose-25 {
-    background-color: rgb(10 10 10);
+    background-color: rgb(249 250 251);
   }
   
   .hover\:bg-rose-25:hover {
-    background-color: rgb(10 10 10);
+    background-color: rgb(249 250 251);
   }
 
   

@@ -71,13 +71,13 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black p-4">
-      <Card className="w-full max-w-md border-gray-900 bg-gray-950">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <Card className="w-full max-w-md border-gray-200 bg-white shadow-lg">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-semibold text-white">
+          <CardTitle className="text-2xl font-semibold text-blue-600">
             SouthGenetics P&L
           </CardTitle>
-          <CardDescription className="text-gray-400">
+          <CardDescription className="text-gray-600">
             {isLogin ? 'Inicia sesión en tu cuenta' : 'Crea una nueva cuenta'}
           </CardDescription>
         </CardHeader>
@@ -118,7 +118,7 @@ export default function LoginPage() {
                   setIsLogin(!isLogin)
                   setMessage('')
                 }}
-                className="text-sm text-gray-400 hover:text-white underline"
+                className="text-sm text-gray-600 hover:text-blue-600 underline"
               >
                 {isLogin ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión'}
               </button>
