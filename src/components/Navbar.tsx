@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
-import { Settings, User, LogOut } from 'lucide-react'
+import { Settings, User, LogOut, BarChart3 } from 'lucide-react'
 
 export function Navbar() {
   const [user, setUser] = useState<any>(null)
@@ -64,6 +64,15 @@ export function Navbar() {
           
           {user ? (
             <div className="flex items-center gap-2">
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => router.push('/metrics')}
+                className="flex items-center gap-2 text-gray-600 hover:text-orange-600 hover:bg-orange-50"
+              >
+                <BarChart3 className="w-4 h-4" />
+                Métricas
+              </Button>
               <Button 
                 variant="ghost" 
                 size="sm"
