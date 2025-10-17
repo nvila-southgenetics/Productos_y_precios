@@ -22,6 +22,7 @@ export type Database = {
           overrides: Json
           product_id: string
           updated_at: string | null
+          mx_config_type: string | null
         }
         Insert: {
           country_code: string
@@ -30,6 +31,7 @@ export type Database = {
           overrides?: Json
           product_id: string
           updated_at?: string | null
+          mx_config_type?: string | null
         }
         Update: {
           country_code?: string
@@ -38,6 +40,7 @@ export type Database = {
           overrides?: Json
           product_id?: string
           updated_at?: string | null
+          mx_config_type?: string | null
         }
         Relationships: [
           {

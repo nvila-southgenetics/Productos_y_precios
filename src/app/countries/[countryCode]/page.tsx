@@ -51,7 +51,10 @@ export default function CountryViewPage() {
         case 'name':
           return a.name.localeCompare(b.name)
         case 'price':
-          return b.base_price - a.base_price
+          // Ordenar por Gross Sales
+          const aGrossSales = aOverrides?.grossSalesUSD !== undefined ? aOverrides.grossSalesUSD : a.base_price
+          const bGrossSales = bOverrides?.grossSalesUSD !== undefined ? bOverrides.grossSalesUSD : b.base_price
+          return bGrossSales - aGrossSales
         case 'profit':
           return bResult.grossProfit.amount - aResult.grossProfit.amount
         default:
@@ -84,10 +87,14 @@ export default function CountryViewPage() {
 
   const fetchAllOverrides = async () => {
     try {
+      // Determinar el tipo de configuración a buscar
+      const configType = countryCode === 'MX' ? 'gobierno' : 'default'
+      
       const { data, error } = await supabase
         .from('product_country_overrides')
         .select('*')
         .eq('country_code', countryCode)
+        .eq('mx_config_type', configType)
 
       if (error) throw error
 
@@ -184,7 +191,7 @@ export default function CountryViewPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="name">Nombre</SelectItem>
-                  <SelectItem value="price">Precio Base</SelectItem>
+                    <SelectItem value="price">Gross Sales</SelectItem>
                   <SelectItem value="profit">Ganancia Bruta</SelectItem>
                 </SelectContent>
               </Select>
@@ -261,7 +268,7 @@ export default function CountryViewPage() {
                         <div>
                           <CardTitle className="text-xl">{product.name}</CardTitle>
                           <CardDescription>
-                            SKU: {product.sku} • Precio base: {formatCurrency(product.base_price, product.currency || undefined)}
+                            SKU: {product.sku}
                           </CardDescription>
                         </div>
                         <Button 
@@ -301,9 +308,6 @@ export default function CountryViewPage() {
                           SKU
                         </th>
                         <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                          Precio Base
-                        </th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
                           Gross Sales
                         </th>
                         <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
@@ -340,9 +344,6 @@ export default function CountryViewPage() {
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-600 font-mono">
                               {product.sku}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-right font-mono text-gray-900">
-                              {formatCurrency(product.base_price)}
                             </td>
                             <td className="px-4 py-3 text-sm text-right font-mono text-gray-900">
                               {formatCurrency(grossSales.amount)}

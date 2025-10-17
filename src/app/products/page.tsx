@@ -158,6 +158,7 @@ export default function ProductsPage() {
     })
     .sort((a, b) => {
       if (sortOrder === 'none') return 0
+      // Ordenar por Gross Sales (usando base_price como fallback)
       if (sortOrder === 'asc') return a.base_price - b.base_price
       return b.base_price - a.base_price
     })
@@ -231,7 +232,7 @@ export default function ProductsPage() {
               
               {/* Ordenar por precio */}
               <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600 whitespace-nowrap">Ordenar por precio:</span>
+                <span className="text-sm text-gray-600 whitespace-nowrap">Ordenar:</span>
                 <Button
                   variant="outline"
                   size="sm"
@@ -400,7 +401,6 @@ export default function ProductsPage() {
                         <tr>
                           <th className="text-left p-4 font-semibold text-gray-900">Producto</th>
                           <th className="text-left p-4 font-semibold text-gray-900">SKU</th>
-                          <th className="text-left p-4 font-semibold text-gray-900">Precio Base</th>
                           <th className="text-left p-4 font-semibold text-gray-900">Descripción</th>
                           <th className="text-left p-4 font-semibold text-gray-900">Fecha</th>
                           <th className="text-center p-4 font-semibold text-gray-900">Acciones</th>
@@ -421,9 +421,6 @@ export default function ProductsPage() {
                               <code className="bg-gray-100 px-2 py-1 rounded text-sm text-gray-900">
                                 {product.sku}
                               </code>
-                            </td>
-                            <td className="p-4 font-semibold text-gray-900">
-                              {formatCurrency(product.base_price, product.currency || undefined)}
                             </td>
                             <td className="p-4">
                               <div className="max-w-xs truncate text-sm text-gray-600">

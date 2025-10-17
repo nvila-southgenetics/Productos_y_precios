@@ -18,9 +18,13 @@ export function CountryTabs({ selectedCountry, onCountryChange }: CountryTabsPro
 
   return (
     <Tabs value={selectedCountry} onValueChange={handleValueChange} className="w-full">
-      <TabsList className="grid w-full grid-cols-6">
+      <TabsList className="grid w-full grid-cols-6 bg-gray-100">
         {countries.map((country) => (
-          <TabsTrigger key={country} value={country} className="country-chip">
+          <TabsTrigger 
+            key={country} 
+            value={country} 
+            className="country-chip data-[state=active]:bg-blue-100 data-[state=active]:text-blue-900 data-[state=active]:border data-[state=active]:border-blue-300"
+          >
             <span className="mr-2">{COUNTRY_FLAGS[country]}</span>
             {COUNTRY_NAMES[country]}
           </TabsTrigger>

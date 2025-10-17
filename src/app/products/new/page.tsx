@@ -81,9 +81,9 @@ export default function NewProductPage() {
               Volver
             </Button>
             <div>
-              <h1 className="text-3xl font-semibold text-white">Nuevo Producto</h1>
+              <h1 className="text-3xl font-semibold text-gray-900">Nuevo Producto</h1>
               <p className="text-muted-foreground mt-1">
-                El precio base se podrá editar después desde la vista del producto
+                Los precios se podrán configurar después desde la vista del producto
               </p>
             </div>
           </div>
@@ -133,8 +133,8 @@ export default function NewProductPage() {
 
                 <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                   <p className="text-sm text-blue-800">
-                    💡 El producto se creará con un precio base de <strong>$10.00 USD</strong>. 
-                    Podrás editarlo después desde la vista del producto.
+                    💡 El producto se creará con un valor inicial de <strong>$10.00 USD</strong> para Gross Sales. 
+                    Podrás configurar los precios por país desde la vista del producto.
                   </p>
                 </div>
 

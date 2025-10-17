@@ -1,11 +1,12 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Product, CountryCode, ComputedResult, OverrideFields } from '@/types'
+import { Product, CountryCode, ComputedResult, OverrideFields, MxConfigType } from '@/types'
 import { formatCurrency, formatPercentage, computePricing } from '@/lib/compute'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { supabase } from '@/lib/supabase'
 import { useNumericInput } from '@/hooks/useNumericInput'
 
@@ -20,6 +21,7 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
   const [overrides, setOverrides] = useState<OverrideFields>({})
   const [isLoading, setIsLoading] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [mxConfigType, setMxConfigType] = useState<MxConfigType>('gobierno')
 
   // Hook para el input de edición
   const editInput = useNumericInput()
@@ -30,7 +32,7 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
 
   useEffect(() => {
     loadOverrides()
-  }, [product.id, countryCode])
+  }, [product.id, countryCode, mxConfigType])
 
   useEffect(() => {
     console.log('Editing cell changed to:', editingCell)
@@ -38,11 +40,15 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
 
   const loadOverrides = async () => {
     try {
+      // Determinar el tipo de configuración a buscar
+      const configType = countryCode === 'MX' ? mxConfigType : 'default'
+      
       const { data, error } = await supabase
         .from('product_country_overrides')
-        .select('overrides')
+        .select('overrides, mx_config_type')
         .eq('product_id', product.id)
         .eq('country_code', countryCode)
+        .eq('mx_config_type', configType)
         .single()
 
       if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
@@ -50,7 +56,7 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
       }
 
       const newOverrides = (data?.overrides as OverrideFields) || {}
-      console.log('Loading overrides for', countryCode, ':', newOverrides)
+      console.log('Loading overrides for', countryCode, mxConfigType, ':', newOverrides)
       setOverrides(newOverrides)
     } catch (error) {
       console.error('Error loading overrides:', error)
@@ -84,14 +90,18 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
       console.log('🌍 Country Code:', countryCode)
 
       // Usar UPSERT para insertar o actualizar automáticamente
+      const upsertData: any = {
+        product_id: product.id,
+        country_code: countryCode,
+        overrides: newOverrides,
+        mx_config_type: countryCode === 'MX' ? mxConfigType : 'default'
+      }
+      
+      // Para México, el conflicto incluye mx_config_type; para otros países, no
       const { data, error } = await supabase
         .from('product_country_overrides')
-        .upsert({
-          product_id: product.id,
-          country_code: countryCode,
-          overrides: newOverrides
-        }, {
-          onConflict: 'product_id,country_code'
+        .upsert(upsertData, {
+          onConflict: 'product_id,country_code,mx_config_type'
         })
         .select()
 
@@ -99,12 +109,9 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
 
       if (error) {
         console.error('❌ Error en base de datos:', error)
-        console.error('❌ Detalles del error:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
-        })
+        console.error('❌ Detalles completos del error:', JSON.stringify(error, null, 2))
+        console.error('❌ Datos enviados:', JSON.stringify(upsertData, null, 2))
+        alert(`Error al guardar: ${error.message || JSON.stringify(error)}`)
         throw error
       }
 
@@ -126,12 +133,24 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
     }
   }
 
+  const changeMxConfigType = (newType: MxConfigType) => {
+    // Simplemente cambiar el tipo, el useEffect se encargará de cargar los overrides correspondientes
+    console.log('🔄 Cambiando tipo de configuración MX de', mxConfigType, 'a', newType)
+    setMxConfigType(newType)
+  }
+
   const resetAllToZero = async () => {
     setIsLoading(true)
+    setSaveStatus('saving')
     try {
+      console.log('🔄 Iniciando reseteo de parámetros...')
+      console.log('📦 Product ID:', product.id)
+      console.log('🌍 Country Code:', countryCode)
+      console.log('🇲🇽 MX Config Type:', mxConfigType)
+      
       // Poner todos los valores en cero incluyendo Gross Sales
       const resetOverrides: OverrideFields = {
-        grossSalesUSD: product.base_price, // Resetear a precio base del producto
+        grossSalesUSD: product.base_price, // Resetear al valor inicial del producto
         commercialDiscountPct: 0,
         commercialDiscountUSD: 0,
         productCostPct: 0,
@@ -154,27 +173,50 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
         salesCommissionUSD: 0
       }
 
+      console.log('📊 Reset overrides:', resetOverrides)
+
       // Usar UPSERT para insertar o actualizar automáticamente
-      const { error } = await supabase
+      const upsertData: any = {
+        product_id: product.id,
+        country_code: countryCode,
+        overrides: resetOverrides,
+        mx_config_type: countryCode === 'MX' ? mxConfigType : 'default'
+      }
+      
+      console.log('💾 Upsert data:', upsertData)
+      
+      // Para México, el conflicto incluye mx_config_type; para otros países, no
+      const { data, error } = await supabase
         .from('product_country_overrides')
-        .upsert({
-          product_id: product.id,
-          country_code: countryCode,
-          overrides: resetOverrides
-        }, {
-          onConflict: 'product_id,country_code'
+        .upsert(upsertData, {
+          onConflict: 'product_id,country_code,mx_config_type'
         })
         .select()
 
+      console.log('✅ Resultado del reseteo:', { data, error })
+
       if (error) {
-        console.error('Error en upsert:', error)
+        console.error('❌ Error en upsert al resetear:', error)
+        console.error('❌ Detalles completos del error:', JSON.stringify(error, null, 2))
+        console.error('❌ Datos enviados:', JSON.stringify(upsertData, null, 2))
+        alert(`Error al resetear parámetros: ${error.message || JSON.stringify(error)}`)
         throw error
       }
 
+      console.log('✅ Parámetros reseteados exitosamente')
       setOverrides(resetOverrides)
       onOverridesChange?.(resetOverrides)
-    } catch (error) {
-      console.error('Error resetting overrides:', error)
+      setSaveStatus('saved')
+      
+      // Resetear el estado de guardado después de 2 segundos
+      setTimeout(() => setSaveStatus('idle'), 2000)
+    } catch (error: any) {
+      console.error('❌ Error resetting overrides:', error)
+      alert(`Error al reiniciar parámetros: ${error.message || 'Error desconocido'}`)
+      setSaveStatus('error')
+      
+      // Resetear el estado de error después de 3 segundos
+      setTimeout(() => setSaveStatus('idle'), 3000)
     } finally {
       setIsLoading(false)
     }
@@ -276,19 +318,26 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
       console.log('💾 Guardando múltiples overrides:', newOverrides)
 
       // Usar UPSERT para insertar o actualizar automáticamente
+      const upsertData: any = {
+        product_id: product.id,
+        country_code: countryCode,
+        overrides: newOverrides,
+        mx_config_type: countryCode === 'MX' ? mxConfigType : 'default'
+      }
+      
+      // Para México, el conflicto incluye mx_config_type; para otros países, no
       const { data, error } = await supabase
         .from('product_country_overrides')
-        .upsert({
-          product_id: product.id,
-          country_code: countryCode,
-          overrides: newOverrides
-        }, {
-          onConflict: 'product_id,country_code'
+        .upsert(upsertData, {
+          onConflict: 'product_id,country_code,mx_config_type'
         })
         .select()
 
       if (error) {
-        console.error('❌ Error en upsert:', error)
+        console.error('❌ Error en upsert (múltiples):', error)
+        console.error('❌ Detalles completos del error:', JSON.stringify(error, null, 2))
+        console.error('❌ Datos enviados:', JSON.stringify(upsertData, null, 2))
+        alert(`Error al guardar overrides: ${error.message || JSON.stringify(error)}`)
         throw error
       }
       
@@ -438,6 +487,35 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
             {isLoading ? 'Guardando...' : 'Reiniciar Parámetros'}
           </Button>
         </div>
+
+        {/* Selector de configuración para México */}
+        {countryCode === 'MX' && (
+          <div className="px-6 py-4 border-b border-gray-200 bg-blue-50">
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-medium text-gray-700">
+                Configuración de costos:
+              </label>
+              <Select 
+                value={mxConfigType} 
+                onValueChange={(value: MxConfigType) => changeMxConfigType(value)}
+                disabled={isLoading}
+              >
+                <SelectTrigger className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="gobierno">Gobierno</SelectItem>
+                  <SelectItem value="convenio">Convenio</SelectItem>
+                  <SelectItem value="lanzamiento">Lanzamiento</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="flex items-center gap-2 text-xs text-gray-600">
+                <span className="inline-block w-2 h-2 bg-blue-500 rounded-full"></span>
+                Cada configuración tiene valores independientes que puedes editar
+              </div>
+            </div>
+          </div>
+        )}
         
         <div className="overflow-x-auto">
           <table className="w-full">

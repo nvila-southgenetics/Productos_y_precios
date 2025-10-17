@@ -119,7 +119,7 @@ export default function ProductComparePage() {
                 Comparar: {product.name}
               </h1>
               <p className="text-muted-foreground mt-1">
-                SKU: {product.sku} | Precio Base: ${product.base_price.toFixed(2)}
+                SKU: {product.sku}
               </p>
             </div>
           </div>

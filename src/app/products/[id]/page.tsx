@@ -62,11 +62,15 @@ export default function ProductDetailPage() {
 
   const fetchOverrides = async () => {
     try {
+      // Determinar el tipo de configuración a buscar
+      const configType = selectedCountry === 'MX' ? 'gobierno' : 'default'
+      
       const { data, error } = await supabase
         .from('product_country_overrides')
         .select('overrides')
         .eq('product_id', productId)
         .eq('country_code', selectedCountry)
+        .eq('mx_config_type', configType)
         .single()
 
       if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
@@ -133,8 +137,6 @@ export default function ProductDetailPage() {
               <h1 className="text-3xl font-bold font-heading text-gray-900">{product.name}</h1>
               <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
                 <span>SKU: {product.sku}</span>
-                <span>•</span>
-                <span>Precio base: {formatCurrency(product.base_price, product.currency || undefined)}</span>
               </div>
             </div>
             <Button 
@@ -190,10 +192,6 @@ export default function ProductDetailPage() {
                   <div>
                     <span className="text-sm text-muted-foreground">SKU:</span>
                     <p className="font-mono text-sm">{product.sku}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm text-muted-foreground">Precio base:</span>
-                    <p className="font-medium">{formatCurrency(product.base_price, product.currency || undefined)}</p>
                   </div>
                   {product.description && (
                     <div>

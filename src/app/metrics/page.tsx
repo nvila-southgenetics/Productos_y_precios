@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
-import { TrendingUp, DollarSign, Calculator, Trophy, BarChart3, LineChart as LineChartIcon, PieChart as PieChartIcon } from 'lucide-react'
+import { TrendingUp, TrendingDown, DollarSign, Calculator, Trophy, BarChart3, LineChart as LineChartIcon, PieChart as PieChartIcon, Globe, AlertTriangle } from 'lucide-react'
 
 const ALL_COUNTRIES: CountryCode[] = ['UY', 'AR', 'MX', 'CL', 'VE', 'CO']
 
@@ -38,6 +38,9 @@ export default function MetricsPage() {
   // Chart type states
   const [percentageChartType, setPercentageChartType] = useState<ChartType>('bar')
   const [amountChartType, setAmountChartType] = useState<ChartType>('bar')
+  const [leastProfitablePercentageChartType, setLeastProfitablePercentageChartType] = useState<ChartType>('bar')
+  const [leastProfitableAmountChartType, setLeastProfitableAmountChartType] = useState<ChartType>('bar')
+  const [mostProfitableCountriesChartType, setMostProfitableCountriesChartType] = useState<ChartType>('bar')
   
   // ROI Calculator states
   const [selectedProductId, setSelectedProductId] = useState<string>('')
@@ -59,9 +62,11 @@ export default function MetricsPage() {
 
       if (productsError) throw productsError
 
+      // Cargar overrides: para México usar "gobierno", para otros usar "default"
       const { data: overridesData, error: overridesError } = await supabase
         .from('product_country_overrides')
         .select('*')
+        .in('mx_config_type', ['gobierno', 'default'])
 
       if (overridesError) throw overridesError
 
@@ -126,6 +131,43 @@ export default function MetricsPage() {
     return Object.values(topByCountry)
   }
 
+  const getBottomProductByCountry = (byPercentage: boolean) => {
+    const metrics = calculateMetrics()
+    const bottomByCountry: Record<CountryCode, ProductMetric> = {} as Record<CountryCode, ProductMetric>
+
+    ALL_COUNTRIES.forEach(country => {
+      const countryMetrics = metrics.filter(m => m.countryCode === country)
+      if (countryMetrics.length > 0) {
+        const sorted = countryMetrics.sort((a, b) => 
+          byPercentage ? a.profitPercentage - b.profitPercentage : a.profitAmount - b.profitAmount
+        )
+        bottomByCountry[country] = sorted[0]
+      }
+    })
+
+    return Object.values(bottomByCountry)
+  }
+
+  const getCountriesProfitability = () => {
+    const metrics = calculateMetrics()
+    const countryTotals: Record<CountryCode, { profitAmount: number; profitPercentage: number; count: number }> = {} as any
+
+    ALL_COUNTRIES.forEach(country => {
+      const countryMetrics = metrics.filter(m => m.countryCode === country)
+      if (countryMetrics.length > 0) {
+        const totalProfit = countryMetrics.reduce((sum, m) => sum + m.profitAmount, 0)
+        const avgPercentage = countryMetrics.reduce((sum, m) => sum + m.profitPercentage, 0) / countryMetrics.length
+        countryTotals[country] = {
+          profitAmount: totalProfit,
+          profitPercentage: avgPercentage,
+          count: countryMetrics.length
+        }
+      }
+    })
+
+    return countryTotals
+  }
+
   const getProductsByCountry = (countryCode: CountryCode) => {
     const metrics = calculateMetrics()
     return metrics.filter(m => m.countryCode === countryCode)
@@ -168,6 +210,9 @@ export default function MetricsPage() {
 
   const topByPercentage = getTopProductByCountry(true)
   const topByAmount = getTopProductByCountry(false)
+  const bottomByPercentage = getBottomProductByCountry(true)
+  const bottomByAmount = getBottomProductByCountry(false)
+  const countriesProfitability = getCountriesProfitability()
   const roiData = calculateROI()
 
   const renderPercentageChart = () => {
@@ -350,6 +395,281 @@ export default function MetricsPage() {
     )
   }
 
+  const renderLeastProfitablePercentageChart = () => {
+    const data = bottomByPercentage.map(m => ({ 
+      country: m.countryCode, 
+      percentage: Number(m.profitPercentage.toFixed(1)),
+      productName: m.productName,
+      fill: '#ef4444'
+    }))
+
+    const tooltip = ({ active, payload }: any) => {
+      if (active && payload && payload.length) {
+        return (
+          <div className="bg-white p-3 border border-gray-200 rounded shadow-lg">
+            <p className="font-semibold text-sm">{payload[0].payload.productName}</p>
+            <p className="text-xs text-gray-600">{COUNTRY_NAMES[payload[0].payload.country as CountryCode]}</p>
+            <p className="text-red-600 font-semibold">{payload[0].value}% de rentabilidad</p>
+          </div>
+        )
+      }
+      return null
+    }
+
+    if (leastProfitablePercentageChartType === 'pie') {
+      return (
+        <ResponsiveContainer width="100%" height={300}>
+          <PieChart>
+            <Pie 
+              data={data} 
+              dataKey="percentage" 
+              nameKey="country" 
+              cx="50%" 
+              cy="50%" 
+              outerRadius={100}
+              label={(entry: any) => `${entry.country}: ${entry.percentage}%`}
+            >
+              {data.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill="#ef4444" />
+              ))}
+            </Pie>
+            <Tooltip content={tooltip} />
+          </PieChart>
+        </ResponsiveContainer>
+      )
+    }
+
+    if (leastProfitablePercentageChartType === 'line') {
+      return (
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="country" />
+            <YAxis unit="%" />
+            <Tooltip content={tooltip} />
+            <Line type="monotone" dataKey="percentage" stroke="#ef4444" strokeWidth={2} />
+          </LineChart>
+        </ResponsiveContainer>
+      )
+    }
+
+    if (leastProfitablePercentageChartType === 'area') {
+      return (
+        <ResponsiveContainer width="100%" height={300}>
+          <AreaChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="country" />
+            <YAxis unit="%" />
+            <Tooltip content={tooltip} />
+            <Area type="monotone" dataKey="percentage" stroke="#ef4444" fill="#ef4444" fillOpacity={0.3} />
+          </AreaChart>
+        </ResponsiveContainer>
+      )
+    }
+
+    return (
+      <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="country" />
+          <YAxis unit="%" />
+          <Tooltip content={tooltip} />
+          <Bar dataKey="percentage" radius={[4, 4, 0, 0]}>
+            {data.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill="#ef4444" />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    )
+  }
+
+  const renderLeastProfitableAmountChart = () => {
+    const data = bottomByAmount.map(m => ({ 
+      country: m.countryCode, 
+      amount: Number(m.profitAmount.toFixed(2)),
+      productName: m.productName,
+      fill: '#f97316'
+    }))
+
+    const tooltip = ({ active, payload }: any) => {
+      if (active && payload && payload.length) {
+        return (
+          <div className="bg-white p-3 border border-gray-200 rounded shadow-lg">
+            <p className="font-semibold text-sm">{payload[0].payload.productName}</p>
+            <p className="text-xs text-gray-600">{COUNTRY_NAMES[payload[0].payload.country as CountryCode]}</p>
+            <p className="text-orange-600 font-semibold">
+              ${payload[0].value.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            </p>
+          </div>
+        )
+      }
+      return null
+    }
+
+    if (leastProfitableAmountChartType === 'pie') {
+      return (
+        <ResponsiveContainer width="100%" height={300}>
+          <PieChart>
+            <Pie 
+              data={data} 
+              dataKey="amount" 
+              nameKey="country" 
+              cx="50%" 
+              cy="50%" 
+              outerRadius={100}
+              label={(entry: any) => `${entry.country}: $${entry.amount.toFixed(2)}`}
+            >
+              {data.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill="#f97316" />
+              ))}
+            </Pie>
+            <Tooltip content={tooltip} />
+          </PieChart>
+        </ResponsiveContainer>
+      )
+    }
+
+    if (leastProfitableAmountChartType === 'line') {
+      return (
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="country" />
+            <YAxis unit=" $" />
+            <Tooltip content={tooltip} />
+            <Line type="monotone" dataKey="amount" stroke="#f97316" strokeWidth={2} />
+          </LineChart>
+        </ResponsiveContainer>
+      )
+    }
+
+    if (leastProfitableAmountChartType === 'area') {
+      return (
+        <ResponsiveContainer width="100%" height={300}>
+          <AreaChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="country" />
+            <YAxis unit=" $" />
+            <Tooltip content={tooltip} />
+            <Area type="monotone" dataKey="amount" stroke="#f97316" fill="#f97316" fillOpacity={0.3} />
+          </AreaChart>
+        </ResponsiveContainer>
+      )
+    }
+
+    return (
+      <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="country" />
+          <YAxis unit=" $" />
+          <Tooltip content={tooltip} />
+          <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
+            {data.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill="#f97316" />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    )
+  }
+
+  const renderMostProfitableCountriesChart = () => {
+    const data = Object.entries(countriesProfitability)
+      .sort((a, b) => b[1].profitAmount - a[1].profitAmount)
+      .map(([country, data]) => ({
+        country: country as CountryCode,
+        amount: Number(data.profitAmount.toFixed(2)),
+        percentage: Number(data.profitPercentage.toFixed(1)),
+        products: data.count,
+        fill: '#10b981'
+      }))
+
+    const tooltip = ({ active, payload }: any) => {
+      if (active && payload && payload.length) {
+        return (
+          <div className="bg-white p-3 border border-gray-200 rounded shadow-lg">
+            <p className="font-semibold text-sm">{COUNTRY_NAMES[payload[0].payload.country as CountryCode]}</p>
+            <p className="text-emerald-600 font-semibold">
+              ${payload[0].value.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            </p>
+            <p className="text-xs text-gray-600">Promedio: {payload[0].payload.percentage}%</p>
+            <p className="text-xs text-gray-600">{payload[0].payload.products} productos</p>
+          </div>
+        )
+      }
+      return null
+    }
+
+    if (mostProfitableCountriesChartType === 'pie') {
+      return (
+        <ResponsiveContainer width="100%" height={300}>
+          <PieChart>
+            <Pie 
+              data={data} 
+              dataKey="amount" 
+              nameKey="country" 
+              cx="50%" 
+              cy="50%" 
+              outerRadius={100}
+              label={(entry: any) => `${entry.country}: $${entry.amount.toFixed(0)}`}
+            >
+              {data.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill="#10b981" />
+              ))}
+            </Pie>
+            <Tooltip content={tooltip} />
+          </PieChart>
+        </ResponsiveContainer>
+      )
+    }
+
+    if (mostProfitableCountriesChartType === 'line') {
+      return (
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="country" />
+            <YAxis unit=" $" />
+            <Tooltip content={tooltip} />
+            <Line type="monotone" dataKey="amount" stroke="#10b981" strokeWidth={2} />
+          </LineChart>
+        </ResponsiveContainer>
+      )
+    }
+
+    if (mostProfitableCountriesChartType === 'area') {
+      return (
+        <ResponsiveContainer width="100%" height={300}>
+          <AreaChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="country" />
+            <YAxis unit=" $" />
+            <Tooltip content={tooltip} />
+            <Area type="monotone" dataKey="amount" stroke="#10b981" fill="#10b981" fillOpacity={0.3} />
+          </AreaChart>
+        </ResponsiveContainer>
+      )
+    }
+
+    return (
+      <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="country" />
+          <YAxis unit=" $" />
+          <Tooltip content={tooltip} />
+          <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
+            {data.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill="#10b981" />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
@@ -362,7 +682,8 @@ export default function MetricsPage() {
           </p>
         </div>
 
-        {/* Productos más rentables por país */}
+        {/* Sección: Productos más rentables */}
+        <h2 className="text-2xl font-semibold text-gray-900 mb-4">Productos Más Rentables</h2>
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
           <Card>
             <CardHeader>
@@ -470,6 +791,171 @@ export default function MetricsPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Sección: Productos menos rentables */}
+        <h2 className="text-2xl font-semibold text-gray-900 mb-4">Productos Menos Rentables</h2>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-red-50 rounded-lg">
+                    <AlertTriangle className="w-5 h-5 text-red-600" />
+                  </div>
+                  <div>
+                    <CardTitle>Producto Menos Rentable por País</CardTitle>
+                    <CardDescription>Por porcentaje de ganancia</CardDescription>
+                  </div>
+                </div>
+                <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setLeastProfitablePercentageChartType('bar')}
+                    className={leastProfitablePercentageChartType === 'bar' ? 'bg-white shadow-sm' : ''}
+                  >
+                    <BarChart3 className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setLeastProfitablePercentageChartType('line')}
+                    className={leastProfitablePercentageChartType === 'line' ? 'bg-white shadow-sm' : ''}
+                  >
+                    <LineChartIcon className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setLeastProfitablePercentageChartType('area')}
+                    className={leastProfitablePercentageChartType === 'area' ? 'bg-white shadow-sm' : ''}
+                  >
+                    <TrendingUp className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setLeastProfitablePercentageChartType('pie')}
+                    className={leastProfitablePercentageChartType === 'pie' ? 'bg-white shadow-sm' : ''}
+                  >
+                    <PieChartIcon className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {renderLeastProfitablePercentageChart()}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-orange-50 rounded-lg">
+                    <TrendingDown className="w-5 h-5 text-orange-600" />
+                  </div>
+                  <div>
+                    <CardTitle>Producto que Menos Dinero Deja por País</CardTitle>
+                    <CardDescription>Por ganancia absoluta en USD</CardDescription>
+                  </div>
+                </div>
+                <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setLeastProfitableAmountChartType('bar')}
+                    className={leastProfitableAmountChartType === 'bar' ? 'bg-white shadow-sm' : ''}
+                  >
+                    <BarChart3 className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setLeastProfitableAmountChartType('line')}
+                    className={leastProfitableAmountChartType === 'line' ? 'bg-white shadow-sm' : ''}
+                  >
+                    <LineChartIcon className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setLeastProfitableAmountChartType('area')}
+                    className={leastProfitableAmountChartType === 'area' ? 'bg-white shadow-sm' : ''}
+                  >
+                    <TrendingUp className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setLeastProfitableAmountChartType('pie')}
+                    className={leastProfitableAmountChartType === 'pie' ? 'bg-white shadow-sm' : ''}
+                  >
+                    <PieChartIcon className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {renderLeastProfitableAmountChart()}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Sección: Rentabilidad por País */}
+        <h2 className="text-2xl font-semibold text-gray-900 mb-4">Países Más Rentables</h2>
+        <Card className="mb-8">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-emerald-50 rounded-lg">
+                  <Globe className="w-5 h-5 text-emerald-600" />
+                </div>
+                <div>
+                  <CardTitle>Países Más Rentables</CardTitle>
+                  <CardDescription>Por ganancia total en USD</CardDescription>
+                </div>
+              </div>
+              <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setMostProfitableCountriesChartType('bar')}
+                  className={mostProfitableCountriesChartType === 'bar' ? 'bg-white shadow-sm' : ''}
+                >
+                  <BarChart3 className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setMostProfitableCountriesChartType('line')}
+                  className={mostProfitableCountriesChartType === 'line' ? 'bg-white shadow-sm' : ''}
+                >
+                  <LineChartIcon className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setMostProfitableCountriesChartType('area')}
+                  className={mostProfitableCountriesChartType === 'area' ? 'bg-white shadow-sm' : ''}
+                >
+                  <TrendingUp className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setMostProfitableCountriesChartType('pie')}
+                  className={mostProfitableCountriesChartType === 'pie' ? 'bg-white shadow-sm' : ''}
+                >
+                  <PieChartIcon className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {renderMostProfitableCountriesChart()}
+          </CardContent>
+        </Card>
 
         {/* Calculadora de ROI */}
         <Card className="mb-8">
