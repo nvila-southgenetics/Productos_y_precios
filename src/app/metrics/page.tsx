@@ -62,11 +62,11 @@ export default function MetricsPage() {
 
       if (productsError) throw productsError
 
-      // Cargar overrides: para México usar "gobierno", para otros usar "default"
+      // Cargar overrides: para México usar "precio_lista", para otros usar "default"
       const { data: overridesData, error: overridesError } = await supabase
         .from('product_country_overrides')
         .select('*')
-        .in('mx_config_type', ['gobierno', 'default'])
+        .in('mx_config_type', ['precio_lista', 'default'])
 
       if (overridesError) throw overridesError
 

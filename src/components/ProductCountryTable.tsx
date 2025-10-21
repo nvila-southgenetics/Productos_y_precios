@@ -21,7 +21,7 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
   const [overrides, setOverrides] = useState<OverrideFields>({})
   const [isLoading, setIsLoading] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
-  const [mxConfigType, setMxConfigType] = useState<MxConfigType>('gobierno')
+  const [mxConfigType, setMxConfigType] = useState<MxConfigType>('precio_lista')
 
   // Hook para el input de edición
   const editInput = useNumericInput()
@@ -504,6 +504,7 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="precio_lista">Precio de lista</SelectItem>
                   <SelectItem value="gobierno">Gobierno</SelectItem>
                   <SelectItem value="convenio">Convenio</SelectItem>
                   <SelectItem value="lanzamiento">Lanzamiento</SelectItem>

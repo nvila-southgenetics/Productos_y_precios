@@ -63,7 +63,7 @@ export default function ProductDetailPage() {
   const fetchOverrides = async () => {
     try {
       // Determinar el tipo de configuración a buscar
-      const configType = selectedCountry === 'MX' ? 'gobierno' : 'default'
+      const configType = selectedCountry === 'MX' ? 'precio_lista' : 'default'
       
       const { data, error } = await supabase
         .from('product_country_overrides')
