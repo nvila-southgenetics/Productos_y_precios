@@ -139,6 +139,23 @@ export default function CountryViewPage() {
     )
   }
 
+  const sortedProducts = getSortedProducts()
+
+  // Calcular métricas totales
+  const totalRevenue = sortedProducts.reduce((sum, product) => {
+    const productOverrides = overrides[product.id] || {}
+    const result = computePricing(product, countryCode, productOverrides)
+    return sum + result.salesRevenue.amount
+  }, 0)
+
+  const totalProfit = sortedProducts.reduce((sum, product) => {
+    const productOverrides = overrides[product.id] || {}
+    const result = computePricing(product, countryCode, productOverrides)
+    return sum + result.grossProfit.amount
+  }, 0)
+
+  const averageProfitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
@@ -164,6 +181,29 @@ export default function CountryViewPage() {
                 Compara todos los productos y sus precios para {COUNTRY_NAMES[countryCode]}
               </p>
             </div>
+          </div>
+
+          {/* Métricas generales */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardDescription>Total de Productos</CardDescription>
+                <CardTitle className="text-3xl">{sortedProducts.length}</CardTitle>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardDescription>Revenue Total</CardDescription>
+                <CardTitle className="text-3xl text-blue-600">{formatCurrency(totalRevenue)}</CardTitle>
+              </CardHeader>
+            </Card>
+            <Card className="border-emerald-200">
+              <CardHeader className="pb-3 bg-emerald-50">
+                <CardDescription className="text-emerald-700">Gross Profit Total</CardDescription>
+                <CardTitle className="text-3xl text-emerald-600">{formatCurrency(totalProfit)}</CardTitle>
+                <p className="text-sm text-emerald-700">Margen promedio: {averageProfitMargin.toFixed(1)}%</p>
+              </CardHeader>
+            </Card>
           </div>
 
           {/* Search and Sort Controls */}
@@ -199,7 +239,7 @@ export default function CountryViewPage() {
               
               <div className="flex items-center gap-3">
             <div className="text-sm text-muted-foreground">
-                  {getSortedProducts().length} producto{getSortedProducts().length !== 1 ? 's' : ''}
+                  {sortedProducts.length} producto{sortedProducts.length !== 1 ? 's' : ''}
                   {searchTerm && ` de ${products.length}`}
                 </div>
                 
@@ -227,7 +267,7 @@ export default function CountryViewPage() {
           </div>
 
           {/* Products Grid/Table */}
-          {getSortedProducts().length === 0 ? (
+          {sortedProducts.length === 0 ? (
               <Card>
                 <CardContent className="py-12">
                   <div className="text-center">
@@ -257,7 +297,7 @@ export default function CountryViewPage() {
               </Card>
           ) : viewMode === 'grid' ? (
             <div className="space-y-6">
-              {getSortedProducts().map((product) => {
+              {sortedProducts.map((product) => {
                 const productOverrides = overrides[product.id] || {}
                 const computedResult = computePricing(product, countryCode, productOverrides)
                 
@@ -328,7 +368,7 @@ export default function CountryViewPage() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {getSortedProducts().map((product) => {
+                      {sortedProducts.map((product) => {
                         const productOverrides = overrides[product.id] || {}
                         const computedResult = computePricing(product, countryCode, productOverrides)
                         const { grossSales, salesRevenue, totalCostOfSales, grossProfit } = computedResult
