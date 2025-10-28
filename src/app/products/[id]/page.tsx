@@ -62,15 +62,17 @@ export default function ProductDetailPage() {
 
   const fetchOverrides = async () => {
     try {
-      // Determinar el tipo de configuración a buscar
-      const configType = selectedCountry === 'MX' ? 'precio_lista' : 'default'
+      // Determinar el tipo de configuración a buscar según el país
+      const mxConfig = selectedCountry === 'MX' ? 'precio_lista' : 'default'
+      const clConfig = selectedCountry === 'CL' ? 'precio_lista' : 'default'
       
       const { data, error } = await supabase
         .from('product_country_overrides')
         .select('overrides')
         .eq('product_id', productId)
         .eq('country_code', selectedCountry)
-        .eq('mx_config_type', configType)
+        .eq('mx_config_type', mxConfig)
+        .eq('cl_config_type', clConfig)
         .single()
 
       if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found

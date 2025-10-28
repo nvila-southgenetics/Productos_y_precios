@@ -31,6 +31,7 @@ export type ProductCountryOverride = Tables<'product_country_overrides'>
 
 export type CountryCode = 'UY' | 'AR' | 'MX' | 'CL' | 'VE' | 'CO'
 export type MxConfigType = 'precio_lista' | 'gobierno' | 'convenio' | 'lanzamiento' | 'default'
+export type ClConfigType = 'precio_lista' | 'gobierno' | 'convenio_christus' | 'default'
 
 export type ComputedRow = {
   label: string

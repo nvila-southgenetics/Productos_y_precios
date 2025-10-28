@@ -102,6 +102,7 @@ export default function SimulacroCountryViewPage() {
       const { data, error } = await supabase
         .from('products')
         .select('*')
+        .ilike('name', '%Test%')  // Solo mostrar productos que contengan "Test"
         .order('name')
 
       if (error) throw error

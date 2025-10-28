@@ -87,14 +87,16 @@ export default function CountryViewPage() {
 
   const fetchAllOverrides = async () => {
     try {
-      // Determinar el tipo de configuración a buscar
-      const configType = countryCode === 'MX' ? 'precio_lista' : 'default'
+      // Determinar el tipo de configuración a buscar según el país
+      const mxConfig = countryCode === 'MX' ? 'precio_lista' : 'default'
+      const clConfig = countryCode === 'CL' ? 'precio_lista' : 'default'
       
       const { data, error } = await supabase
         .from('product_country_overrides')
         .select('*')
         .eq('country_code', countryCode)
-        .eq('mx_config_type', configType)
+        .eq('mx_config_type', mxConfig)
+        .eq('cl_config_type', clConfig)
 
       if (error) throw error
 

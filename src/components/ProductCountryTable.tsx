@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Product, CountryCode, ComputedResult, OverrideFields, MxConfigType } from '@/types'
+import { Product, CountryCode, ComputedResult, OverrideFields, MxConfigType, ClConfigType } from '@/types'
 import { formatCurrency, formatPercentage, computePricing } from '@/lib/compute'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,7 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
   const [isLoading, setIsLoading] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [mxConfigType, setMxConfigType] = useState<MxConfigType>('precio_lista')
+  const [clConfigType, setClConfigType] = useState<ClConfigType>('precio_lista')
 
   // Hook para el input de edición
   const editInput = useNumericInput()
@@ -32,7 +33,7 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
 
   useEffect(() => {
     loadOverrides()
-  }, [product.id, countryCode, mxConfigType])
+  }, [product.id, countryCode, mxConfigType, clConfigType])
 
   useEffect(() => {
     console.log('Editing cell changed to:', editingCell)
@@ -40,15 +41,17 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
 
   const loadOverrides = async () => {
     try {
-      // Determinar el tipo de configuración a buscar
-      const configType = countryCode === 'MX' ? mxConfigType : 'default'
+      // Determinar el tipo de configuración a buscar según el país
+      const mxConfig = countryCode === 'MX' ? mxConfigType : 'default'
+      const clConfig = countryCode === 'CL' ? clConfigType : 'default'
       
       const { data, error } = await supabase
         .from('product_country_overrides')
-        .select('overrides, mx_config_type')
+        .select('overrides, mx_config_type, cl_config_type')
         .eq('product_id', product.id)
         .eq('country_code', countryCode)
-        .eq('mx_config_type', configType)
+        .eq('mx_config_type', mxConfig)
+        .eq('cl_config_type', clConfig)
         .single()
 
       if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
@@ -56,7 +59,7 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
       }
 
       const newOverrides = (data?.overrides as OverrideFields) || {}
-      console.log('Loading overrides for', countryCode, mxConfigType, ':', newOverrides)
+      console.log('Loading overrides for', countryCode, mxConfig, clConfig, ':', newOverrides)
       setOverrides(newOverrides)
     } catch (error) {
       console.error('Error loading overrides:', error)
@@ -94,14 +97,15 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
         product_id: product.id,
         country_code: countryCode,
         overrides: newOverrides,
-        mx_config_type: countryCode === 'MX' ? mxConfigType : 'default'
+        mx_config_type: countryCode === 'MX' ? mxConfigType : 'default',
+        cl_config_type: countryCode === 'CL' ? clConfigType : 'default'
       }
       
-      // Para México, el conflicto incluye mx_config_type; para otros países, no
+      // El conflicto incluye mx_config_type y cl_config_type
       const { data, error } = await supabase
         .from('product_country_overrides')
         .upsert(upsertData, {
-          onConflict: 'product_id,country_code,mx_config_type'
+          onConflict: 'product_id,country_code,mx_config_type,cl_config_type'
         })
         .select()
 
@@ -139,6 +143,12 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
     setMxConfigType(newType)
   }
 
+  const changeClConfigType = (newType: ClConfigType) => {
+    // Simplemente cambiar el tipo, el useEffect se encargará de cargar los overrides correspondientes
+    console.log('🔄 Cambiando tipo de configuración CL de', clConfigType, 'a', newType)
+    setClConfigType(newType)
+  }
+
   const resetAllToZero = async () => {
     setIsLoading(true)
     setSaveStatus('saving')
@@ -147,6 +157,7 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
       console.log('📦 Product ID:', product.id)
       console.log('🌍 Country Code:', countryCode)
       console.log('🇲🇽 MX Config Type:', mxConfigType)
+      console.log('🇨🇱 CL Config Type:', clConfigType)
       
       // Poner todos los valores en cero incluyendo Gross Sales
       const resetOverrides: OverrideFields = {
@@ -180,16 +191,17 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
         product_id: product.id,
         country_code: countryCode,
         overrides: resetOverrides,
-        mx_config_type: countryCode === 'MX' ? mxConfigType : 'default'
+        mx_config_type: countryCode === 'MX' ? mxConfigType : 'default',
+        cl_config_type: countryCode === 'CL' ? clConfigType : 'default'
       }
       
       console.log('💾 Upsert data:', upsertData)
       
-      // Para México, el conflicto incluye mx_config_type; para otros países, no
+      // El conflicto incluye mx_config_type y cl_config_type
       const { data, error } = await supabase
         .from('product_country_overrides')
         .upsert(upsertData, {
-          onConflict: 'product_id,country_code,mx_config_type'
+          onConflict: 'product_id,country_code,mx_config_type,cl_config_type'
         })
         .select()
 
@@ -322,14 +334,15 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
         product_id: product.id,
         country_code: countryCode,
         overrides: newOverrides,
-        mx_config_type: countryCode === 'MX' ? mxConfigType : 'default'
+        mx_config_type: countryCode === 'MX' ? mxConfigType : 'default',
+        cl_config_type: countryCode === 'CL' ? clConfigType : 'default'
       }
       
-      // Para México, el conflicto incluye mx_config_type; para otros países, no
+      // El conflicto incluye mx_config_type y cl_config_type
       const { data, error } = await supabase
         .from('product_country_overrides')
         .upsert(upsertData, {
-          onConflict: 'product_id,country_code,mx_config_type'
+          onConflict: 'product_id,country_code,mx_config_type,cl_config_type'
         })
         .select()
 
@@ -508,6 +521,35 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
                   <SelectItem value="gobierno">Gobierno</SelectItem>
                   <SelectItem value="convenio">Convenio</SelectItem>
                   <SelectItem value="lanzamiento">Lanzamiento</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="flex items-center gap-2 text-xs text-gray-600">
+                <span className="inline-block w-2 h-2 bg-blue-500 rounded-full"></span>
+                Cada configuración tiene valores independientes que puedes editar
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Selector de configuración para Chile */}
+        {countryCode === 'CL' && (
+          <div className="px-6 py-4 border-b border-gray-200 bg-blue-50">
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-medium text-gray-700">
+                Configuración de costos:
+              </label>
+              <Select 
+                value={clConfigType} 
+                onValueChange={(value: ClConfigType) => changeClConfigType(value)}
+                disabled={isLoading}
+              >
+                <SelectTrigger className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="precio_lista">Precio de lista</SelectItem>
+                  <SelectItem value="gobierno">Gobierno</SelectItem>
+                  <SelectItem value="convenio_christus">Convenio Christus</SelectItem>
                 </SelectContent>
               </Select>
               <div className="flex items-center gap-2 text-xs text-gray-600">

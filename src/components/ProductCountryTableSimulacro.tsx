@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Product, CountryCode, ComputedResult, OverrideFields, MxConfigType } from '@/types'
+import { Product, CountryCode, ComputedResult, OverrideFields, MxConfigType, ClConfigType } from '@/types'
 import { formatCurrency, formatPercentage, computePricing } from '@/lib/compute'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -21,6 +21,7 @@ export function ProductCountryTableSimulacro({ product, countryCode, onOverrides
   const [overrides, setOverrides] = useState<OverrideFields>({})
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [mxConfigType, setMxConfigType] = useState<MxConfigType>('precio_lista')
+  const [clConfigType, setClConfigType] = useState<ClConfigType>('precio_lista')
 
   // Calcular el resultado usando los overrides actuales
   const computedResult = computePricing(product, countryCode, overrides)
@@ -28,11 +29,12 @@ export function ProductCountryTableSimulacro({ product, countryCode, onOverrides
 
   useEffect(() => {
     loadOverrides()
-  }, [product.id, countryCode, mxConfigType])
+  }, [product.id, countryCode, mxConfigType, clConfigType])
 
   const getStorageKey = () => {
-    const configType = countryCode === 'MX' ? mxConfigType : 'default'
-    return `simulacro_${product.id}_${countryCode}_${configType}`
+    const mxConfig = countryCode === 'MX' ? mxConfigType : 'default'
+    const clConfig = countryCode === 'CL' ? clConfigType : 'default'
+    return `simulacro_${product.id}_${countryCode}_${mxConfig}_${clConfig}`
   }
 
   const loadOverrides = () => {
@@ -42,7 +44,7 @@ export function ProductCountryTableSimulacro({ product, countryCode, onOverrides
       
       if (savedData) {
         const newOverrides = JSON.parse(savedData) as OverrideFields
-        console.log('Loading simulacro overrides for', countryCode, mxConfigType, ':', newOverrides)
+        console.log('Loading simulacro overrides for', countryCode, mxConfigType, clConfigType, ':', newOverrides)
         setOverrides(newOverrides)
       } else {
         setOverrides({})
@@ -102,6 +104,11 @@ export function ProductCountryTableSimulacro({ product, countryCode, onOverrides
   const changeMxConfigType = (newType: MxConfigType) => {
     console.log('🔄 Cambiando tipo de configuración MX de', mxConfigType, 'a', newType)
     setMxConfigType(newType)
+  }
+
+  const changeClConfigType = (newType: ClConfigType) => {
+    console.log('🔄 Cambiando tipo de configuración CL de', clConfigType, 'a', newType)
+    setClConfigType(newType)
   }
 
   const startEditing = (key: string, currentValue: number) => {
@@ -266,6 +273,34 @@ export function ProductCountryTableSimulacro({ product, countryCode, onOverrides
           </div>
         </div>
       )}
+
+      {/* Selector de configuración de Chile */}
+      {countryCode === 'CL' && (
+        <div className="px-6 py-4 border-b border-gray-200 bg-blue-50">
+          <div className="flex items-center gap-4">
+            <label className="text-sm font-medium text-gray-700">
+              Configuración de costos:
+            </label>
+            <Select 
+              value={clConfigType} 
+              onValueChange={(value: ClConfigType) => changeClConfigType(value)}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="precio_lista">Precio de lista</SelectItem>
+                <SelectItem value="gobierno">Gobierno</SelectItem>
+                <SelectItem value="convenio_christus">Convenio Christus</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="flex items-center gap-2 text-xs text-gray-600">
+              <span className="inline-block w-2 h-2 bg-blue-500 rounded-full"></span>
+              Cada configuración tiene valores independientes que puedes editar
+            </div>
+          </div>
+        </div>
+      )}
       
       <CardContent className="p-6">
         <div className="flex items-center justify-between mb-4">
@@ -332,9 +367,9 @@ export function ProductCountryTableSimulacro({ product, countryCode, onOverrides
                 const fieldMap: Record<string, { amount: keyof OverrideFields, pct: keyof OverrideFields }> = {
                   'Product Cost': { amount: 'productCostUSD', pct: 'productCostPct' },
                   'Kit Cost': { amount: 'kitCostUSD', pct: 'kitCostPct' },
-                  'Payment Fee': { amount: 'paymentFeeUSD', pct: 'paymentFeePct' },
-                  'Blood Draw & Sample Handling': { amount: 'bloodDrawSampleUSD', pct: 'bloodDrawSamplePct' },
-                  'Sanitary Permits': { amount: 'sanitaryPermitsUSD', pct: 'sanitaryPermitsPct' },
+                  'Payment Fee Costs': { amount: 'paymentFeeUSD', pct: 'paymentFeePct' },
+                  'Blood Drawn & Sample Handling': { amount: 'bloodDrawSampleUSD', pct: 'bloodDrawSamplePct' },
+                  'Sanitary Permits to export blood': { amount: 'sanitaryPermitsUSD', pct: 'sanitaryPermitsPct' },
                   'External Courier': { amount: 'externalCourierUSD', pct: 'externalCourierPct' },
                   'Internal Courier': { amount: 'internalCourierUSD', pct: 'internalCourierPct' },
                   'Physicians Fees': { amount: 'physiciansFeesUSD', pct: 'physiciansFeesPct' },

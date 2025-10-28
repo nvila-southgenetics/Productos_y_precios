@@ -34,12 +34,14 @@ export default function SimulacroPage() {
       const { data, error } = await supabase
         .from('products')
         .select('*')
+        .ilike('name', '%Test%')  // Buscar productos que contengan "Test" (case insensitive)
         .order('created_at', { ascending: false })
 
       if (error) {
         console.error('Error fetching products:', error)
         router.push('/login')
       } else {
+        console.log('Productos encontrados:', data)
         setProducts(data || [])
       }
     } catch (error) {
