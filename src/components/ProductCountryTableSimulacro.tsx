@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Product, CountryCode, ComputedResult, OverrideFields, MxConfigType, ClConfigType } from '@/types'
+import { Product, CountryCode, ComputedResult, OverrideFields, MxConfigType, ClConfigType, ColConfigType } from '@/types'
 import { formatCurrency, formatPercentage, computePricing } from '@/lib/compute'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,7 @@ export function ProductCountryTableSimulacro({ product, countryCode, onOverrides
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [mxConfigType, setMxConfigType] = useState<MxConfigType>('precio_lista')
   const [clConfigType, setClConfigType] = useState<ClConfigType>('precio_lista')
+  const [colConfigType, setColConfigType] = useState<ColConfigType>('precio_lista')
 
   // Calcular el resultado usando los overrides actuales
   const computedResult = computePricing(product, countryCode, overrides)
@@ -29,12 +30,13 @@ export function ProductCountryTableSimulacro({ product, countryCode, onOverrides
 
   useEffect(() => {
     loadOverrides()
-  }, [product.id, countryCode, mxConfigType, clConfigType])
+  }, [product.id, countryCode, mxConfigType, clConfigType, colConfigType])
 
   const getStorageKey = () => {
     const mxConfig = countryCode === 'MX' ? mxConfigType : 'default'
     const clConfig = countryCode === 'CL' ? clConfigType : 'default'
-    return `simulacro_${product.id}_${countryCode}_${mxConfig}_${clConfig}`
+    const colConfig = countryCode === 'CO' ? colConfigType : 'default'
+    return `simulacro_${product.id}_${countryCode}_${mxConfig}_${clConfig}_${colConfig}`
   }
 
   const loadOverrides = () => {
@@ -109,6 +111,11 @@ export function ProductCountryTableSimulacro({ product, countryCode, onOverrides
   const changeClConfigType = (newType: ClConfigType) => {
     console.log('🔄 Cambiando tipo de configuración CL de', clConfigType, 'a', newType)
     setClConfigType(newType)
+  }
+
+  const changeColConfigType = (newType: ColConfigType) => {
+    console.log('🔄 Cambiando tipo de configuración CO de', colConfigType, 'a', newType)
+    setColConfigType(newType)
   }
 
   const startEditing = (key: string, currentValue: number) => {
@@ -292,6 +299,36 @@ export function ProductCountryTableSimulacro({ product, countryCode, onOverrides
                 <SelectItem value="precio_lista">Precio de lista</SelectItem>
                 <SelectItem value="gobierno">Gobierno</SelectItem>
                 <SelectItem value="convenio_christus">Convenio Christus</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="flex items-center gap-2 text-xs text-gray-600">
+              <span className="inline-block w-2 h-2 bg-blue-500 rounded-full"></span>
+              Cada configuración tiene valores independientes que puedes editar
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Selector de configuración de Colombia */}
+      {countryCode === 'CO' && (
+        <div className="px-6 py-4 border-b border-gray-200 bg-blue-50">
+          <div className="flex items-center gap-4">
+            <label className="text-sm font-medium text-gray-700">
+              Configuración de costos:
+            </label>
+            <Select 
+              value={colConfigType} 
+              onValueChange={(value: ColConfigType) => changeColConfigType(value)}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="precio_lista">Lista de Precios</SelectItem>
+                <SelectItem value="cali">Ciudad de CALI</SelectItem>
+                <SelectItem value="bogota">Ciudad de BOGOTÁ</SelectItem>
+                <SelectItem value="fedex">FedEx</SelectItem>
+                <SelectItem value="copa">Copa</SelectItem>
               </SelectContent>
             </Select>
             <div className="flex items-center gap-2 text-xs text-gray-600">

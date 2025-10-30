@@ -62,12 +62,13 @@ export default function MetricsPage() {
 
       if (productsError) throw productsError
 
-      // Cargar overrides: para México usar "precio_lista", para Chile "precio_lista", para otros usar "default"
+      // Cargar overrides: para México usar "precio_lista", para Chile "precio_lista", para Colombia "precio_lista", para otros usar "default"
       const { data: overridesData, error: overridesError } = await supabase
         .from('product_country_overrides')
         .select('*')
         .in('mx_config_type', ['precio_lista', 'default'])
         .in('cl_config_type', ['precio_lista', 'default'])
+        .in('col_config_type', ['precio_lista', 'default'])
 
       if (overridesError) throw overridesError
 

@@ -33,8 +33,10 @@ export default function SimulacroCountryViewPage() {
     const overridesMap: Record<string, OverrideFields> = {}
     
     products.forEach(product => {
-      const configType = countryCode === 'MX' ? 'precio_lista' : 'default'
-      const storageKey = `simulacro_${product.id}_${countryCode}_${configType}`
+      const mxConfig = countryCode === 'MX' ? 'precio_lista' : 'default'
+      const clConfig = countryCode === 'CL' ? 'precio_lista' : 'default'
+      const colConfig = countryCode === 'CO' ? 'precio_lista' : 'default'
+      const storageKey = `simulacro_${product.id}_${countryCode}_${mxConfig}_${clConfig}_${colConfig}`
       const savedData = localStorage.getItem(storageKey)
       
       if (savedData) {
