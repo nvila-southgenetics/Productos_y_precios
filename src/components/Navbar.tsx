@@ -39,7 +39,7 @@ export function Navbar() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <h1 
-              className="text-xl font-semibold text-blue-600 cursor-pointer hover:text-blue-700 transition-colors"
+              className="text-2xl font-semibold text-blue-600 cursor-pointer hover:text-blue-700 transition-colors"
               onClick={() => router.push('/')}
             >
               SouthGenetics P&L
@@ -56,7 +56,7 @@ export function Navbar() {
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <h1 
-            className="text-xl font-semibold text-blue-600 cursor-pointer hover:text-blue-700 transition-colors"
+            className="text-2xl font-semibold text-blue-600 cursor-pointer hover:text-blue-700 transition-colors"
             onClick={() => router.push('/')}
           >
             SouthGenetics P&L
