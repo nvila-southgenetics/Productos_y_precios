@@ -122,4 +122,7 @@ export type OverrideFields = {
   // Sales Commission - ambos formatos
   salesCommissionPct?: number
   salesCommissionUSD?: number
+  
+  // Comentarios por fila
+  comments?: Record<string, string>
 }

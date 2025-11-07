@@ -7,8 +7,10 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { supabase } from '@/lib/supabase'
 import { useNumericInput } from '@/hooks/useNumericInput'
+import { MessageSquare } from 'lucide-react'
 
 interface ProductCountryTableProps {
   product: Product
@@ -24,6 +26,11 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
   const [mxConfigType, setMxConfigType] = useState<MxConfigType>('precio_lista')
   const [clConfigType, setClConfigType] = useState<ClConfigType>('precio_lista')
   const [colConfigType, setColConfigType] = useState<ColConfigType>('precio_lista')
+  
+  // Estado para comentarios
+  const [commentDialogOpen, setCommentDialogOpen] = useState(false)
+  const [currentCommentKey, setCurrentCommentKey] = useState<string>('')
+  const [currentComment, setCurrentComment] = useState<string>('')
 
   // Hook para el input de edición
   const editInput = useNumericInput()
@@ -157,6 +164,28 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
     // Simplemente cambiar el tipo, el useEffect se encargará de cargar los overrides correspondientes
     console.log('🔄 Cambiando tipo de configuración CO de', colConfigType, 'a', newType)
     setColConfigType(newType)
+  }
+
+  const openCommentDialog = (cellId: string) => {
+    const comments = overrides.comments || {}
+    setCurrentCommentKey(cellId)
+    setCurrentComment(comments[cellId] || '')
+    setCommentDialogOpen(true)
+  }
+
+  const saveComment = async () => {
+    const comments = { ...(overrides.comments || {}) }
+    
+    if (currentComment.trim() === '') {
+      // Si el comentario está vacío, lo eliminamos
+      delete comments[currentCommentKey]
+    } else {
+      comments[currentCommentKey] = currentComment.trim()
+    }
+    
+    const newOverrides = { ...overrides, comments }
+    await saveMultipleOverrides(newOverrides)
+    setCommentDialogOpen(false)
   }
 
   const resetAllToZero = async () => {
@@ -449,10 +478,27 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
 
     const amountClasses = isGrossProfit ? "px-4 py-3 text-right font-mono text-emerald-700 font-bold" : "px-4 py-3 text-right font-mono"
     const pctClasses = isGrossProfit ? "px-4 py-3 text-right font-mono text-sm text-emerald-600" : "px-4 py-3 text-right font-mono text-sm"
+    
+    const hasComment = cellId && overrides.comments && overrides.comments[cellId]
 
     return (
       <tr className={rowClasses}>
-        <td className={isGrossProfit ? "px-4 py-3 text-left text-emerald-700 font-semibold" : "px-4 py-3 text-left"}>{row.label}</td>
+        <td className={isGrossProfit ? "px-4 py-3 text-left text-emerald-700 font-semibold" : "px-4 py-3 text-left"}>
+          <div className="flex items-center gap-2">
+            <span>{row.label}</span>
+            {cellId && !isTotal && (
+              <button
+                onClick={() => openCommentDialog(cellId)}
+                className={`p-1 rounded-full hover:bg-blue-100 transition-colors ${
+                  hasComment ? 'text-blue-600' : 'text-gray-400 hover:text-blue-600'
+                }`}
+                title={hasComment ? 'Ver/editar comentario' : 'Agregar comentario'}
+              >
+                <MessageSquare className={`w-4 h-4 ${hasComment ? 'fill-blue-100' : ''}`} />
+              </button>
+            )}
+          </div>
+        </td>
         <td className={amountClasses}>
           {cellId && !isHeader && !isTotal ? (
             renderEditableCell(`${cellId}-usd`, Math.abs(row.amount))
@@ -680,6 +726,9 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
             💰 <strong>Gross Sales es editable por país</strong> - cambia según el mercado local.
           </p>
           <p className="text-xs text-gray-600 mt-1">
+            💬 <strong>Haz clic en el ícono de comentario</strong> para agregar notas a cada fila.
+          </p>
+          <p className="text-xs text-gray-600 mt-1">
             🔄 "Reiniciar Parámetros" pone todos los valores en cero y Gross Sales al precio base original.
           </p>
           <p className="text-xs text-gray-600 mt-1">
@@ -687,6 +736,38 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
           </p>
         </div>
       </CardContent>
+
+      {/* Diálogo para editar comentarios */}
+      <Dialog open={commentDialogOpen} onOpenChange={setCommentDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Comentario</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <textarea
+              value={currentComment}
+              onChange={(e) => setCurrentComment(e.target.value)}
+              placeholder="Escribe un comentario para esta fila..."
+              className="w-full min-h-[120px] p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCommentDialogOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={saveComment}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }

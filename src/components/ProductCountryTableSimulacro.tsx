@@ -7,7 +7,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { FlaskConical } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { FlaskConical, MessageSquare } from 'lucide-react'
 
 interface ProductCountryTableSimulacroProps {
   product: Product
@@ -23,6 +24,11 @@ export function ProductCountryTableSimulacro({ product, countryCode, onOverrides
   const [mxConfigType, setMxConfigType] = useState<MxConfigType>('precio_lista')
   const [clConfigType, setClConfigType] = useState<ClConfigType>('precio_lista')
   const [colConfigType, setColConfigType] = useState<ColConfigType>('precio_lista')
+  
+  // Estado para comentarios
+  const [commentDialogOpen, setCommentDialogOpen] = useState(false)
+  const [currentCommentKey, setCurrentCommentKey] = useState<string>('')
+  const [currentComment, setCurrentComment] = useState<string>('')
 
   // Calcular el resultado usando los overrides actuales
   const computedResult = computePricing(product, countryCode, overrides)
@@ -118,6 +124,45 @@ export function ProductCountryTableSimulacro({ product, countryCode, onOverrides
     setColConfigType(newType)
   }
 
+  const openCommentDialog = (cellId: string) => {
+    const comments = overrides.comments || {}
+    setCurrentCommentKey(cellId)
+    setCurrentComment(comments[cellId] || '')
+    setCommentDialogOpen(true)
+  }
+
+  const saveComment = () => {
+    setSaveStatus('saving')
+    
+    try {
+      const comments = { ...(overrides.comments || {}) }
+      
+      if (currentComment.trim() === '') {
+        // Si el comentario está vacío, lo eliminamos
+        delete comments[currentCommentKey]
+      } else {
+        comments[currentCommentKey] = currentComment.trim()
+      }
+      
+      const newOverrides = { ...overrides, comments }
+      
+      // Guardar en localStorage
+      const storageKey = getStorageKey()
+      localStorage.setItem(storageKey, JSON.stringify(newOverrides))
+      
+      setOverrides(newOverrides)
+      onOverridesChange?.(newOverrides)
+      
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus('idle'), 2000)
+      setCommentDialogOpen(false)
+    } catch (error) {
+      console.error('Error saving comment:', error)
+      setSaveStatus('error')
+      setTimeout(() => setSaveStatus('idle'), 3000)
+    }
+  }
+
   const startEditing = (key: string, currentValue: number) => {
     setEditingCell(key)
     setEditValue(currentValue.toString())
@@ -141,16 +186,33 @@ export function ProductCountryTableSimulacro({ product, countryCode, onOverrides
     amountValue: number,
     pctValue: number,
     amountField: keyof OverrideFields,
-    pctField: keyof OverrideFields
+    pctField: keyof OverrideFields,
+    cellId?: string
   ) => {
     const amountKey = `${amountField}_amount`
     const pctKey = `${pctField}_pct`
     const isEditingAmount = editingCell === amountKey
     const isEditingPct = editingCell === pctKey
+    const hasComment = cellId && overrides.comments && overrides.comments[cellId]
 
     return (
       <tr className="border-b border-gray-200 hover:bg-gray-100 transition-colors">
-        <td className="px-6 py-3 text-sm font-medium text-gray-700">{label}</td>
+        <td className="px-6 py-3 text-sm font-medium text-gray-700">
+          <div className="flex items-center gap-2">
+            <span>{label}</span>
+            {cellId && (
+              <button
+                onClick={() => openCommentDialog(cellId)}
+                className={`p-1 rounded-full hover:bg-blue-100 transition-colors ${
+                  hasComment ? 'text-blue-600' : 'text-gray-400 hover:text-blue-600'
+                }`}
+                title={hasComment ? 'Ver/editar comentario' : 'Agregar comentario'}
+              >
+                <MessageSquare className={`w-4 h-4 ${hasComment ? 'fill-blue-100' : ''}`} />
+              </button>
+            )}
+          </div>
+        </td>
         <td className="px-6 py-3 text-right">
           {isEditingAmount ? (
             <Input
@@ -205,11 +267,26 @@ export function ProductCountryTableSimulacro({ product, countryCode, onOverrides
 
   const renderGrossSalesRow = () => {
     const key = 'grossSalesUSD'
+    const cellId = 'gross-sales'
     const isEditing = editingCell === key
+    const hasComment = overrides.comments && overrides.comments[cellId]
 
     return (
       <tr className="border-b border-gray-200 hover:bg-gray-100 transition-colors">
-        <td className="px-6 py-3 text-sm font-medium text-gray-700">{grossSales.label}</td>
+        <td className="px-6 py-3 text-sm font-medium text-gray-700">
+          <div className="flex items-center gap-2">
+            <span>{grossSales.label}</span>
+            <button
+              onClick={() => openCommentDialog(cellId)}
+              className={`p-1 rounded-full hover:bg-blue-100 transition-colors ${
+                hasComment ? 'text-blue-600' : 'text-gray-400 hover:text-blue-600'
+              }`}
+              title={hasComment ? 'Ver/editar comentario' : 'Agregar comentario'}
+            >
+              <MessageSquare className={`w-4 h-4 ${hasComment ? 'fill-blue-100' : ''}`} />
+            </button>
+          </div>
+        </td>
         <td className="px-6 py-3 text-right">
           {isEditing ? (
             <Input
@@ -387,7 +464,8 @@ export function ProductCountryTableSimulacro({ product, countryCode, onOverrides
                 discount.amount,
                 discount.pct,
                 'commercialDiscountUSD',
-                'commercialDiscountPct'
+                'commercialDiscountPct',
+                'commercial-discount'
               )}
               
               <tr className="bg-gray-100 border-b-2 border-gray-300">
@@ -401,21 +479,21 @@ export function ProductCountryTableSimulacro({ product, countryCode, onOverrides
               </tr>
 
               {costRows.map((row, index) => {
-                const fieldMap: Record<string, { amount: keyof OverrideFields, pct: keyof OverrideFields }> = {
-                  'Product Cost': { amount: 'productCostUSD', pct: 'productCostPct' },
-                  'Kit Cost': { amount: 'kitCostUSD', pct: 'kitCostPct' },
-                  'Payment Fee Costs': { amount: 'paymentFeeUSD', pct: 'paymentFeePct' },
-                  'Blood Drawn & Sample Handling': { amount: 'bloodDrawSampleUSD', pct: 'bloodDrawSamplePct' },
-                  'Sanitary Permits to export blood': { amount: 'sanitaryPermitsUSD', pct: 'sanitaryPermitsPct' },
-                  'External Courier': { amount: 'externalCourierUSD', pct: 'externalCourierPct' },
-                  'Internal Courier': { amount: 'internalCourierUSD', pct: 'internalCourierPct' },
-                  'Physicians Fees': { amount: 'physiciansFeesUSD', pct: 'physiciansFeesPct' },
-                  'Sales Commission': { amount: 'salesCommissionUSD', pct: 'salesCommissionPct' },
+                const fieldMap: Record<string, { amount: keyof OverrideFields, pct: keyof OverrideFields, cellId: string }> = {
+                  'Product Cost': { amount: 'productCostUSD', pct: 'productCostPct', cellId: 'product-cost' },
+                  'Kit Cost': { amount: 'kitCostUSD', pct: 'kitCostPct', cellId: 'kit-cost' },
+                  'Payment Fee Costs': { amount: 'paymentFeeUSD', pct: 'paymentFeePct', cellId: 'payment-fee' },
+                  'Blood Drawn & Sample Handling': { amount: 'bloodDrawSampleUSD', pct: 'bloodDrawSamplePct', cellId: 'blood-draw' },
+                  'Sanitary Permits to export blood': { amount: 'sanitaryPermitsUSD', pct: 'sanitaryPermitsPct', cellId: 'sanitary-permits' },
+                  'External Courier': { amount: 'externalCourierUSD', pct: 'externalCourierPct', cellId: 'external-courier' },
+                  'Internal Courier': { amount: 'internalCourierUSD', pct: 'internalCourierPct', cellId: 'internal-courier' },
+                  'Physicians Fees': { amount: 'physiciansFeesUSD', pct: 'physiciansFeesPct', cellId: 'physicians-fees' },
+                  'Sales Commission': { amount: 'salesCommissionUSD', pct: 'salesCommissionPct', cellId: 'sales-commission' },
                 }
                 
                 const fields = fieldMap[row.label]
                 if (fields) {
-                  return renderEditableCell(row.label, row.amount, row.pct, fields.amount, fields.pct)
+                  return renderEditableCell(row.label, row.amount, row.pct, fields.amount, fields.pct, fields.cellId)
                 }
                 
                 return null
@@ -436,6 +514,38 @@ export function ProductCountryTableSimulacro({ product, countryCode, onOverrides
           </table>
         </div>
       </CardContent>
+
+      {/* Diálogo para editar comentarios */}
+      <Dialog open={commentDialogOpen} onOpenChange={setCommentDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Comentario</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <textarea
+              value={currentComment}
+              onChange={(e) => setCurrentComment(e.target.value)}
+              placeholder="Escribe un comentario para esta fila..."
+              className="w-full min-h-[120px] p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCommentDialogOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={saveComment}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }
