@@ -314,14 +314,14 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
     if (fieldPair) {
       console.log('Field pair:', fieldPair, 'isPercentageEdit:', isPercentageEdit, 'newValue:', newValue)
       
-      // Guardar valores
-      const newOverrides = { ...overrides }
+      // Guardar valores - usar Object.assign para evitar problemas de tipos
+      const newOverrides: OverrideFields = { ...overrides }
       
       if (baseCellId === 'gross-sales') {
         // Gross Sales solo tiene USD, no tiene %
         const usdValue = newValue || 0
         console.log('💾 Guardando Gross Sales USD como:', usdValue)
-        newOverrides[fieldPair.usd] = usdValue
+        Object.assign(newOverrides, { [fieldPair.usd]: usdValue })
       } else {
         // Calcular la base de referencia (salesRevenue para la mayoría, grossSalesAmount para commercial-discount)
         const baseAmount = baseCellId === 'commercial-discount' 
@@ -335,17 +335,19 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
           const usdValue = baseAmount * pctValue
           
           console.log('💾 Guardando % como:', pctValue, 'y calculando USD como:', usdValue)
-          newOverrides[fieldPair.pct] = pctValue
-          newOverrides[fieldPair.usd] = usdValue
+          Object.assign(newOverrides, { 
+            [fieldPair.pct]: pctValue,
+            [fieldPair.usd]: usdValue
+          })
         } else {
           // Editamos USD -> calcular %
           const usdValue = newValue || 0
           const pctValue = baseAmount > 0 ? usdValue / baseAmount : 0
           
           console.log('💾 Guardando USD como:', usdValue, 'y calculando % como:', pctValue)
-          newOverrides[fieldPair.usd] = usdValue
+          Object.assign(newOverrides, { [fieldPair.usd]: usdValue })
           if (fieldPair.pct) {
-            newOverrides[fieldPair.pct] = pctValue
+            Object.assign(newOverrides, { [fieldPair.pct]: pctValue })
           }
         }
       }
