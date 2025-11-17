@@ -25,7 +25,8 @@ export default function NewProductPage() {
     name: '',
     sku: '',
     description: '',
-    category: '' as CategoryName | ''
+    category: '' as CategoryName | '',
+    tipo: '' as string | ''
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
