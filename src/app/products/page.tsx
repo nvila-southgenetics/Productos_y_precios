@@ -459,7 +459,7 @@ export default function ProductsPage() {
                     <div className="flex flex-wrap gap-2">
                       {sampleTypes.map((type) => {
                         const isSelected = selectedTypes.includes(type)
-                        const typeConfig = {
+                        const typeConfig: Record<string, { color: string; bgColor: string; borderColor: string }> = {
                           'Sangre': { color: 'text-red-700', bgColor: 'bg-red-100', borderColor: 'border-red-300' },
                           'Corte de Tejido': { color: 'text-purple-700', bgColor: 'bg-purple-100', borderColor: 'border-purple-300' },
                           'Punción': { color: 'text-blue-700', bgColor: 'bg-blue-100', borderColor: 'border-blue-300' },
@@ -528,13 +528,12 @@ export default function ProductsPage() {
               })}
               
               {selectedTypes.map((type) => {
-                const typeConfig = {
+                const typeConfig: Record<string, { color: string; bgColor: string; borderColor: string }> = {
                   'Sangre': { color: 'text-red-700', bgColor: 'bg-red-100', borderColor: 'border-red-300' },
                   'Corte de Tejido': { color: 'text-purple-700', bgColor: 'bg-purple-100', borderColor: 'border-purple-300' },
                   'Punción': { color: 'text-blue-700', bgColor: 'bg-blue-100', borderColor: 'border-blue-300' },
                   'Biopsia endometrial': { color: 'text-pink-700', bgColor: 'bg-pink-100', borderColor: 'border-pink-300' },
                   'Hisopado bucal': { color: 'text-cyan-700', bgColor: 'bg-cyan-100', borderColor: 'border-cyan-300' },
-                  'Sangre y corte tejido': { color: 'text-orange-700', bgColor: 'bg-orange-100', borderColor: 'border-orange-300' },
                   'Orina': { color: 'text-green-700', bgColor: 'bg-green-100', borderColor: 'border-green-300' }
                 }
                 const tConfig = typeConfig[type] || { color: 'text-gray-700', bgColor: 'bg-gray-100', borderColor: 'border-gray-300' }
