@@ -398,7 +398,7 @@ export default function ProductsPage() {
                     <div className="flex flex-wrap gap-2">
                       {Object.keys(PRODUCT_CATEGORIES).filter(cat => cat !== 'Todos').map((category) => {
                         const isSelected = selectedCategories.includes(category as CategoryName)
-                        const config = {
+                        const config: Record<string, { color: string; bgColor: string; borderColor: string }> = {
                           'Ginecología': { color: 'text-pink-700', bgColor: 'bg-pink-100', borderColor: 'border-pink-300' },
                           'Oncología': { color: 'text-red-700', bgColor: 'bg-red-100', borderColor: 'border-red-300' },
                           'Endocrinología': { color: 'text-purple-700', bgColor: 'bg-purple-100', borderColor: 'border-purple-300' },
@@ -407,7 +407,7 @@ export default function ProductsPage() {
                           'Anualidades': { color: 'text-orange-700', bgColor: 'bg-orange-100', borderColor: 'border-orange-300' },
                           'Otros': { color: 'text-gray-700', bgColor: 'bg-gray-100', borderColor: 'border-gray-300' }
                         }
-                        const catConfig = config[category as CategoryName] || config['Otros']
+                        const catConfig = config[category] || config['Otros']
                         
                         return (
                           <button
@@ -499,7 +499,7 @@ export default function ProductsPage() {
           {(selectedCategories.length > 0 || selectedTypes.length > 0) && (
             <div className="flex flex-wrap gap-2 items-center">
               {selectedCategories.map((category) => {
-                const config = {
+                const config: Record<string, { color: string; bgColor: string; borderColor: string }> = {
                   'Ginecología': { color: 'text-pink-700', bgColor: 'bg-pink-100', borderColor: 'border-pink-300' },
                   'Oncología': { color: 'text-red-700', bgColor: 'bg-red-100', borderColor: 'border-red-300' },
                   'Endocrinología': { color: 'text-purple-700', bgColor: 'bg-purple-100', borderColor: 'border-purple-300' },
