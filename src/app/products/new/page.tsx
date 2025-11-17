@@ -10,13 +10,22 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { ArrowLeft } from 'lucide-react'
+import { PRODUCT_CATEGORIES, getCategoryFromProductName, getTypeFromProductName, CategoryName } from '@/lib/categories'
 
 export default function NewProductPage() {
   const [formData, setFormData] = useState({
     name: '',
     sku: '',
-    description: ''
+    description: '',
+    category: '' as CategoryName | ''
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -35,12 +44,19 @@ export default function NewProductPage() {
         throw new Error('No estás autenticado')
       }
 
+      // Determinar categoría automáticamente si no se especificó
+      const category = formData.category || getCategoryFromProductName(formData.name) || null
+      // Determinar tipo automáticamente si no se especificó
+      const tipo = formData.tipo || getTypeFromProductName(formData.name) || null
+
       const { error } = await supabase
         .from('products')
         .insert([{
           name: formData.name,
           sku: formData.sku,
           description: formData.description || null,
+          category: category,
+          tipo: tipo,
           base_price: 10, // Precio por defecto
           currency: 'USD',
           user_id: user.id
@@ -129,6 +145,28 @@ export default function NewProductPage() {
                     onChange={(e) => handleInputChange('description', e.target.value)}
                     placeholder="Descripción del producto (opcional)"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="category">Categoría</Label>
+                  <Select 
+                    value={formData.category || ''} 
+                    onValueChange={(value) => handleInputChange('category', value)}
+                  >
+                    <SelectTrigger id="category">
+                      <SelectValue placeholder="Seleccionar categoría (opcional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.keys(PRODUCT_CATEGORIES).filter(cat => cat !== 'Todos').map((category) => (
+                        <SelectItem key={category} value={category}>
+                          {category}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Si no seleccionas una categoría, se detectará automáticamente según el nombre del producto
+                  </p>
                 </div>
 
                 <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">

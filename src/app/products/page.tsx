@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { formatCurrency } from '@/lib/compute'
 import { COUNTRY_NAMES, COUNTRY_FLAGS } from '@/lib/countryRates'
-import { Plus, Package, Edit, Trash2, Grid3X3, List, Eye, Globe, GitCompare, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import { Plus, Package, Edit, Trash2, Grid3X3, List, Eye, Globe, GitCompare, Search, ArrowUpDown, ArrowUp, ArrowDown, X, ChevronDown } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -22,6 +22,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { PRODUCT_CATEGORIES, getCategoryFromProductName, getTypeFromProductName, CategoryName } from '@/lib/categories'
+import { CategoryBadge } from '@/components/CategoryBadge'
+import { TypeBadge } from '@/components/TypeBadge'
 
 type ViewMode = 'grid' | 'table'
 type SortOrder = 'none' | 'asc' | 'desc'
@@ -32,6 +42,10 @@ export default function ProductsPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [searchTerm, setSearchTerm] = useState('')
   const [sortOrder, setSortOrder] = useState<SortOrder>('none')
+  const [selectedCategories, setSelectedCategories] = useState<CategoryName[]>([])
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([])
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false)
+  const [typeDropdownOpen, setTypeDropdownOpen] = useState(false)
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; product: Product | null }>({
     open: false,
     product: null
@@ -41,7 +55,7 @@ export default function ProductsPage() {
     open: false,
     product: null
   })
-  const [editForm, setEditForm] = useState({ name: '', description: '' })
+  const [editForm, setEditForm] = useState({ name: '', description: '', category: '' as CategoryName | '', tipo: '' as string | '' })
   const [updating, setUpdating] = useState(false)
   const router = useRouter()
 
@@ -97,7 +111,9 @@ export default function ProductsPage() {
   const handleEditProduct = (product: Product) => {
     setEditForm({
       name: product.name,
-      description: product.description || ''
+      description: product.description || '',
+      category: (product.category as CategoryName) || '',
+      tipo: ((product as any).tipo as string) || ''
     })
     setEditDialog({ open: true, product })
   }
@@ -107,11 +123,18 @@ export default function ProductsPage() {
 
     setUpdating(true)
     try {
+      // Determinar categoría automáticamente si no se especificó
+      const category = editForm.category || getCategoryFromProductName(editForm.name) || null
+      // Determinar tipo automáticamente si no se especificó
+      const tipo = editForm.tipo || getTypeFromProductName(editForm.name) || null
+
       const { error } = await supabase
         .from('products')
         .update({
           name: editForm.name,
-          description: editForm.description || null
+          description: editForm.description || null,
+          category: category,
+          tipo: tipo
         })
         .eq('id', editDialog.product.id)
 
@@ -120,9 +143,11 @@ export default function ProductsPage() {
         alert('Error al actualizar el producto')
       } else {
         // Actualizar la lista local
+        const updatedCategory = editForm.category || getCategoryFromProductName(editForm.name) || null
+        const updatedTipo = editForm.tipo || getTypeFromProductName(editForm.name) || null
         setProducts(products.map(p => 
           p.id === editDialog.product!.id 
-            ? { ...p, name: editForm.name, description: editForm.description || null }
+            ? { ...p, name: editForm.name, description: editForm.description || null, category: updatedCategory, tipo: updatedTipo }
             : p
         ))
         setEditDialog({ open: false, product: null })
@@ -145,9 +170,68 @@ export default function ProductsPage() {
     }
   }
 
+  // Tipos de muestra disponibles
+  const sampleTypes = [
+    'Sangre',
+    'Corte de Tejido',
+    'Punción',
+    'Biopsia endometrial',
+    'Hisopado bucal',
+    'Orina'
+  ]
+
+  // Toggle categoría
+  const toggleCategory = (category: CategoryName) => {
+    if (category === 'Todos') {
+      setSelectedCategories([])
+      return
+    }
+    setSelectedCategories(prev => {
+      if (prev.includes(category)) {
+        return prev.filter(c => c !== category)
+      } else {
+        return [...prev, category]
+      }
+    })
+  }
+
+  // Toggle tipo
+  const toggleType = (type: string) => {
+    setSelectedTypes(prev => {
+      if (prev.includes(type)) {
+        return prev.filter(t => t !== type)
+      } else {
+        return [...prev, type]
+      }
+    })
+  }
+
   // Filtrar y ordenar productos
   const filteredAndSortedProducts = products
     .filter(product => {
+      // Filtro por categorías
+      if (selectedCategories.length > 0) {
+        const productCategory = product.category || getCategoryFromProductName(product.name)
+        if (!productCategory || !selectedCategories.includes(productCategory as CategoryName)) {
+          return false
+        }
+      }
+      
+      // Filtro por tipo - debe tener TODOS los tipos seleccionados
+      if (selectedTypes.length > 0) {
+        const productType = (product as any).tipo
+        if (!productType) {
+          return false
+        }
+        // Si el producto tiene múltiples tipos (separados por comas), verificar que tenga TODOS los seleccionados
+        const productTypes = productType.split(',').map((t: string) => t.trim())
+        const hasAllSelectedTypes = selectedTypes.every(selectedType => productTypes.includes(selectedType))
+        if (!hasAllSelectedTypes) {
+          return false
+        }
+      }
+      
+      // Filtro por búsqueda
       if (!searchTerm) return true
       const searchLower = searchTerm.toLowerCase()
       return (
@@ -162,6 +246,7 @@ export default function ProductsPage() {
       if (sortOrder === 'asc') return a.base_price - b.base_price
       return b.base_price - a.base_price
     })
+
 
   if (loading) {
     return (
@@ -214,62 +299,6 @@ export default function ProductsPage() {
           </div>
         </div>
 
-        {/* Filtros y búsqueda */}
-        <Card className="mb-8">
-          <CardContent className="py-4">
-            <div className="flex flex-col md:flex-row gap-4 items-center">
-              {/* Buscador */}
-              <div className="relative flex-1 w-full">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <Input
-                  type="text"
-                  placeholder="Buscar por nombre, SKU o descripción..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              
-              {/* Ordenar por precio */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600 whitespace-nowrap">Ordenar:</span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={toggleSortOrder}
-                  className="flex items-center gap-2 min-w-[120px] border-gray-300 text-gray-700 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300"
-                >
-                  {sortOrder === 'none' && (
-                    <>
-                      <ArrowUpDown className="w-4 h-4" />
-                      Sin orden
-                    </>
-                  )}
-                  {sortOrder === 'asc' && (
-                    <>
-                      <ArrowUp className="w-4 h-4" />
-                      Ascendente
-                    </>
-                  )}
-                  {sortOrder === 'desc' && (
-                    <>
-                      <ArrowDown className="w-4 h-4" />
-                      Descendente
-                    </>
-                  )}
-                </Button>
-              </div>
-              
-              {/* Contador de resultados */}
-              {(searchTerm || sortOrder !== 'none') && (
-                <div className="text-sm text-gray-600">
-                  {filteredAndSortedProducts.length} de {products.length} productos
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Quick Country Navigation */}
         <Card className="mb-8">
           <CardHeader>
@@ -297,6 +326,238 @@ export default function ProductsPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Búsqueda y filtros - Minimalista */}
+        <div className="mb-6 space-y-4">
+          {/* Búsqueda y ordenamiento */}
+          <div className="flex flex-col sm:flex-row gap-3 items-center">
+            {/* Buscador */}
+            <div className="relative flex-1 w-full">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                type="text"
+                placeholder="Buscar productos..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            
+            {/* Ordenar */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleSortOrder}
+              className="flex items-center gap-2 min-w-[140px]"
+            >
+              {sortOrder === 'none' && (
+                <>
+                  <ArrowUpDown className="w-4 h-4" />
+                  Ordenar
+                </>
+              )}
+              {sortOrder === 'asc' && (
+                <>
+                  <ArrowUp className="w-4 h-4" />
+                  Precio ↑
+                </>
+              )}
+              {sortOrder === 'desc' && (
+                <>
+                  <ArrowDown className="w-4 h-4" />
+                  Precio ↓
+                </>
+              )}
+            </Button>
+          </div>
+
+          {/* Filtros de categorías y tipo - Dropdowns */}
+          <div className="flex gap-3 items-start">
+            {/* Dropdown de categorías */}
+            <div className="relative">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setCategoryDropdownOpen(!categoryDropdownOpen)
+                  setTypeDropdownOpen(false)
+                }}
+                className="flex items-center gap-2 min-w-[160px] justify-between"
+              >
+                <span>Categorías</span>
+                <ChevronDown className={`w-4 h-4 transition-transform ${categoryDropdownOpen ? 'rotate-180' : ''}`} />
+              </Button>
+              
+              {categoryDropdownOpen && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-10" 
+                    onClick={() => setCategoryDropdownOpen(false)}
+                  />
+                  <div className="absolute top-full left-0 mt-2 z-20 bg-white border border-gray-200 rounded-lg shadow-lg p-3 min-w-[280px] max-w-md max-h-[400px] overflow-y-auto">
+                    <div className="flex flex-wrap gap-2">
+                      {Object.keys(PRODUCT_CATEGORIES).filter(cat => cat !== 'Todos').map((category) => {
+                        const isSelected = selectedCategories.includes(category as CategoryName)
+                        const config = {
+                          'Ginecología': { color: 'text-pink-700', bgColor: 'bg-pink-100', borderColor: 'border-pink-300' },
+                          'Oncología': { color: 'text-red-700', bgColor: 'bg-red-100', borderColor: 'border-red-300' },
+                          'Endocrinología': { color: 'text-purple-700', bgColor: 'bg-purple-100', borderColor: 'border-purple-300' },
+                          'Urología': { color: 'text-blue-700', bgColor: 'bg-blue-100', borderColor: 'border-blue-300' },
+                          'Prenatales': { color: 'text-cyan-700', bgColor: 'bg-cyan-100', borderColor: 'border-cyan-300' },
+                          'Anualidades': { color: 'text-orange-700', bgColor: 'bg-orange-100', borderColor: 'border-orange-300' },
+                          'Otros': { color: 'text-gray-700', bgColor: 'bg-gray-100', borderColor: 'border-gray-300' }
+                        }
+                        const catConfig = config[category as CategoryName] || config['Otros']
+                        
+                        return (
+                          <button
+                            key={category}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              toggleCategory(category as CategoryName)
+                            }}
+                            className={`
+                              px-3 py-1.5 rounded-full text-sm font-medium transition-all relative
+                              ${isSelected 
+                                ? `${catConfig.bgColor} ${catConfig.color} border-2 ${catConfig.borderColor}` 
+                                : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                              }
+                            `}
+                          >
+                            {category}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Dropdown de tipo */}
+            <div className="relative">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setTypeDropdownOpen(!typeDropdownOpen)
+                  setCategoryDropdownOpen(false)
+                }}
+                className="flex items-center gap-2 min-w-[160px] justify-between"
+              >
+                <span>Tipo</span>
+                <ChevronDown className={`w-4 h-4 transition-transform ${typeDropdownOpen ? 'rotate-180' : ''}`} />
+              </Button>
+              
+              {typeDropdownOpen && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-10" 
+                    onClick={() => setTypeDropdownOpen(false)}
+                  />
+                  <div className="absolute top-full left-0 mt-2 z-20 bg-white border border-gray-200 rounded-lg shadow-lg p-3 min-w-[280px] max-w-md max-h-[400px] overflow-y-auto">
+                    <div className="flex flex-wrap gap-2">
+                      {sampleTypes.map((type) => {
+                        const isSelected = selectedTypes.includes(type)
+                        const typeConfig = {
+                          'Sangre': { color: 'text-red-700', bgColor: 'bg-red-100', borderColor: 'border-red-300' },
+                          'Corte de Tejido': { color: 'text-purple-700', bgColor: 'bg-purple-100', borderColor: 'border-purple-300' },
+                          'Punción': { color: 'text-blue-700', bgColor: 'bg-blue-100', borderColor: 'border-blue-300' },
+                          'Biopsia endometrial': { color: 'text-pink-700', bgColor: 'bg-pink-100', borderColor: 'border-pink-300' },
+                          'Hisopado bucal': { color: 'text-cyan-700', bgColor: 'bg-cyan-100', borderColor: 'border-cyan-300' },
+                          'Orina': { color: 'text-green-700', bgColor: 'bg-green-100', borderColor: 'border-green-300' }
+                        }
+                        const tConfig = typeConfig[type] || { color: 'text-gray-700', bgColor: 'bg-gray-100', borderColor: 'border-gray-300' }
+                        
+                        return (
+                          <button
+                            key={type}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              toggleType(type)
+                            }}
+                            className={`
+                              px-3 py-1.5 rounded-full text-sm font-medium transition-all relative
+                              ${isSelected 
+                                ? `${tConfig.bgColor} ${tConfig.color} border-2 ${tConfig.borderColor}` 
+                                : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                              }
+                            `}
+                          >
+                            {type}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Etiquetas seleccionadas con X */}
+          {(selectedCategories.length > 0 || selectedTypes.length > 0) && (
+            <div className="flex flex-wrap gap-2 items-center">
+              {selectedCategories.map((category) => {
+                const config = {
+                  'Ginecología': { color: 'text-pink-700', bgColor: 'bg-pink-100', borderColor: 'border-pink-300' },
+                  'Oncología': { color: 'text-red-700', bgColor: 'bg-red-100', borderColor: 'border-red-300' },
+                  'Endocrinología': { color: 'text-purple-700', bgColor: 'bg-purple-100', borderColor: 'border-purple-300' },
+                  'Urología': { color: 'text-blue-700', bgColor: 'bg-blue-100', borderColor: 'border-blue-300' },
+                  'Prenatales': { color: 'text-cyan-700', bgColor: 'bg-cyan-100', borderColor: 'border-cyan-300' },
+                  'Anualidades': { color: 'text-orange-700', bgColor: 'bg-orange-100', borderColor: 'border-orange-300' },
+                  'Otros': { color: 'text-gray-700', bgColor: 'bg-gray-100', borderColor: 'border-gray-300' }
+                }
+                const catConfig = config[category] || config['Otros']
+                
+                return (
+                  <div
+                    key={category}
+                    className={`relative ${catConfig.bgColor} ${catConfig.color} border-2 ${catConfig.borderColor} px-3 py-1.5 rounded-full text-sm font-medium`}
+                  >
+                    <button
+                      onClick={() => toggleCategory(category)}
+                      className="absolute -top-1.5 -right-1.5 bg-gray-800 text-white rounded-full p-0.5 hover:bg-gray-900 transition-colors"
+                      aria-label={`Eliminar ${category}`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                    {category}
+                  </div>
+                )
+              })}
+              
+              {selectedTypes.map((type) => {
+                const typeConfig = {
+                  'Sangre': { color: 'text-red-700', bgColor: 'bg-red-100', borderColor: 'border-red-300' },
+                  'Corte de Tejido': { color: 'text-purple-700', bgColor: 'bg-purple-100', borderColor: 'border-purple-300' },
+                  'Punción': { color: 'text-blue-700', bgColor: 'bg-blue-100', borderColor: 'border-blue-300' },
+                  'Biopsia endometrial': { color: 'text-pink-700', bgColor: 'bg-pink-100', borderColor: 'border-pink-300' },
+                  'Hisopado bucal': { color: 'text-cyan-700', bgColor: 'bg-cyan-100', borderColor: 'border-cyan-300' },
+                  'Sangre y corte tejido': { color: 'text-orange-700', bgColor: 'bg-orange-100', borderColor: 'border-orange-300' },
+                  'Orina': { color: 'text-green-700', bgColor: 'bg-green-100', borderColor: 'border-green-300' }
+                }
+                const tConfig = typeConfig[type] || { color: 'text-gray-700', bgColor: 'bg-gray-100', borderColor: 'border-gray-300' }
+                
+                return (
+                  <div
+                    key={type}
+                    className={`relative ${tConfig.bgColor} ${tConfig.color} border-2 ${tConfig.borderColor} px-3 py-1.5 rounded-full text-sm font-medium`}
+                  >
+                    <button
+                      onClick={() => toggleType(type)}
+                      className="absolute -top-1.5 -right-1.5 bg-gray-800 text-white rounded-full p-0.5 hover:bg-gray-900 transition-colors"
+                      aria-label={`Eliminar ${type}`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                    {type}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
 
         {filteredAndSortedProducts.length === 0 ? (
           <Card className="text-center py-12">
@@ -328,10 +589,18 @@ export default function ProductsPage() {
                     className="hover:shadow-xl transition-all duration-200"
                   >
                     <CardHeader>
-                      <CardTitle className="text-xl">{product.name}</CardTitle>
-                      <CardDescription>
-                        SKU: {product.sku}
-                      </CardDescription>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          <CardTitle className="text-xl">{product.name}</CardTitle>
+                          <CardDescription className="mt-1">
+                            SKU: {product.sku}
+                          </CardDescription>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            <CategoryBadge category={product.category} productName={product.name} />
+                            <TypeBadge type={(product as any).tipo} />
+                          </div>
+                        </div>
+                      </div>
                     </CardHeader>
                     <CardContent>
                       {product.description && (
@@ -416,6 +685,10 @@ export default function ProductsPage() {
                           >
                             <td className="p-4">
                               <div className="font-medium text-gray-900">{product.name}</div>
+                              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                <CategoryBadge category={product.category} productName={product.name} size="sm" />
+                                <TypeBadge type={(product as any).tipo} size="sm" />
+                              </div>
                             </td>
                             <td className="p-4">
                               <code className="bg-gray-100 px-2 py-1 rounded text-sm text-gray-900">
@@ -538,6 +811,28 @@ export default function ProductsPage() {
                 placeholder="Descripción del producto (opcional)"
                 disabled={updating}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-category">Categoría</Label>
+              <Select 
+                value={editForm.category || ''} 
+                onValueChange={(value) => setEditForm({ ...editForm, category: value as CategoryName })}
+                disabled={updating}
+              >
+                <SelectTrigger id="edit-category">
+                  <SelectValue placeholder="Seleccionar categoría (opcional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.keys(PRODUCT_CATEGORIES).filter(cat => cat !== 'Todos').map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {category}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Si no seleccionas una categoría, se detectará automáticamente según el nombre del producto
+              </p>
             </div>
           </div>
           <DialogFooter>

@@ -16,37 +16,37 @@ export type Database = {
     Tables: {
       product_country_overrides: {
         Row: {
+          cl_config_type: string | null
+          col_config_type: string | null
           country_code: string
           created_at: string | null
           id: string
+          mx_config_type: string | null
           overrides: Json
           product_id: string
           updated_at: string | null
-          mx_config_type: string | null
-          cl_config_type: string | null
-          col_config_type: string | null
         }
         Insert: {
+          cl_config_type?: string | null
+          col_config_type?: string | null
           country_code: string
           created_at?: string | null
           id?: string
+          mx_config_type?: string | null
           overrides?: Json
           product_id: string
           updated_at?: string | null
-          mx_config_type?: string | null
-          cl_config_type?: string | null
-          col_config_type?: string | null
         }
         Update: {
+          cl_config_type?: string | null
+          col_config_type?: string | null
           country_code?: string
           created_at?: string | null
           id?: string
+          mx_config_type?: string | null
           overrides?: Json
           product_id?: string
           updated_at?: string | null
-          mx_config_type?: string | null
-          cl_config_type?: string | null
-          col_config_type?: string | null
         }
         Relationships: [
           {
@@ -61,6 +61,7 @@ export type Database = {
       products: {
         Row: {
           base_price: number
+          category: string | null
           created_at: string | null
           currency: string | null
           description: string | null
@@ -72,6 +73,7 @@ export type Database = {
         }
         Insert: {
           base_price: number
+          category?: string | null
           created_at?: string | null
           currency?: string | null
           description?: string | null
@@ -83,6 +85,7 @@ export type Database = {
         }
         Update: {
           base_price?: number
+          category?: string | null
           created_at?: string | null
           currency?: string | null
           description?: string | null

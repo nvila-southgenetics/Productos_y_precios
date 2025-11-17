@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { supabase } from '@/lib/supabase'
 import { useNumericInput } from '@/hooks/useNumericInput'
 import { MessageSquare } from 'lucide-react'
+import { CategoryBadge } from '@/components/CategoryBadge'
+import { TypeBadge } from '@/components/TypeBadge'
 
 interface ProductCountryTableProps {
   product: Product
@@ -527,11 +529,15 @@ export function ProductCountryTable({ product, countryCode, onOverridesChange }:
       <CardContent className="p-0">
         {/* Header con botón de reiniciar y estado de guardado */}
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <h3 className="text-lg font-semibold text-gray-900">
               <span className="inline-block w-1 h-4 bg-blue-600 mr-2"></span>
               Cálculo de Costos
             </h3>
+            <div className="flex items-center gap-2">
+              <CategoryBadge category={product.category} productName={product.name} size="sm" />
+              <TypeBadge type={(product as any).tipo} size="sm" />
+            </div>
             {saveStatus === 'saving' && (
               <div className="flex items-center gap-1 text-sm text-orange-600 bg-orange-50 px-3 py-1 rounded-full">
                 <div className="w-3 h-3 border-2 border-orange-600 border-t-transparent rounded-full animate-spin"></div>

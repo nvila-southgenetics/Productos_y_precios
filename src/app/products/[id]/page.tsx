@@ -13,6 +13,8 @@ import { ProductCountryTable } from '@/components/ProductCountryTable'
 import { CountryTabs } from '@/components/CountryTabs'
 import { ArrowLeft, GitCompare } from 'lucide-react'
 import { formatCurrency } from '@/lib/compute'
+import { CategoryBadge } from '@/components/CategoryBadge'
+import { TypeBadge } from '@/components/TypeBadge'
 
 export default function ProductDetailPage() {
   const params = useParams()
@@ -142,6 +144,10 @@ export default function ProductDetailPage() {
               <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
                 <span>SKU: {product.sku}</span>
               </div>
+              <div className="flex flex-wrap gap-2 mt-3">
+                <CategoryBadge category={product.category} productName={product.name} size="md" />
+                <TypeBadge type={(product as any).tipo} size="md" />
+              </div>
             </div>
             <Button 
               variant="outline"
@@ -203,6 +209,18 @@ export default function ProductDetailPage() {
                       <p className="text-sm">{product.description}</p>
                     </div>
                   )}
+                  <div>
+                    <span className="text-sm text-muted-foreground">Categoría:</span>
+                    <div className="mt-1.5">
+                      <CategoryBadge category={product.category} productName={product.name} size="sm" />
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-sm text-muted-foreground">Tipo:</span>
+                    <div className="mt-1.5">
+                      <TypeBadge type={(product as any).tipo} size="sm" />
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </div>
