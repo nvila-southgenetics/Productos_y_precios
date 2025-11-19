@@ -182,3 +182,13 @@ export const COUNTRY_FLAGS: Record<CountryCode, string> = {
   VE: '🇻🇪',
   CO: '🇨🇴',
 }
+
+// Configuración de IVA por país (en porcentaje)
+export const COUNTRY_VAT: Record<CountryCode, number> = {
+  UY: 0.22, // 22% IVA en Uruguay
+  AR: 0.21, // 21% IVA en Argentina
+  MX: 0.16, // 16% IVA en México
+  CL: 0.19, // 19% IVA en Chile
+  VE: 0.16, // 16% IVA en Venezuela
+  CO: 0.19, // 19% IVA en Colombia
+}

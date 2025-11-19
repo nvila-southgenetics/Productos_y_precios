@@ -28,6 +28,7 @@ export type NotificationPreferences = {
 }
 export type Product = Tables<'products'>
 export type ProductCountryOverride = Tables<'product_country_overrides'>
+export type Sale = Tables<'sales'>
 
 export type CountryCode = 'UY' | 'AR' | 'MX' | 'CL' | 'VE' | 'CO'
 export type MxConfigType = 'precio_lista' | 'gobierno' | 'convenio' | 'lanzamiento' | 'default'

@@ -32,6 +32,68 @@ function calculateValue(
   }
 }
 
+/**
+ * Calcula el valor por defecto de Blood Drawn & Sample Handling basado en el país y tipo de producto
+ * @param countryCode Código del país
+ * @param productTipo Tipo(s) del producto (puede ser "Sangre", "Corte de Tejido", o ambos separados por comas)
+ * @returns Valor en USD o undefined si no hay regla específica
+ */
+function getDefaultBloodDrawSampleUSD(
+  countryCode: CountryCode,
+  productTipo: string | null | undefined
+): number | undefined {
+  if (!productTipo) {
+    return undefined
+  }
+
+  // Dividir los tipos si hay múltiples (separados por comas)
+  const tipos = productTipo.split(',').map(t => t.trim())
+  const hasSangre = tipos.includes('Sangre')
+  const hasCorteTejido = tipos.includes('Corte de Tejido')
+
+  // Definir los valores por país y tipo
+  const bloodDrawRates: Partial<Record<CountryCode, { sangre?: number; corteTejido?: number }>> = {
+    UY: {
+      sangre: 31,
+      corteTejido: 182
+    },
+    VE: {
+      sangre: 40
+    },
+    CL: {
+      sangre: 11,
+      corteTejido: 74
+    },
+    AR: {
+      sangre: 35
+    }
+    // MX y CO no tienen reglas específicas, usarán el valor por defecto del país
+  }
+
+  const countryRates = bloodDrawRates[countryCode]
+  if (!countryRates) {
+    return undefined
+  }
+
+  // Si tiene ambos tipos, usar el más alto (o sumar si es necesario)
+  // Por ahora usamos el más alto
+  if (hasSangre && hasCorteTejido) {
+    const sangreValue = countryRates.sangre || 0
+    const corteValue = countryRates.corteTejido || 0
+    return Math.max(sangreValue, corteValue)
+  }
+
+  if (hasSangre && countryRates.sangre !== undefined) {
+    return countryRates.sangre
+  }
+
+  if (hasCorteTejido && countryRates.corteTejido !== undefined) {
+    return countryRates.corteTejido
+  }
+
+  return undefined
+}
+
 export function computePricing(
   product: Product,
   countryCode: CountryCode,
@@ -130,11 +192,20 @@ export function computePricing(
   })
 
   // 4. Blood Drawn & Sample Handling - puede ser USD o %
+  // Calcular el valor por defecto basado en el tipo de producto si no hay override
+  let defaultBloodDrawUSD = rules.bloodDrawSampleUSD
+  if (overrides?.bloodDrawSampleUSD === undefined) {
+    const tipoBasedValue = getDefaultBloodDrawSampleUSD(countryCode, (product as any).tipo)
+    if (tipoBasedValue !== undefined) {
+      defaultBloodDrawUSD = tipoBasedValue
+    }
+  }
+  
   const bloodDrawCalc = calculateValue(
     salesRevenueAmount,
     overrides?.bloodDrawSampleUSD,
     overrides?.bloodDrawSamplePct,
-    rules.bloodDrawSampleUSD ? (rules.bloodDrawSampleUSD / salesRevenueAmount) : 0
+    defaultBloodDrawUSD ? (defaultBloodDrawUSD / salesRevenueAmount) : 0
   )
   costRows.push({
     label: 'Blood Drawn & Sample Handling',

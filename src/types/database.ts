@@ -68,6 +68,7 @@ export type Database = {
           id: string
           name: string
           sku: string
+          tipo: string | null
           updated_at: string | null
           user_id: string
         }
@@ -80,6 +81,7 @@ export type Database = {
           id?: string
           name: string
           sku: string
+          tipo?: string | null
           updated_at?: string | null
           user_id: string
         }
@@ -92,6 +94,7 @@ export type Database = {
           id?: string
           name?: string
           sku?: string
+          tipo?: string | null
           updated_at?: string | null
           user_id?: string
         }
@@ -138,6 +141,56 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      sales: {
+        Row: {
+          country_code: string
+          created_at: string | null
+          gross_profit_amount: number | null
+          gross_sales_amount: number | null
+          id: string
+          month: number
+          product_id: string
+          quantity: number
+          updated_at: string | null
+          user_id: string
+          year: number
+        }
+        Insert: {
+          country_code: string
+          created_at?: string | null
+          gross_profit_amount?: number | null
+          gross_sales_amount?: number | null
+          id?: string
+          month: number
+          product_id: string
+          quantity: number
+          updated_at?: string | null
+          user_id: string
+          year: number
+        }
+        Update: {
+          country_code?: string
+          created_at?: string | null
+          gross_profit_amount?: number | null
+          gross_sales_amount?: number | null
+          id?: string
+          month?: number
+          product_id?: string
+          quantity?: number
+          updated_at?: string | null
+          user_id?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       workspace_invitations: {
         Row: {

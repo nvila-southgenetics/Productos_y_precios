@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
-import { Settings, User, LogOut, BarChart3, FlaskConical, Home } from 'lucide-react'
+import { Settings, User, LogOut, BarChart3, FlaskConical, Home, DollarSign } from 'lucide-react'
 
 export function Navbar() {
   const [user, setUser] = useState<any>(null)
@@ -90,6 +90,15 @@ export function Navbar() {
               >
                 <FlaskConical className="w-4 h-4" />
                 Simulacro
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => router.push('/sales')}
+                className="flex items-center gap-2 text-gray-600 hover:text-green-600 hover:bg-green-50"
+              >
+                <DollarSign className="w-4 h-4" />
+                P&L Import
               </Button>
               <Button 
                 variant="ghost" 
