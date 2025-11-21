@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Product, CountryCode, ProductCountryOverride, OverrideFields } from '@/types'
 import { Navbar } from '@/components/Navbar'
@@ -19,10 +19,18 @@ import { TypeBadge } from '@/components/TypeBadge'
 export default function ProductDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const productId = params.id as string
   
   const [product, setProduct] = useState<Product | null>(null)
-  const [selectedCountry, setSelectedCountry] = useState<CountryCode>('UY')
+  const [selectedCountry, setSelectedCountry] = useState<CountryCode>(() => {
+    // Leer el país de los query params si existe
+    const countryParam = searchParams?.get('country')
+    if (countryParam && ['UY', 'AR', 'MX', 'CL', 'VE', 'CO'].includes(countryParam)) {
+      return countryParam as CountryCode
+    }
+    return 'UY'
+  })
   const [overrides, setOverrides] = useState<OverrideFields>({})
   const [loading, setLoading] = useState(true)
   
@@ -33,6 +41,14 @@ export default function ProductDetailPage() {
       fetchOverrides()
     }
   }, [productId])
+
+  useEffect(() => {
+    // Si hay un país en los query params, actualizar el país seleccionado
+    const countryParam = searchParams?.get('country')
+    if (countryParam && ['UY', 'AR', 'MX', 'CL', 'VE', 'CO'].includes(countryParam)) {
+      setSelectedCountry(countryParam as CountryCode)
+    }
+  }, [searchParams])
 
   useEffect(() => {
     if (product) {
