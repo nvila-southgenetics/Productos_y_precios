@@ -34,7 +34,7 @@ async function removeHardcodedSales() {
     }
 
     console.log('✅ Ventas de Noviembre 2025 en Argentina eliminadas exitosamente')
-    console.log(`📊 Registros eliminados: ${data?.length || 0}`)
+    console.log(`📊 Registros eliminados: ${Array.isArray(data) ? data.length : 0}`)
 
   } catch (error) {
     console.error('❌ Error eliminando ventas:', error)
