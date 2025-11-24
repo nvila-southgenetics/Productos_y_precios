@@ -179,10 +179,10 @@ export default function SalesPage() {
       }
 
       // Cargar overrides de productos por país
-      const productIds = [...new Set((data || []).map((s: any) => s.product_id))]
+      const productIds = Array.from(new Set((data || []).map((s: any) => s.product_id)))
       const countryCodes = selectedCountry !== 'all' 
         ? [selectedCountry] 
-        : [...new Set((data || []).map((s: any) => s.country_code))]
+        : Array.from(new Set((data || []).map((s: any) => s.country_code)))
 
       const { data: overridesData } = await supabase
         .from('product_country_overrides')
@@ -237,15 +237,15 @@ export default function SalesPage() {
             year: sale.year,
           }
         })
-        .filter((item: any) => item !== null)
+        .filter((item: any): item is NonNullable<typeof item> => item !== null)
         .sort((a: any, b: any) => {
           // Ordenar por año, mes y luego por nombre de producto
           if (a.year !== b.year) return a.year - b.year
           if (a.month !== b.month) return a.month - b.month
           return a.product_name.localeCompare(b.product_name)
-        })
+        }) as any[]
 
-      setProductSales(salesList)
+      setProductSales(salesList as any)
     }
 
     loadSalesData()
@@ -280,8 +280,8 @@ export default function SalesPage() {
       'Septiembre': 9, 'Octubre': 10, 'Noviembre': 11, 'Diciembre': 12,
       'Ene': 1, 'Feb': 2, 'Mar': 3, 'Abr': 4, 'May': 5, 'Jun': 6,
       'Jul': 7, 'Ago': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dic': 12,
-      'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
-      'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12,
+      'Jan': 1, 'February': 2, 'March': 3, 'Apr': 4, 'June': 6,
+      'July': 7, 'Aug': 8, 'September': 9, 'October': 10, 'November': 11, 'Dec': 12,
       '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6,
       '7': 7, '8': 8, '9': 9, '10': 10, '11': 11, '12': 12,
     }
@@ -526,7 +526,7 @@ export default function SalesPage() {
     }
     
     console.log(`Total de ventas parseadas: ${sales.length}`)
-    console.log(`Meses encontrados: ${[...new Set(sales.map(s => `${s.year}-${s.month}`))].join(', ')}`)
+    console.log(`Meses encontrados: ${Array.from(new Set(sales.map(s => `${s.year}-${s.month}`))).join(', ')}`)
 
     if (sales.length === 0) {
       throw new Error("No se encontraron ventas válidas en el archivo. Verifica que el formato sea: Año - Mes - Producto - Cantidad - País")
@@ -721,7 +721,7 @@ export default function SalesPage() {
 
       // Mostrar advertencia si hay productos no encontrados
       if (notFoundProducts.length > 0) {
-        const uniqueNotFound = [...new Set(notFoundProducts)]
+        const uniqueNotFound = Array.from(new Set(notFoundProducts))
         console.warn(`${uniqueNotFound.length} productos no encontrados:`, uniqueNotFound)
         const errorMsg = `Advertencia: ${uniqueNotFound.length} producto(s) no se encontraron en la base de datos:\n${uniqueNotFound.slice(0, 5).join('\n')}${uniqueNotFound.length > 5 ? `\n... y ${uniqueNotFound.length - 5} más` : ''}\n\nEstos productos fueron omitidos. Verifica que existan en la base de datos.`
         setError(errorMsg)
@@ -757,7 +757,7 @@ export default function SalesPage() {
       setParsedSales([])
       
       // Recargar datos de ventas
-      const { data: salesData } = await supabase
+      let query = supabase
         .from('sales')
         .select(`
           month, 
@@ -768,7 +768,12 @@ export default function SalesPage() {
           products(id, name, sku, category, tipo, base_price, currency, description, user_id, created_at, updated_at)
         `)
         .eq('user_id', userId)
-        .eq('country_code', selectedCountry !== 'all' ? selectedCountry : undefined)
+        
+      if (selectedCountry !== 'all') {
+        query = query.eq('country_code', selectedCountry)
+      }
+      
+      const { data: salesData } = await query
 
       if (salesData) {
         // Actualizar ventas mensuales
@@ -789,10 +794,10 @@ export default function SalesPage() {
         // Cargar overrides si hay datos
         let overridesMap: Record<string, any> = {}
         if (salesData && salesData.length > 0) {
-          const productIds = [...new Set(salesData.map((s: any) => s.product_id))]
+          const productIds = Array.from(new Set(salesData.map((s: any) => s.product_id)))
           const countryCodes = selectedCountry !== 'all' 
             ? [selectedCountry] 
-            : [...new Set(salesData.map((s: any) => s.country_code))]
+            : Array.from(new Set(salesData.map((s: any) => s.country_code)))
 
           const { data: overridesData } = await supabase
             .from('product_country_overrides')
@@ -829,15 +834,15 @@ export default function SalesPage() {
               year: sale.year,
             }
           })
-          .filter((item: any) => item !== null)
+          .filter((item: any): item is NonNullable<typeof item> => item !== null)
           .sort((a: any, b: any) => {
             // Ordenar por año, mes y luego por nombre de producto
             if (a.year !== b.year) return a.year - b.year
             if (a.month !== b.month) return a.month - b.month
             return a.product_name.localeCompare(b.product_name)
-          })
+          }) as any[]
 
-        setProductSales(salesList)
+        setProductSales(salesList as any)
       }
     } catch (err: any) {
       console.error("Error guardando ventas:", err)
@@ -1999,50 +2004,50 @@ export default function SalesPage() {
                                     })
                                   }
                                   
-                                  return filteredMonthSales.map((sale, idx) => {
-                                  // Calcular gross sales y gross profit usando computePricing
-                                  let grossSalesAmount = 0
-                                  let grossProfitAmount = 0
-                                  
-                                  if (sale.product_full) {
-                                    const overrideKey = `${sale.product_id}-${sale.country_code}`
-                                    const overrides = productOverrides[overrideKey] || {}
+                                  return filteredMonthSales.map((sale, idx): JSX.Element => {
+                                    // Calcular gross sales y gross profit usando computePricing
+                                    let grossSalesAmount = 0
+                                    let grossProfitAmount = 0
                                     
-                                    try {
-                                      const computed = computePricing(
-                                        sale.product_full,
-                                        sale.country_code,
-                                        overrides
-                                      )
-                                      // Multiplicar por la cantidad, usar valor absoluto para grossProfit
-                                      grossSalesAmount = computed.grossSales.amount * sale.quantity
-                                      grossProfitAmount = Math.abs(computed.grossProfit.amount) * sale.quantity
-                                    } catch (e) {
-                                      console.error('Error calculando precios:', e)
-                                      // Fallback al precio base
+                                    if (sale.product_full) {
+                                      const overrideKey = `${sale.product_id}-${sale.country_code}`
+                                      const overrides = productOverrides[overrideKey] || {}
+                                      
+                                      try {
+                                        const computed = computePricing(
+                                          sale.product_full,
+                                          sale.country_code,
+                                          overrides
+                                        )
+                                        // Multiplicar por la cantidad, usar valor absoluto para grossProfit
+                                        grossSalesAmount = computed.grossSales.amount * sale.quantity
+                                        grossProfitAmount = Math.abs(computed.grossProfit.amount) * sale.quantity
+                                      } catch (e) {
+                                        console.error('Error calculando precios:', e)
+                                        // Fallback al precio base
+                                        grossSalesAmount = sale.product_price * sale.quantity
+                                        grossProfitAmount = Math.abs(sale.product_price) * sale.quantity
+                                      }
+                                    } else {
+                                      // Fallback si no hay producto completo
                                       grossSalesAmount = sale.product_price * sale.quantity
                                       grossProfitAmount = Math.abs(sale.product_price) * sale.quantity
                                     }
-                                  } else {
-                                    // Fallback si no hay producto completo
-                                    grossSalesAmount = sale.product_price * sale.quantity
-                                    grossProfitAmount = Math.abs(sale.product_price) * sale.quantity
-                                  }
 
-                                  // Verificar si el gross sale es 10 USD
-                                  const isOutdatedPrice = sale.product_full && (() => {
-                                    try {
-                                      const overrideKey = `${sale.product_id}-${sale.country_code}`
-                                      const overrides = productOverrides[overrideKey] || {}
-                                      const computed = computePricing(sale.product_full, sale.country_code, overrides)
-                                      return computed.grossSales.amount === 10
-                                    } catch (e) {
-                                      return false
-                                    }
-                                  })()
+                                    // Verificar si el gross sale es 10 USD
+                                    const isOutdatedPrice = sale.product_full && (() => {
+                                      try {
+                                        const overrideKey = `${sale.product_id}-${sale.country_code}`
+                                        const overrides = productOverrides[overrideKey] || {}
+                                        const computed = computePricing(sale.product_full, sale.country_code, overrides)
+                                        return computed.grossSales.amount === 10
+                                      } catch (e) {
+                                        return false
+                                      }
+                                    })()
 
-                                  return (
-                                    <tr key={`${sale.product_id}-${idx}`} className="border-b border-gray-100 hover:bg-gray-50 last:border-b-0">
+                                    return (
+                                      <tr key={`${sale.product_id}-${idx}`} className="border-b border-gray-100 hover:bg-gray-50 last:border-b-0">
                                       <td className="py-1 px-2 text-gray-900">
                                         <div className="flex items-center gap-2">
                                           <Link 
@@ -2093,8 +2098,6 @@ export default function SalesPage() {
                                     </tr>
                                   )
                                 })
-                                
-                                return filteredMonthSales
                               })()}
                               </tbody>
                               <tfoot>

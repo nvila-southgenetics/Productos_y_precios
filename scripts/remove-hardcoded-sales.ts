@@ -34,7 +34,8 @@ async function removeHardcodedSales() {
     }
 
     console.log('✅ Ventas de Noviembre 2025 en Argentina eliminadas exitosamente')
-    console.log(`📊 Registros eliminados: ${Array.isArray(data) ? data.length : 0}`)
+    // Nota: El método delete() de Supabase no retorna los registros eliminados en data
+    // Por lo tanto, no podemos mostrar la cantidad exacta de registros eliminados
 
   } catch (error) {
     console.error('❌ Error eliminando ventas:', error)
