@@ -700,17 +700,49 @@ export default function SalesPage() {
           }
 
           // 3. Búsqueda parcial (solo si no se encontró con índices exactos)
+          // Priorizar coincidencias exactas y evitar que términos cortos coincidan con productos más largos
           if (!product) {
-            product = products.find(p => {
-              const pNameLower = p.name.toLowerCase().trim()
-              const pSkuLower = p.sku.toLowerCase().trim()
-              return (sale.productSku && (pNameLower.includes(sale.productSku.toLowerCase().trim()) ||
-                     pSkuLower.includes(sale.productSku.toLowerCase().trim()))) ||
-                     pNameLower.includes(cleanNameLower) ||
-                     cleanNameLower.includes(pNameLower) ||
-                     pNameLower.includes(productNameLower) ||
-                     productNameLower.includes(pNameLower)
-            }) || null
+            const searchTerm = cleanNameLower || productNameLower
+            
+            // Primero intentar coincidencias exactas de SKU
+            if (sale.productSku) {
+              const skuLower = sale.productSku.toLowerCase().trim()
+              product = products.find(p => {
+                const pSkuLower = p.sku.toLowerCase().trim()
+                const pNameLower = p.name.toLowerCase().trim()
+                return pSkuLower === skuLower || pNameLower === skuLower
+              }) || null
+            }
+            
+            // Si no se encontró, buscar coincidencias más estrictas
+            // CRÍTICO: Si el término de búsqueda es más corto que el nombre del producto,
+            // NO coincidir a menos que sea exactamente igual. Esto evita que "Unity" coincida con "Unity BPS"
+            if (!product) {
+              product = products.find(p => {
+                const pNameLower = p.name.toLowerCase().trim()
+                
+                // Coincidencia exacta
+                if (pNameLower === searchTerm) {
+                  return true
+                }
+                
+                // Si el término de búsqueda es más corto que el nombre del producto, NO coincidir
+                // Esto previene que "Unity" (5 chars) coincida con "Unity BPS" (9 chars)
+                if (searchTerm.length < pNameLower.length) {
+                  return false
+                }
+                
+                // Si el término de búsqueda es igual o más largo, verificar que contenga el nombre del producto
+                // y que la diferencia sea razonable (máximo 3 caracteres adicionales)
+                if (searchTerm.length >= pNameLower.length) {
+                  if (searchTerm.includes(pNameLower) && searchTerm.length - pNameLower.length <= 3) {
+                    return true
+                  }
+                }
+                
+                return false
+              }) || null
+            }
           }
 
           // 4. Si no se encontró, crear el producto automáticamente
