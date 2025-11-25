@@ -8,11 +8,11 @@ import Link from 'next/link'
 import { Navbar } from '@/components/Navbar'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Upload, FileSpreadsheet, Save, BarChart3, TrendingUp, Package, AlertCircle, ChevronDown, ChevronRight, Filter, X, Calculator } from 'lucide-react'
+import { Upload, FileSpreadsheet, Save, BarChart3, TrendingUp, Package, AlertCircle, ChevronDown, ChevronRight, Filter, X, Calculator, Trash2, AlertTriangle } from 'lucide-react'
 import { CategoryBadge } from '@/components/CategoryBadge'
 import { TypeBadge } from '@/components/TypeBadge'
 import { formatCurrency, formatPercentage, computePricing } from '@/lib/compute'
-import { PRODUCT_CATEGORIES, getCategoryNames, getCategoryFromProductName, CategoryName } from '@/lib/categories'
+import { PRODUCT_CATEGORIES, getCategoryNames, getCategoryFromProductName, getTypeFromProductName, CategoryName } from '@/lib/categories'
 import { supabase } from '@/lib/supabase'
 import { CountryCode, Sale, Product } from '@/types'
 import { COUNTRY_NAMES, COUNTRY_FLAGS } from '@/lib/countryRates'
@@ -27,6 +27,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
@@ -59,6 +60,7 @@ export default function SalesPage() {
   const [success, setSuccess] = useState<string>('')
   const [parsedSales, setParsedSales] = useState<ParsedSale[]>([])
   const [products, setProducts] = useState<Product[]>([])
+  const [processingProgress, setProcessingProgress] = useState<{ current: number; total: number } | null>(null)
   const [selectedCountry, setSelectedCountry] = useState<CountryCode | 'all'>('all')
   const [monthlySales, setMonthlySales] = useState<MonthlySales[]>([])
   const [productSales, setProductSales] = useState<Array<{
@@ -93,6 +95,8 @@ export default function SalesPage() {
   const [combinedFilterOpen, setCombinedFilterOpen] = useState(false)
   const [plDialogOpen, setPlDialogOpen] = useState<Record<string, boolean>>({})
   const [combinedPlDialogOpen, setCombinedPlDialogOpen] = useState(false)
+  const [clearAllDialogOpen, setClearAllDialogOpen] = useState(false)
+  const [clearing, setClearing] = useState(false)
   const router = useRouter()
 
   // Cerrar dropdowns al hacer click fuera
@@ -596,8 +600,24 @@ export default function SalesPage() {
           return normalized
         })
 
-        // Parsear ventas
-        const sales = parseExcel(normalizedRows)
+        // Parsear ventas (procesar en chunks para archivos grandes)
+        const totalRows = normalizedRows.length
+        const chunkSize = 1000 // Procesar 1000 filas a la vez
+        const sales: ParsedSale[] = []
+        
+        setProcessingProgress({ current: 0, total: totalRows })
+        
+        for (let i = 0; i < normalizedRows.length; i += chunkSize) {
+          const chunk = normalizedRows.slice(i, Math.min(i + chunkSize, normalizedRows.length))
+          const chunkSales = parseExcel(chunk)
+          sales.push(...chunkSales)
+          
+          // Actualizar progreso y permitir que el navegador respire
+          setProcessingProgress({ current: Math.min(i + chunkSize, totalRows), total: totalRows })
+          await new Promise(resolve => setTimeout(resolve, 0))
+        }
+        
+        setProcessingProgress(null)
         
         if (sales.length === 0) {
           throw new Error("No se encontraron ventas en el archivo. Verifica que el formato sea correcto.")
@@ -630,131 +650,280 @@ export default function SalesPage() {
     setSaving(true)
     setError('')
     setSuccess('')
+    setProcessingProgress({ current: 0, total: parsedSales.length })
 
     try {
-      // Buscar productos por SKU o nombre
-      const salesToInsert = []
-      const notFoundProducts: string[] = []
-
-      for (const sale of parsedSales) {
-        // Limpiar el nombre del producto (remover corchetes y espacios extra)
-        const cleanProductName = sale.productName.replace(/\[.*?\]/g, '').trim()
-        const productNameLower = sale.productName.toLowerCase().trim()
-        const cleanNameLower = cleanProductName.toLowerCase().trim()
+      // Crear índices de productos para búsqueda O(1) en lugar de O(n)
+      const productIndexBySku = new Map<string, Product>()
+      const productIndexByName = new Map<string, Product>()
+      const productIndexByCleanName = new Map<string, Product>()
+      
+      products.forEach(p => {
+        const skuLower = p.sku.toLowerCase().trim()
+        const nameLower = p.name.toLowerCase().trim()
+        const cleanName = p.name.replace(/\[.*?\]/g, '').trim().toLowerCase()
         
-        // Buscar producto por múltiples estrategias
-        let product = null
+        productIndexBySku.set(skuLower, p)
+        productIndexByName.set(nameLower, p)
+        productIndexByCleanName.set(cleanName, p)
+      })
 
-        // 1. Buscar por SKU exacto (si existe)
-        if (sale.productSku) {
-          product = products.find(p => 
-            p.sku.toLowerCase().trim() === sale.productSku!.toLowerCase().trim()
-          )
-        }
+      // Buscar productos por SKU o nombre, crear automáticamente si no existen
+      const salesToInsert = []
+      const createdProducts: string[] = []
+      const BATCH_SIZE = 500 // Procesar en lotes para mostrar progreso
 
-        // 2. Buscar por nombre exacto (con y sin corchetes)
-        if (!product) {
-          product = products.find(p => {
-            const pNameLower = p.name.toLowerCase().trim()
-            return pNameLower === productNameLower || 
-                   pNameLower === cleanNameLower ||
-                   pNameLower === sale.productSku?.toLowerCase().trim()
+      for (let i = 0; i < parsedSales.length; i += BATCH_SIZE) {
+        const batch = parsedSales.slice(i, Math.min(i + BATCH_SIZE, parsedSales.length))
+        
+        for (const sale of batch) {
+          // Limpiar el nombre del producto (remover corchetes y espacios extra)
+          const cleanProductName = sale.productName.replace(/\[.*?\]/g, '').trim()
+          const productNameLower = sale.productName.toLowerCase().trim()
+          const cleanNameLower = cleanProductName.toLowerCase().trim()
+          
+          // Buscar producto usando índices (más eficiente)
+          let product: Product | null = null
+
+          // 1. Buscar por SKU exacto (si existe)
+          if (sale.productSku) {
+            product = productIndexBySku.get(sale.productSku.toLowerCase().trim()) || null
+          }
+
+          // 2. Buscar por nombre exacto (con y sin corchetes)
+          if (!product) {
+            product = productIndexByName.get(productNameLower) || 
+                     productIndexByName.get(cleanNameLower) ||
+                     (sale.productSku ? productIndexByName.get(sale.productSku.toLowerCase().trim()) : null) ||
+                     productIndexByCleanName.get(cleanNameLower) ||
+                     null
+          }
+
+          // 3. Búsqueda parcial (solo si no se encontró con índices exactos)
+          if (!product) {
+            product = products.find(p => {
+              const pNameLower = p.name.toLowerCase().trim()
+              const pSkuLower = p.sku.toLowerCase().trim()
+              return (sale.productSku && (pNameLower.includes(sale.productSku.toLowerCase().trim()) ||
+                     pSkuLower.includes(sale.productSku.toLowerCase().trim()))) ||
+                     pNameLower.includes(cleanNameLower) ||
+                     cleanNameLower.includes(pNameLower) ||
+                     pNameLower.includes(productNameLower) ||
+                     productNameLower.includes(pNameLower)
+            }) || null
+          }
+
+          // 4. Si no se encontró, crear el producto automáticamente
+          if (!product) {
+            try {
+              // Detectar categoría y tipo automáticamente
+              const category = getCategoryFromProductName(sale.productName) || null
+              const tipo = getTypeFromProductName(sale.productName) || null
+              
+              // Usar el nombre del producto como SKU si no hay SKU, o generar uno único
+              const sku = sale.productSku || sale.productName.trim().substring(0, 50) || `AUTO-${Date.now()}`
+              
+              // Crear el producto con precio base de 10 USD (para mostrar alerta de desactualizado)
+              const { data: newProduct, error: createError } = await supabase
+                .from('products')
+                .insert([{
+                  name: sale.productName.trim(),
+                  sku: sku,
+                  description: null,
+                  category: category,
+                  tipo: tipo,
+                  base_price: 10, // Precio por defecto que activará la alerta de desactualizado
+                  currency: 'USD',
+                  user_id: userId
+                }])
+                .select()
+                .single()
+
+              if (createError) {
+                console.error(`Error creando producto "${sale.productName}":`, createError)
+                // Si falla la creación, continuar sin este producto
+                continue
+              }
+
+              if (newProduct) {
+                product = newProduct as Product
+                createdProducts.push(sale.productName)
+                
+                // Actualizar los índices para evitar crear duplicados en el mismo batch
+                const skuLower = product.sku.toLowerCase().trim()
+                const nameLower = product.name.toLowerCase().trim()
+                const cleanName = product.name.replace(/\[.*?\]/g, '').trim().toLowerCase()
+                
+                productIndexBySku.set(skuLower, product)
+                productIndexByName.set(nameLower, product)
+                productIndexByCleanName.set(cleanName, product)
+                products.push(product)
+              }
+            } catch (err: any) {
+              console.error(`Error creando producto "${sale.productName}":`, err)
+              // Continuar sin este producto
+              continue
+            }
+          }
+
+          if (!product) {
+            // Si aún no hay producto después de intentar crearlo, saltar esta venta
+            continue
+          }
+
+          salesToInsert.push({
+            user_id: userId,
+            product_id: product.id,
+            country_code: sale.countryCode,
+            month: sale.month,
+            year: sale.year,
+            quantity: sale.quantity,
+            gross_sales_amount: sale.grossSalesAmount || null,
+            gross_profit_amount: sale.grossProfitAmount || null,
           })
         }
-
-        // 3. Buscar por nombre que contenga el SKU o el nombre limpio
-        if (!product && sale.productSku) {
-          product = products.find(p => {
-            const pNameLower = p.name.toLowerCase().trim()
-            const pSkuLower = p.sku.toLowerCase().trim()
-            return pNameLower.includes(sale.productSku!.toLowerCase().trim()) ||
-                   pSkuLower.includes(sale.productSku!.toLowerCase().trim()) ||
-                   pNameLower.includes(cleanNameLower) ||
-                   cleanNameLower.includes(pNameLower)
-          })
-        }
-
-        // 4. Buscar por nombre que contenga parte del nombre del producto
-        if (!product) {
-          // Extraer palabras clave del nombre (sin corchetes, sin espacios extra)
-          const keywords = cleanNameLower.split(/\s+/).filter(k => k.length > 2)
-          product = products.find(p => {
-            const pNameLower = p.name.toLowerCase().trim()
-            return keywords.some(keyword => pNameLower.includes(keyword)) ||
-                   pNameLower.includes(cleanNameLower) ||
-                   cleanNameLower.includes(pNameLower)
-          })
-        }
-
-        // 5. Búsqueda más flexible: cualquier coincidencia parcial
-        if (!product) {
-          product = products.find(p => {
-            const pNameLower = p.name.toLowerCase().trim()
-            return pNameLower.includes(productNameLower) ||
-                   productNameLower.includes(pNameLower) ||
-                   (sale.productSku && pNameLower.includes(sale.productSku.toLowerCase().trim()))
-          })
-        }
-
-        if (!product) {
-          const notFoundMsg = `Producto no encontrado: "${sale.productName}" (SKU: ${sale.productSku || 'N/A'})`
-          console.warn(notFoundMsg)
-          notFoundProducts.push(notFoundMsg)
-          continue
-        }
-
-        salesToInsert.push({
-          user_id: userId,
-          product_id: product.id,
-          country_code: sale.countryCode,
-          month: sale.month,
-          year: sale.year,
-          quantity: sale.quantity,
-          gross_sales_amount: sale.grossSalesAmount || null,
-          gross_profit_amount: sale.grossProfitAmount || null,
-        })
+        
+        // Actualizar progreso
+        setProcessingProgress({ current: Math.min(i + BATCH_SIZE, parsedSales.length), total: parsedSales.length })
+        // Permitir que el navegador respire
+        await new Promise(resolve => setTimeout(resolve, 0))
       }
 
       if (salesToInsert.length === 0) {
         throw new Error("No se encontraron productos coincidentes para guardar las ventas")
       }
 
-      // Mostrar advertencia si hay productos no encontrados
-      if (notFoundProducts.length > 0) {
-        const uniqueNotFound = Array.from(new Set(notFoundProducts))
-        console.warn(`${uniqueNotFound.length} productos no encontrados:`, uniqueNotFound)
-        const errorMsg = `Advertencia: ${uniqueNotFound.length} producto(s) no se encontraron en la base de datos:\n${uniqueNotFound.slice(0, 5).join('\n')}${uniqueNotFound.length > 5 ? `\n... y ${uniqueNotFound.length - 5} más` : ''}\n\nEstos productos fueron omitidos. Verifica que existan en la base de datos.`
-        setError(errorMsg)
+      // Guardar mensaje de productos creados para mostrarlo después del upsert
+      let createdProductsMsg = ''
+      if (createdProducts.length > 0) {
+        const uniqueCreated = Array.from(new Set(createdProducts))
+        console.log(`${uniqueCreated.length} productos creados automáticamente:`, uniqueCreated)
+        
+        createdProductsMsg = `\n\nSe crearon ${uniqueCreated.length} producto(s) automáticamente:\n${uniqueCreated.slice(0, 5).join('\n')}${uniqueCreated.length > 5 ? `\n... y ${uniqueCreated.length - 5} más` : ''}\n\nEstos productos fueron creados con precio base de $10.00 USD y mostrarán una alerta de "precio desactualizado". Puedes actualizar los precios desde la vista del producto.`
       }
 
-      // Insertar ventas (eliminar duplicados existentes primero)
-      // Primero, eliminar ventas existentes para los mismos períodos
-      const periodsToDelete = salesToInsert.map(s => ({
-        user_id: s.user_id,
-        product_id: s.product_id,
-        country_code: s.country_code,
-        month: s.month,
-        year: s.year,
-      }))
-
-      for (const period of periodsToDelete) {
-        await supabase
+      // Agrupar ventas por clave única dentro del mismo archivo para sumar duplicados
+      const salesMap = new Map<string, typeof salesToInsert[0] & { quantity: number }>()
+      
+      for (const sale of salesToInsert) {
+        const key = `${sale.user_id}-${sale.product_id}-${sale.country_code}-${sale.month}-${sale.year}`
+        
+        if (salesMap.has(key)) {
+          // Si ya existe en el mismo archivo, sumar la cantidad
+          const existing = salesMap.get(key)!
+          existing.quantity += sale.quantity
+        } else {
+          // Si no existe, agregarlo
+          salesMap.set(key, { ...sale })
+        }
+      }
+      
+      const finalSalesToInsert = Array.from(salesMap.values())
+      
+      // Obtener ventas existentes en la base de datos para sumar cantidades
+      const uniqueKeys = Array.from(salesMap.keys())
+      const existingSalesMap = new Map<string, any>()
+      
+      // Obtener registros existentes en batches
+      const QUERY_BATCH_SIZE = 100
+      for (let i = 0; i < uniqueKeys.length; i += QUERY_BATCH_SIZE) {
+        const batch = uniqueKeys.slice(i, i + QUERY_BATCH_SIZE)
+        
+        for (const key of batch) {
+          const [user_id, product_id, country_code, month, year] = key.split('-')
+          
+          const { data: existingData } = await supabase
+            .from('sales')
+            .select('*')
+            .eq('user_id', user_id)
+            .eq('product_id', product_id)
+            .eq('country_code', country_code)
+            .eq('month', parseInt(month))
+            .eq('year', parseInt(year))
+            .maybeSingle()
+          
+          if (existingData) {
+            existingSalesMap.set(key, existingData)
+          }
+        }
+      }
+      
+      // Preparar datos para upsert: si existe, sumar cantidad; si no, insertar nuevo
+      const upsertData = finalSalesToInsert.map(sale => {
+        const key = `${sale.user_id}-${sale.product_id}-${sale.country_code}-${sale.month}-${sale.year}`
+        const existing = existingSalesMap.get(key)
+        
+        if (existing) {
+          // Si existe, actualizar sumando la cantidad
+          return {
+            ...sale,
+            quantity: existing.quantity + sale.quantity
+          }
+        } else {
+          // Si no existe, insertar nuevo
+          return sale
+        }
+      })
+      
+      // Usar upsert en batches para evitar límites de payload de Supabase
+      const UPSERT_BATCH_SIZE = 1000
+      let processedCount = 0
+      
+      for (let i = 0; i < upsertData.length; i += UPSERT_BATCH_SIZE) {
+        const batch = upsertData.slice(i, Math.min(i + UPSERT_BATCH_SIZE, upsertData.length))
+        
+        // Usar upsert con onConflict para actualizar si existe
+        const { error: upsertError } = await supabase
           .from('sales')
-          .delete()
-          .match(period)
+          .upsert(batch, {
+            onConflict: 'user_id,country_code,month,year,product_id',
+            ignoreDuplicates: false
+          })
+
+        if (upsertError) {
+          throw upsertError
+        }
+        
+        processedCount += batch.length
+        setProcessingProgress({ current: processedCount, total: upsertData.length })
       }
 
-      // Luego insertar las nuevas ventas
-      const { error: insertError } = await supabase
-        .from('sales')
-        .insert(salesToInsert)
-
-      if (insertError) {
-        throw insertError
+      const newRecords = upsertData.filter(sale => {
+        const key = `${sale.user_id}-${sale.product_id}-${sale.country_code}-${sale.month}-${sale.year}`
+        return !existingSalesMap.has(key)
+      }).length
+      const updatedRecords = upsertData.length - newRecords
+      
+      let successMsg = `Se procesaron ${upsertData.length} registros`
+      if (newRecords > 0 && updatedRecords > 0) {
+        successMsg += `: ${newRecords} nuevos, ${updatedRecords} actualizados (cantidades sumadas)`
+      } else if (newRecords > 0) {
+        successMsg += ` (${newRecords} nuevos)`
+      } else if (updatedRecords > 0) {
+        successMsg += ` (${updatedRecords} actualizados, cantidades sumadas)`
       }
-
-      setSuccess(`Se guardaron ${salesToInsert.length} registros de ventas exitosamente`)
+      
+      // Agregar información sobre productos creados si hay
+      if (createdProductsMsg) {
+        successMsg += createdProductsMsg
+      }
+      
+      setSuccess(successMsg)
       setParsedSales([])
+      setProcessingProgress(null)
+      
+      // Recargar productos si se crearon nuevos
+      if (createdProducts.length > 0) {
+        const { data: productsData } = await supabase
+          .from('products')
+          .select('*')
+          .eq('user_id', userId)
+          .order('name', { ascending: true })
+        
+        if (productsData) {
+          setProducts(productsData as Product[])
+        }
+      }
       
       // Recargar datos de ventas
       let query = supabase
@@ -852,6 +1021,40 @@ export default function SalesPage() {
     }
   }
 
+  /**
+   * Limpia todos los datos de ventas del usuario
+   */
+  const handleClearAllSales = async () => {
+    if (!userId) return
+
+    setClearing(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      const { error: deleteError } = await supabase
+        .from('sales')
+        .delete()
+        .eq('user_id', userId)
+
+      if (deleteError) {
+        throw deleteError
+      }
+
+      setSuccess('Todos los datos de ventas han sido eliminados exitosamente')
+      setClearAllDialogOpen(false)
+      
+      // Recargar datos (debería estar vacío ahora)
+      setProductSales([])
+      setMonthlySales([])
+    } catch (err: any) {
+      console.error("Error eliminando ventas:", err)
+      setError(err?.message || "Error al eliminar las ventas")
+    } finally {
+      setClearing(false)
+    }
+  }
+
   const monthNames = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
@@ -902,6 +1105,25 @@ export default function SalesPage() {
                 )}
               </div>
 
+              {processingProgress && (
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-blue-700 text-sm font-medium">
+                      Procesando: {processingProgress.current} de {processingProgress.total} registros
+                    </span>
+                    <span className="text-blue-600 text-sm">
+                      {Math.round((processingProgress.current / processingProgress.total) * 100)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-blue-200 rounded-full h-2">
+                    <div 
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${(processingProgress.current / processingProgress.total) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               {error && (
                 <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
                   {error}
@@ -926,9 +1148,77 @@ export default function SalesPage() {
                   </p>
                 </div>
               )}
+
+              {/* Botón para limpiar todos los datos */}
+              {productSales.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <Button
+                    onClick={() => setClearAllDialogOpen(true)}
+                    variant="destructive"
+                    className="flex items-center gap-2"
+                    disabled={clearing || !userId}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    {clearing ? 'Eliminando...' : 'Limpiar todos los datos de ventas'}
+                  </Button>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Esta acción eliminará permanentemente todas las ventas guardadas. Esta acción no se puede deshacer.
+                  </p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
+
+        {/* Dialog para confirmar limpieza de datos */}
+        <Dialog open={clearAllDialogOpen} onOpenChange={setClearAllDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-red-600">
+                <AlertTriangle className="w-5 h-5" />
+                Confirmar eliminación de datos
+              </DialogTitle>
+              <DialogDescription>
+                ¿Estás seguro de que deseas eliminar <strong>todas</strong> las ventas guardadas?
+                <br />
+                <br />
+                Esta acción es <strong>irreversible</strong> y eliminará permanentemente todos los registros de ventas.
+                <br />
+                <br />
+                <span className="text-sm text-gray-600">
+                  Total de registros a eliminar: <strong>{productSales.length}</strong>
+                </span>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setClearAllDialogOpen(false)}
+                disabled={clearing}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleClearAllSales}
+                disabled={clearing}
+                className="flex items-center gap-2"
+              >
+                {clearing ? (
+                  <>
+                    <span className="animate-spin">⏳</span>
+                    Eliminando...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    Sí, eliminar todo
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Filtro de país */}
         <Card className="mb-6">
