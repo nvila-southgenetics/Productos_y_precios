@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "db:seed": "tsx scripts/seed.ts",
-    "db:remove-hardcoded": "tsx scripts/remove-hardcoded-sales.ts"
+    "db:remove-hardcoded": "tsx scripts/remove-hardcoded-sales.ts",
+    "db:update-categories": "tsx scripts/update-categories.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.0.5",
