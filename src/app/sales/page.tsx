@@ -2,13 +2,13 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Navbar } from '@/components/Navbar'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Upload, FileSpreadsheet, Save, BarChart3, TrendingUp, Package, AlertCircle, ChevronDown, ChevronRight, Filter, X, Calculator, Trash2, AlertTriangle } from 'lucide-react'
+import { Upload, FileSpreadsheet, Save, BarChart3, TrendingUp, Package, AlertCircle, ChevronDown, ChevronRight, Filter, X, Calculator, Trash2, AlertTriangle, Edit2 } from 'lucide-react'
 import { CategoryBadge } from '@/components/CategoryBadge'
 import { TypeBadge } from '@/components/TypeBadge'
 import { formatCurrency, formatPercentage, computePricing } from '@/lib/compute'
@@ -64,6 +64,7 @@ export default function SalesPage() {
   const [selectedCountry, setSelectedCountry] = useState<CountryCode | 'all'>('all')
   const [monthlySales, setMonthlySales] = useState<MonthlySales[]>([])
   const [productSales, setProductSales] = useState<Array<{
+    id: string
     product_id: string
     product_name: string
     product_sku: string
@@ -76,6 +77,36 @@ export default function SalesPage() {
     month: number
     year: number
   }>>([])
+  const [editingQuantity, setEditingQuantity] = useState<string | null>(null)
+  const [quantityEditValue, setQuantityEditValue] = useState<string>('')
+  const editInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+
+  // Enfocar el input cuando se activa la edición, sin causar scroll
+  useEffect(() => {
+    if (editingQuantity) {
+      const input = editInputRefs.current[editingQuantity]
+      if (input) {
+        // Verificar si el input está visible
+        const rect = input.getBoundingClientRect()
+        const isVisible = rect.top >= 0 && rect.bottom <= window.innerHeight
+        
+        // Solo hacer scroll si no está visible, y usar 'nearest' para minimizar el movimiento
+        if (!isVisible) {
+          input.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
+          setTimeout(() => {
+            input.focus()
+            input.select()
+          }, 100)
+        } else {
+          // Si está visible, solo enfocar sin scroll
+          setTimeout(() => {
+            input.focus()
+            input.select()
+          }, 0)
+        }
+      }
+    }
+  }, [editingQuantity])
   const [productOverrides, setProductOverrides] = useState<Record<string, any>>({})
   const [userId, setUserId] = useState<string | null>(null)
   const [openMonths, setOpenMonths] = useState<Record<string, boolean>>({})
@@ -228,6 +259,7 @@ export default function SalesPage() {
           if (!product || !product.id) return null
 
           return {
+            id: sale.id,
             product_id: product.id,
             product_name: product.name || 'Producto sin nombre',
             product_sku: product.sku || 'N/A',
@@ -281,9 +313,9 @@ export default function SalesPage() {
     const monthMap: Record<string, number> = {
       'Enero': 1, 'Febrero': 2, 'Marzo': 3, 'Abril': 4,
       'Mayo': 5, 'Junio': 6, 'Julio': 7, 'Agosto': 8,
-      'Septiembre': 9, 'Octubre': 10, 'Noviembre': 11, 'Diciembre': 12,
+      'Septiembre': 9, 'Setiembre': 9, 'Octubre': 10, 'Noviembre': 11, 'Diciembre': 12,
       'Ene': 1, 'Feb': 2, 'Mar': 3, 'Abr': 4, 'May': 5, 'Jun': 6,
-      'Jul': 7, 'Ago': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dic': 12,
+      'Jul': 7, 'Ago': 8, 'Sep': 9, 'Set': 9, 'Oct': 10, 'Nov': 11, 'Dic': 12,
       'Jan': 1, 'February': 2, 'March': 3, 'Apr': 4, 'June': 6,
       'July': 7, 'Aug': 8, 'September': 9, 'October': 10, 'November': 11, 'Dec': 12,
       '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6,
@@ -961,6 +993,7 @@ export default function SalesPage() {
       let query = supabase
         .from('sales')
         .select(`
+          id,
           month, 
           year, 
           quantity,
@@ -1022,6 +1055,7 @@ export default function SalesPage() {
             if (!product || !product.id) return null
 
             return {
+              id: sale.id,
               product_id: product.id,
               product_name: product.name || 'Producto sin nombre',
               product_sku: product.sku || 'N/A',
@@ -1050,6 +1084,55 @@ export default function SalesPage() {
       setError(err?.message || "Error al guardar las ventas")
     } finally {
       setSaving(false)
+    }
+  }
+
+  /**
+   * Actualiza la cantidad de una venta
+   */
+  const handleUpdateQuantity = async (saleId: string, newQuantity: number) => {
+    if (!userId) return
+
+    try {
+      const { error } = await supabase
+        .from('sales')
+        .update({ quantity: newQuantity })
+        .eq('id', saleId)
+        .eq('user_id', userId)
+
+      if (error) {
+        throw error
+      }
+
+      // Actualizar el estado local
+      setProductSales(prev => prev.map(sale => 
+        sale.id === saleId ? { ...sale, quantity: newQuantity } : sale
+      ))
+
+      // Recargar ventas mensuales
+      const { data: salesData } = await supabase
+        .from('sales')
+        .select('month, year, quantity')
+        .eq('user_id', userId)
+      
+      if (salesData) {
+        const grouped = salesData.reduce((acc, sale: any) => {
+          const key = `${sale.year}-${sale.month}`
+          if (!acc[key]) {
+            acc[key] = { month: sale.month, year: sale.year, quantity: 0 }
+          }
+          acc[key].quantity += sale.quantity
+          return acc
+        }, {} as Record<string, MonthlySales>)
+
+        setMonthlySales(Object.values(grouped).sort((a, b) => {
+          if (a.year !== b.year) return a.year - b.year
+          return a.month - b.month
+        }))
+      }
+    } catch (err: any) {
+      console.error("Error actualizando cantidad:", err)
+      setError(err?.message || "Error al actualizar la cantidad")
     }
   }
 
@@ -1643,14 +1726,16 @@ export default function SalesPage() {
                                     </div>
                                   </th>
                                   <th className="text-right py-1 px-2 font-semibold text-gray-700">Cantidad</th>
-                                  <th className="text-right py-1 px-2 font-semibold text-gray-700">Precio sin impuestos</th>
-                                  <th className="text-right py-1 px-2 font-semibold text-gray-700">Precio con impuestos</th>
+                                  <th className="text-right py-1 px-2 font-semibold text-gray-700">Gross Sale</th>
+                                  <th className="text-right py-1 px-2 font-semibold text-gray-700">Gross Profit</th>
+                                  <th className="text-right py-1 px-2 font-semibold text-gray-700">Margen</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {filteredCombinedSales.map((sale, idx) => {
                                   let grossSalesAmount = 0
                                   let grossProfitAmount = 0
+                                  let margin = 0
                                   
                                   if (sale.product_full) {
                                     const overrideKey = `${sale.product_id}-${sale.country_code}`
@@ -1660,13 +1745,16 @@ export default function SalesPage() {
                                       const computed = computePricing(sale.product_full, sale.country_code, overrides)
                                       grossSalesAmount = computed.grossSales.amount * sale.quantity
                                       grossProfitAmount = Math.abs(computed.grossProfit.amount) * sale.quantity
+                                      margin = computed.grossProfit.pct || 0
                                     } catch (e) {
                                       grossSalesAmount = sale.product_price * sale.quantity
                                       grossProfitAmount = Math.abs(sale.product_price) * sale.quantity
+                                      margin = 0
                                     }
                                   } else {
                                     grossSalesAmount = sale.product_price * sale.quantity
                                     grossProfitAmount = Math.abs(sale.product_price) * sale.quantity
+                                    margin = 0
                                   }
 
                                   const isOutdatedPrice = sale.product_full && (() => {
@@ -1680,8 +1768,11 @@ export default function SalesPage() {
                                     }
                                   })()
 
+                                  // Crear una clave única para esta fila específica
+                                  const rowKey = `combined-${sale.id || sale.product_id}-${sale.country_code}-${idx}`
+
                                   return (
-                                    <tr key={`combined-${sale.product_id}-${idx}`} className="border-b border-gray-100 hover:bg-gray-50 last:border-b-0">
+                                    <tr key={rowKey} className="border-b border-gray-100 hover:bg-gray-50 last:border-b-0">
                                       <td className="py-1 px-2 text-gray-900">
                                         <div className="flex items-center gap-2">
                                           <Link 
@@ -1715,9 +1806,76 @@ export default function SalesPage() {
                                         </div>
                                       </td>
                                       <td className="py-1 px-2 text-right">
-                                        <span className="font-semibold text-blue-600">
-                                          {sale.quantity.toLocaleString()}
-                                        </span>
+                                        {editingQuantity === rowKey ? (
+                                          <div className="flex items-center justify-end gap-2">
+                                            <input
+                                              ref={(el) => {
+                                                if (el) {
+                                                  editInputRefs.current[rowKey] = el
+                                                }
+                                              }}
+                                              type="number"
+                                              min="0"
+                                              value={quantityEditValue}
+                                              data-edit-id={rowKey}
+                                              onChange={(e) => setQuantityEditValue(e.target.value)}
+                                              onBlur={async () => {
+                                                const newQty = parseInt(quantityEditValue) || 0
+                                                if (sale.id && newQty !== sale.quantity && newQty >= 0) {
+                                                  await handleUpdateQuantity(sale.id, newQty)
+                                                }
+                                                setEditingQuantity(null)
+                                                setQuantityEditValue('')
+                                              }}
+                                              onKeyDown={async (e) => {
+                                                if (e.key === 'Enter') {
+                                                  e.preventDefault()
+                                                  const newQty = parseInt(quantityEditValue) || 0
+                                                  if (sale.id && newQty !== sale.quantity && newQty >= 0) {
+                                                    await handleUpdateQuantity(sale.id, newQty)
+                                                  }
+                                                  setEditingQuantity(null)
+                                                  setQuantityEditValue('')
+                                                } else if (e.key === 'Escape') {
+                                                  e.preventDefault()
+                                                  setEditingQuantity(null)
+                                                  setQuantityEditValue('')
+                                                }
+                                              }}
+                                              onClick={(e) => e.stopPropagation()}
+                                              onFocus={(e) => {
+                                                e.target.select()
+                                              }}
+                                              className="w-20 px-2 py-1 border border-blue-300 rounded text-right font-semibold text-blue-600"
+                                            />
+                                          </div>
+                                        ) : (
+                                          <div className="flex items-center justify-end gap-1">
+                                            <span className="font-semibold text-blue-600">
+                                              {sale.quantity.toLocaleString()}
+                                            </span>
+                                            {sale.id && (
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation()
+                                                  e.preventDefault()
+                                                  e.nativeEvent.stopImmediatePropagation()
+                                                  setEditingQuantity(rowKey)
+                                                  setQuantityEditValue(sale.quantity.toString())
+                                                }}
+                                                onMouseDown={(e) => {
+                                                  e.preventDefault()
+                                                  e.stopPropagation()
+                                                }}
+                                                className="p-1 hover:bg-blue-50 rounded text-blue-600 transition-colors"
+                                                title="Editar cantidad"
+                                                type="button"
+                                              >
+                                                <Edit2 className="w-3 h-3" />
+                                              </button>
+                                            )}
+                                          </div>
+                                        )}
                                       </td>
                                       <td className="py-1 px-2 text-right">
                                         <span className="font-semibold text-green-600">
@@ -1729,19 +1887,19 @@ export default function SalesPage() {
                                           {formatCurrency(grossProfitAmount)}
                                         </span>
                                       </td>
+                                      <td className="py-1 px-2 text-right">
+                                        <span className="font-semibold text-orange-600">
+                                          {margin.toFixed(1)}%
+                                        </span>
+                                      </td>
                                     </tr>
                                   )
                                 })}
                               </tbody>
                               <tfoot>
-                                <tr className="bg-blue-100 font-semibold border-t-2 border-gray-300">
-                                  <td colSpan={2} className="py-1 px-2 text-gray-900">Total Combinado</td>
-                                  <td className="py-1 px-2 text-right text-blue-600">
-                                    {filteredCombinedSales.reduce((sum, s) => sum + s.quantity, 0).toLocaleString()}
-                                  </td>
-                                  <td className="py-1 px-2 text-right text-green-600">
-                                    {formatCurrency(
-                                      filteredCombinedSales.reduce((sum, s) => {
+                                {(() => {
+                                  const totalQuantity = filteredCombinedSales.reduce((sum, s) => sum + s.quantity, 0)
+                                  const totalGrossSales = filteredCombinedSales.reduce((sum, s) => {
                                         if (s.product_full) {
                                           const overrideKey = `${s.product_id}-${s.country_code}`
                                           const overrides = productOverrides[overrideKey] || {}
@@ -1754,11 +1912,7 @@ export default function SalesPage() {
                                         }
                                         return sum + (s.product_price * s.quantity)
                                       }, 0)
-                                    )}
-                                  </td>
-                                  <td className="py-1 px-2 text-right text-purple-600">
-                                    {formatCurrency(
-                                      filteredCombinedSales.reduce((sum, s) => {
+                                  const totalGrossProfit = filteredCombinedSales.reduce((sum, s) => {
                                         if (s.product_full) {
                                           const overrideKey = `${s.product_id}-${s.country_code}`
                                           const overrides = productOverrides[overrideKey] || {}
@@ -1771,9 +1925,28 @@ export default function SalesPage() {
                                         }
                                         return sum + (Math.abs(s.product_price) * s.quantity)
                                       }, 0)
-                                    )}
+                                  const totalMargin = totalGrossSales > 0 
+                                    ? (totalGrossProfit / totalGrossSales * 100)
+                                    : 0
+
+                                  return (
+                                    <tr className="bg-blue-100 font-semibold border-t-2 border-gray-300">
+                                      <td colSpan={2} className="py-1 px-2 text-gray-900">Total Combinado</td>
+                                      <td className="py-1 px-2 text-right text-blue-600">
+                                        {totalQuantity.toLocaleString()}
+                                      </td>
+                                      <td className="py-1 px-2 text-right text-green-600">
+                                        {formatCurrency(totalGrossSales)}
+                                      </td>
+                                      <td className="py-1 px-2 text-right text-purple-600">
+                                        {formatCurrency(totalGrossProfit)}
+                                      </td>
+                                      <td className="py-1 px-2 text-right text-orange-600">
+                                        {totalMargin.toFixed(1)}%
                                   </td>
                                 </tr>
+                                  )
+                                })()}
                               </tfoot>
                             </table>
                           </div>
@@ -2291,8 +2464,9 @@ export default function SalesPage() {
                                     </div>
                                   </th>
                                   <th className="text-right py-1 px-2 font-semibold text-gray-700">Cantidad</th>
-                                  <th className="text-right py-1 px-2 font-semibold text-gray-700">Precio sin impuestos</th>
-                                  <th className="text-right py-1 px-2 font-semibold text-gray-700">Precio con impuestos</th>
+                                  <th className="text-right py-1 px-2 font-semibold text-gray-700">Gross Sale</th>
+                                  <th className="text-right py-1 px-2 font-semibold text-gray-700">Gross Profit</th>
+                                  <th className="text-right py-1 px-2 font-semibold text-gray-700">Margen</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -2330,6 +2504,7 @@ export default function SalesPage() {
                                     // Calcular gross sales y gross profit usando computePricing
                                     let grossSalesAmount = 0
                                     let grossProfitAmount = 0
+                                    let margin = 0
                                     
                                     if (sale.product_full) {
                                       const overrideKey = `${sale.product_id}-${sale.country_code}`
@@ -2344,16 +2519,19 @@ export default function SalesPage() {
                                         // Multiplicar por la cantidad, usar valor absoluto para grossProfit
                                         grossSalesAmount = computed.grossSales.amount * sale.quantity
                                         grossProfitAmount = Math.abs(computed.grossProfit.amount) * sale.quantity
+                                        margin = computed.grossProfit.pct || 0
                                       } catch (e) {
                                         console.error('Error calculando precios:', e)
                                         // Fallback al precio base
                                         grossSalesAmount = sale.product_price * sale.quantity
                                         grossProfitAmount = Math.abs(sale.product_price) * sale.quantity
+                                        margin = 0
                                       }
                                     } else {
                                       // Fallback si no hay producto completo
                                       grossSalesAmount = sale.product_price * sale.quantity
                                       grossProfitAmount = Math.abs(sale.product_price) * sale.quantity
+                                      margin = 0
                                     }
 
                                     // Verificar si el gross sale es 10 USD
@@ -2368,8 +2546,11 @@ export default function SalesPage() {
                                       }
                                     })()
 
+                                    // Crear una clave única para esta fila específica
+                                    const rowKey = `${monthKey}-${sale.id || sale.product_id}-${sale.country_code}-${idx}`
+
                                     return (
-                                      <tr key={`${sale.product_id}-${idx}`} className="border-b border-gray-100 hover:bg-gray-50 last:border-b-0">
+                                      <tr key={`${monthKey}-${sale.id || sale.product_id}-${idx}`} className="border-b border-gray-100 hover:bg-gray-50 last:border-b-0">
                                       <td className="py-1 px-2 text-gray-900">
                                         <div className="flex items-center gap-2">
                                           <Link 
@@ -2403,9 +2584,76 @@ export default function SalesPage() {
                                         </div>
                                       </td>
                                       <td className="py-1 px-2 text-right">
-                                        <span className="font-semibold text-blue-600">
-                                          {sale.quantity.toLocaleString()}
-                                        </span>
+                                        {editingQuantity === rowKey ? (
+                                          <div className="flex items-center justify-end gap-2">
+                                            <input
+                                              ref={(el) => {
+                                                if (el) {
+                                                  editInputRefs.current[rowKey] = el
+                                                }
+                                              }}
+                                              type="number"
+                                              min="0"
+                                              value={quantityEditValue}
+                                              data-edit-id={rowKey}
+                                              onChange={(e) => setQuantityEditValue(e.target.value)}
+                                              onBlur={async () => {
+                                                const newQty = parseInt(quantityEditValue) || 0
+                                                if (sale.id && newQty !== sale.quantity && newQty >= 0) {
+                                                  await handleUpdateQuantity(sale.id, newQty)
+                                                }
+                                                setEditingQuantity(null)
+                                                setQuantityEditValue('')
+                                              }}
+                                              onKeyDown={async (e) => {
+                                                if (e.key === 'Enter') {
+                                                  e.preventDefault()
+                                                  const newQty = parseInt(quantityEditValue) || 0
+                                                  if (sale.id && newQty !== sale.quantity && newQty >= 0) {
+                                                    await handleUpdateQuantity(sale.id, newQty)
+                                                  }
+                                                  setEditingQuantity(null)
+                                                  setQuantityEditValue('')
+                                                } else if (e.key === 'Escape') {
+                                                  e.preventDefault()
+                                                  setEditingQuantity(null)
+                                                  setQuantityEditValue('')
+                                                }
+                                              }}
+                                              onClick={(e) => e.stopPropagation()}
+                                              onFocus={(e) => {
+                                                e.target.select()
+                                              }}
+                                              className="w-20 px-2 py-1 border border-blue-300 rounded text-right font-semibold text-blue-600"
+                                            />
+                                          </div>
+                                        ) : (
+                                          <div className="flex items-center justify-end gap-1">
+                                            <span className="font-semibold text-blue-600">
+                                              {sale.quantity.toLocaleString()}
+                                            </span>
+                                            {sale.id && (
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation()
+                                                  e.preventDefault()
+                                                  e.nativeEvent.stopImmediatePropagation()
+                                                  setEditingQuantity(rowKey)
+                                                  setQuantityEditValue(sale.quantity.toString())
+                                                }}
+                                                onMouseDown={(e) => {
+                                                  e.preventDefault()
+                                                  e.stopPropagation()
+                                                }}
+                                                className="p-1 hover:bg-blue-50 rounded text-blue-600 transition-colors"
+                                                title="Editar cantidad"
+                                                type="button"
+                                              >
+                                                <Edit2 className="w-3 h-3" />
+                                              </button>
+                                            )}
+                                          </div>
+                                        )}
                                       </td>
                                       <td className="py-1 px-2 text-right">
                                         <span className="font-semibold text-green-600">
@@ -2417,15 +2665,17 @@ export default function SalesPage() {
                                           {formatCurrency(grossProfitAmount)}
                                         </span>
                                       </td>
+                                      <td className="py-1 px-2 text-right">
+                                        <span className="font-semibold text-orange-600">
+                                          {margin.toFixed(1)}%
+                                        </span>
+                                      </td>
                                     </tr>
                                   )
                                 })
                               })()}
                               </tbody>
                               <tfoot>
-                                <tr className="bg-gray-100 font-semibold border-t-2 border-gray-300">
-                                  <td colSpan={2} className="py-1 px-2 text-gray-900">Total</td>
-                                  <td className="py-1 px-2 text-right text-blue-600">
                                     {(() => {
                                       const monthFilter = monthFilters[monthKey] || { categories: [], types: [], productName: '' }
                                       let filteredMonthSales = monthData.sales
@@ -2453,39 +2703,8 @@ export default function SalesPage() {
                                         })
                                       }
                                       
-                                      return filteredMonthSales.reduce((sum, s) => sum + s.quantity, 0).toLocaleString()
-                                    })()}
-                                  </td>
-                                  <td className="py-1 px-2 text-right text-green-600">
-                                    {formatCurrency(
-                                      (() => {
-                                        const monthFilter = monthFilters[monthKey] || { categories: [], types: [], productName: '' }
-                                        let filteredMonthSales = monthData.sales
-                                        
-                                        // Filtro por nombre de producto
-                                        if (monthFilter.productName && monthFilter.productName.trim()) {
-                                          const searchTerm = monthFilter.productName.toLowerCase().trim()
-                                          filteredMonthSales = filteredMonthSales.filter(sale => {
-                                            return sale.product_name.toLowerCase().includes(searchTerm)
-                                          })
-                                        }
-                                        
-                                        if (monthFilter.categories.length > 0) {
-                                          filteredMonthSales = filteredMonthSales.filter(sale => {
-                                            const category = sale.product_category || (sale.product_name ? getCategoryFromProductName(sale.product_name) : null)
-                                            return category && monthFilter.categories.includes(category)
-                                          })
-                                        }
-                                        
-                                        if (monthFilter.types.length > 0) {
-                                          filteredMonthSales = filteredMonthSales.filter(sale => {
-                                            if (!sale.product_type) return false
-                                            const types = sale.product_type.split(',').map(t => t.trim())
-                                            return monthFilter.types.some(selectedType => types.includes(selectedType))
-                                          })
-                                        }
-                                        
-                                        return filteredMonthSales.reduce((sum, s) => {
+                                  const totalQuantity = filteredMonthSales.reduce((sum, s) => sum + s.quantity, 0)
+                                  const totalGrossSales = filteredMonthSales.reduce((sum, s) => {
                                           if (s.product_full) {
                                             const overrideKey = `${s.product_id}-${s.country_code}`
                                             const overrides = productOverrides[overrideKey] || {}
@@ -2498,39 +2717,7 @@ export default function SalesPage() {
                                           }
                                           return sum + (s.product_price * s.quantity)
                                         }, 0)
-                                      })()
-                                    )}
-                                  </td>
-                                  <td className="py-1 px-2 text-right text-purple-600">
-                                    {formatCurrency(
-                                      (() => {
-                                        const monthFilter = monthFilters[monthKey] || { categories: [], types: [], productName: '' }
-                                        let filteredMonthSales = monthData.sales
-                                        
-                                        // Filtro por nombre de producto
-                                        if (monthFilter.productName && monthFilter.productName.trim()) {
-                                          const searchTerm = monthFilter.productName.toLowerCase().trim()
-                                          filteredMonthSales = filteredMonthSales.filter(sale => {
-                                            return sale.product_name.toLowerCase().includes(searchTerm)
-                                          })
-                                        }
-                                        
-                                        if (monthFilter.categories.length > 0) {
-                                          filteredMonthSales = filteredMonthSales.filter(sale => {
-                                            const category = sale.product_category || (sale.product_name ? getCategoryFromProductName(sale.product_name) : null)
-                                            return category && monthFilter.categories.includes(category)
-                                          })
-                                        }
-                                        
-                                        if (monthFilter.types.length > 0) {
-                                          filteredMonthSales = filteredMonthSales.filter(sale => {
-                                            if (!sale.product_type) return false
-                                            const types = sale.product_type.split(',').map(t => t.trim())
-                                            return monthFilter.types.some(selectedType => types.includes(selectedType))
-                                          })
-                                        }
-                                        
-                                        return filteredMonthSales.reduce((sum, s) => {
+                                  const totalGrossProfit = filteredMonthSales.reduce((sum, s) => {
                                           if (s.product_full) {
                                             const overrideKey = `${s.product_id}-${s.country_code}`
                                             const overrides = productOverrides[overrideKey] || {}
@@ -2543,10 +2730,28 @@ export default function SalesPage() {
                                           }
                                           return sum + (Math.abs(s.product_price) * s.quantity)
                                         }, 0)
-                                      })()
-                                    )}
+                                  const totalMargin = totalGrossSales > 0 
+                                    ? (totalGrossProfit / totalGrossSales * 100)
+                                    : 0
+
+                                  return (
+                                    <tr className="bg-gray-100 font-semibold border-t-2 border-gray-300">
+                                      <td colSpan={2} className="py-1 px-2 text-gray-900">Total</td>
+                                      <td className="py-1 px-2 text-right text-blue-600">
+                                        {totalQuantity.toLocaleString()}
+                                      </td>
+                                      <td className="py-1 px-2 text-right text-green-600">
+                                        {formatCurrency(totalGrossSales)}
+                                      </td>
+                                      <td className="py-1 px-2 text-right text-purple-600">
+                                        {formatCurrency(totalGrossProfit)}
+                                      </td>
+                                      <td className="py-1 px-2 text-right text-orange-600">
+                                        {totalMargin.toFixed(1)}%
                                   </td>
                                 </tr>
+                                  )
+                                })()}
                               </tfoot>
                             </table>
                             )}
@@ -2814,8 +3019,9 @@ export default function SalesPage() {
                                   <th className="text-left py-1 px-2 font-semibold text-gray-700">Producto</th>
                                   <th className="text-left py-1 px-2 font-semibold text-gray-700">Etiquetas</th>
                                   <th className="text-right py-1 px-2 font-semibold text-gray-700">Cantidad</th>
-                                  <th className="text-right py-1 px-2 font-semibold text-gray-700">Precio sin impuestos</th>
-                                  <th className="text-right py-1 px-2 font-semibold text-gray-700">Precio con impuestos</th>
+                                  <th className="text-right py-1 px-2 font-semibold text-gray-700">Gross Sale</th>
+                                  <th className="text-right py-1 px-2 font-semibold text-gray-700">Gross Profit</th>
+                                  <th className="text-right py-1 px-2 font-semibold text-gray-700">Margen</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -2823,6 +3029,7 @@ export default function SalesPage() {
                                   // Calcular gross sales y gross profit usando computePricing
                                   let grossSalesAmount = 0
                                   let grossProfitAmount = 0
+                                  let margin = 0
                                   
                                   if (sale.product_full) {
                                     const overrideKey = `${sale.product_id}-${sale.country_code}`
@@ -2837,14 +3044,17 @@ export default function SalesPage() {
                                       // Multiplicar por la cantidad total del año
                                       grossSalesAmount = computed.grossSales.amount * sale.quantity
                                       grossProfitAmount = Math.abs(computed.grossProfit.amount) * sale.quantity
+                                      margin = computed.grossProfit.pct || 0
                                     } catch (e) {
                                       console.error('Error calculando precios:', e)
                                       grossSalesAmount = sale.product_price * sale.quantity
                                       grossProfitAmount = Math.abs(sale.product_price) * sale.quantity
+                                      margin = 0
                                     }
                                   } else {
                                     grossSalesAmount = sale.product_price * sale.quantity
                                     grossProfitAmount = Math.abs(sale.product_price) * sale.quantity
+                                    margin = 0
                                   }
 
                                   // Verificar si el gross sale es 10 USD
@@ -2858,6 +3068,9 @@ export default function SalesPage() {
                                       return false
                                     }
                                   })()
+
+                                  // Crear una clave única para esta fila específica
+                                  const rowKey = `${yearKey}-${sale.id || sale.product_id}-${sale.country_code}-${idx}`
 
                                   return (
                                     <tr key={`annual-${yearData.year}-${sale.product_id}-${idx}`} className="border-b border-gray-100 hover:bg-gray-50 last:border-b-0">
@@ -2894,9 +3107,76 @@ export default function SalesPage() {
                                         </div>
                                       </td>
                                       <td className="py-1 px-2 text-right">
-                                        <span className="font-semibold text-blue-600">
-                                          {sale.quantity.toLocaleString()}
-                                        </span>
+                                        {editingQuantity === rowKey ? (
+                                          <div className="flex items-center justify-end gap-2">
+                                            <input
+                                              ref={(el) => {
+                                                if (el) {
+                                                  editInputRefs.current[rowKey] = el
+                                                }
+                                              }}
+                                              type="number"
+                                              min="0"
+                                              value={quantityEditValue}
+                                              data-edit-id={rowKey}
+                                              onChange={(e) => setQuantityEditValue(e.target.value)}
+                                              onBlur={async () => {
+                                                const newQty = parseInt(quantityEditValue) || 0
+                                                if (sale.id && newQty !== sale.quantity && newQty >= 0) {
+                                                  await handleUpdateQuantity(sale.id, newQty)
+                                                }
+                                                setEditingQuantity(null)
+                                                setQuantityEditValue('')
+                                              }}
+                                              onKeyDown={async (e) => {
+                                                if (e.key === 'Enter') {
+                                                  e.preventDefault()
+                                                  const newQty = parseInt(quantityEditValue) || 0
+                                                  if (sale.id && newQty !== sale.quantity && newQty >= 0) {
+                                                    await handleUpdateQuantity(sale.id, newQty)
+                                                  }
+                                                  setEditingQuantity(null)
+                                                  setQuantityEditValue('')
+                                                } else if (e.key === 'Escape') {
+                                                  e.preventDefault()
+                                                  setEditingQuantity(null)
+                                                  setQuantityEditValue('')
+                                                }
+                                              }}
+                                              onClick={(e) => e.stopPropagation()}
+                                              onFocus={(e) => {
+                                                e.target.select()
+                                              }}
+                                              className="w-20 px-2 py-1 border border-blue-300 rounded text-right font-semibold text-blue-600"
+                                            />
+                                          </div>
+                                        ) : (
+                                          <div className="flex items-center justify-end gap-1">
+                                            <span className="font-semibold text-blue-600">
+                                              {sale.quantity.toLocaleString()}
+                                            </span>
+                                            {sale.id && (
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation()
+                                                  e.preventDefault()
+                                                  e.nativeEvent.stopImmediatePropagation()
+                                                  setEditingQuantity(rowKey)
+                                                  setQuantityEditValue(sale.quantity.toString())
+                                                }}
+                                                onMouseDown={(e) => {
+                                                  e.preventDefault()
+                                                  e.stopPropagation()
+                                                }}
+                                                className="p-1 hover:bg-blue-50 rounded text-blue-600 transition-colors"
+                                                title="Editar cantidad"
+                                                type="button"
+                                              >
+                                                <Edit2 className="w-3 h-3" />
+                                              </button>
+                                            )}
+                                          </div>
+                                        )}
                                       </td>
                                       <td className="py-1 px-2 text-right">
                                         <span className="font-semibold text-green-600">
@@ -2908,51 +3188,66 @@ export default function SalesPage() {
                                           {formatCurrency(grossProfitAmount)}
                                         </span>
                                       </td>
+                                      <td className="py-1 px-2 text-right">
+                                        <span className="font-semibold text-orange-600">
+                                          {margin.toFixed(1)}%
+                                        </span>
+                                      </td>
                                     </tr>
                                   )
                                 })}
                               </tbody>
                               <tfoot>
-                                <tr className="bg-blue-100 font-semibold border-t-2 border-gray-300">
-                                  <td colSpan={2} className="py-1 px-2 text-gray-900">Total Anual {yearData.year}</td>
-                                  <td className="py-1 px-2 text-right text-blue-600">
-                                    {annualProducts.reduce((sum, p) => sum + p.quantity, 0).toLocaleString()}
-                                  </td>
-                                  <td className="py-1 px-2 text-right text-green-600">
-                                    {formatCurrency(
-                                      annualProducts.reduce((sum, s) => {
-                                        if (s.product_full) {
-                                          const overrideKey = `${s.product_id}-${s.country_code}`
-                                          const overrides = productOverrides[overrideKey] || {}
-                                          try {
-                                            const computed = computePricing(s.product_full, s.country_code, overrides)
-                                            return sum + (computed.grossSales.amount * s.quantity)
-                                          } catch (e) {
-                                            return sum + (s.product_price * s.quantity)
-                                          }
-                                        }
+                                {(() => {
+                                  const totalQuantity = annualProducts.reduce((sum, p) => sum + p.quantity, 0)
+                                  const totalGrossSales = annualProducts.reduce((sum, s) => {
+                                    if (s.product_full) {
+                                      const overrideKey = `${s.product_id}-${s.country_code}`
+                                      const overrides = productOverrides[overrideKey] || {}
+                                      try {
+                                        const computed = computePricing(s.product_full, s.country_code, overrides)
+                                        return sum + (computed.grossSales.amount * s.quantity)
+                                      } catch (e) {
                                         return sum + (s.product_price * s.quantity)
-                                      }, 0)
-                                    )}
-                                  </td>
-                                  <td className="py-1 px-2 text-right text-purple-600">
-                                    {formatCurrency(
-                                      annualProducts.reduce((sum, s) => {
-                                        if (s.product_full) {
-                                          const overrideKey = `${s.product_id}-${s.country_code}`
-                                          const overrides = productOverrides[overrideKey] || {}
-                                          try {
-                                            const computed = computePricing(s.product_full, s.country_code, overrides)
-                                            return sum + (Math.abs(computed.grossProfit.amount) * s.quantity)
-                                          } catch (e) {
-                                            return sum + (Math.abs(s.product_price) * s.quantity)
-                                          }
-                                        }
+                                      }
+                                    }
+                                    return sum + (s.product_price * s.quantity)
+                                  }, 0)
+                                  const totalGrossProfit = annualProducts.reduce((sum, s) => {
+                                    if (s.product_full) {
+                                      const overrideKey = `${s.product_id}-${s.country_code}`
+                                      const overrides = productOverrides[overrideKey] || {}
+                                      try {
+                                        const computed = computePricing(s.product_full, s.country_code, overrides)
+                                        return sum + (Math.abs(computed.grossProfit.amount) * s.quantity)
+                                      } catch (e) {
                                         return sum + (Math.abs(s.product_price) * s.quantity)
-                                      }, 0)
-                                    )}
-                                  </td>
-                                </tr>
+                                      }
+                                    }
+                                    return sum + (Math.abs(s.product_price) * s.quantity)
+                                  }, 0)
+                                  const totalMargin = totalGrossSales > 0 
+                                    ? (totalGrossProfit / totalGrossSales * 100)
+                                    : 0
+
+                                  return (
+                                    <tr className="bg-blue-100 font-semibold border-t-2 border-gray-300">
+                                      <td colSpan={2} className="py-1 px-2 text-gray-900">Total Anual {yearData.year}</td>
+                                      <td className="py-1 px-2 text-right text-blue-600">
+                                        {totalQuantity.toLocaleString()}
+                                      </td>
+                                      <td className="py-1 px-2 text-right text-green-600">
+                                        {formatCurrency(totalGrossSales)}
+                                      </td>
+                                      <td className="py-1 px-2 text-right text-purple-600">
+                                        {formatCurrency(totalGrossProfit)}
+                                      </td>
+                                      <td className="py-1 px-2 text-right text-orange-600">
+                                        {totalMargin.toFixed(1)}%
+                                      </td>
+                                    </tr>
+                                  )
+                                })()}
                               </tfoot>
                             </table>
                             )}
