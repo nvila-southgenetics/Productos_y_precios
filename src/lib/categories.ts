@@ -29,6 +29,9 @@ export const PRODUCT_CATEGORIES = {
     'ErPeak',
     'ERPeak',
     'Genome IEE',
+    'ENDOMETRIO EMMA'
+  ],
+  'Prenatales': [
     'MaterniT Genome',
     'MaterniT21',
     'MaterniT21 Plus',
@@ -40,11 +43,15 @@ export const PRODUCT_CATEGORIES = {
     'Nifty Pro',
     'Unity',
     'Unity Complete',
-    'ENDOMETRIO EMMA',
     'MATERNIT 21 + SCA',
     'Maternit 21 plus',
     'MATERNIT GENOME',
-    'PATERNIDAD PRE*Paternidad Prenatal'
+    'PATERNIDAD PRE*Paternidad Prenatal',
+    'Paternidad Prenatal + adicional',
+    'Paternidad Prenatal BGI',
+    'Paternidad Prenatal DDC',
+    'Paternidad Prenatal',
+    'Paternidad Post Natal'
   ],
   'Oncología': [
     'CellSearch CTC',
@@ -115,12 +122,7 @@ export const PRODUCT_CATEGORIES = {
     'Exome proband only',
     'Healthy Weight',
     'Metabolic Newborn Screening Confirmation Panel',
-    'Paternidad Prenatal + adicional',
-    'Paternidad Prenatal BGI',
-    'Paternidad Prenatal DDC',
     'Screening Neonatal',
-    'Paternidad Post Natal',
-    'Paternidad Prenatal',
     '02PULDEN-0017',
     '01SANCOR-0011',
     '01SANCOR-0012',

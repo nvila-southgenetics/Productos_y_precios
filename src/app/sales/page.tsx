@@ -3,12 +3,12 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Navbar } from '@/components/Navbar'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Upload, FileSpreadsheet, Save, BarChart3, TrendingUp, Package, AlertCircle, ChevronDown, ChevronRight, Filter, X, Calculator, Trash2, AlertTriangle, Edit2 } from 'lucide-react'
+import { Upload, FileSpreadsheet, Save, BarChart3, TrendingUp, Package, AlertCircle, ChevronDown, ChevronRight, Filter, X, Calculator, Trash2, AlertTriangle, Edit2, Calendar, ChevronLeft } from 'lucide-react'
 import { CategoryBadge } from '@/components/CategoryBadge'
 import { TypeBadge } from '@/components/TypeBadge'
 import { formatCurrency, formatPercentage, computePricing } from '@/lib/compute'
@@ -31,6 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import * as XLSX from 'xlsx'
 
 interface ParsedSale {
@@ -110,7 +111,7 @@ export default function SalesPage() {
   const [productOverrides, setProductOverrides] = useState<Record<string, any>>({})
   const [userId, setUserId] = useState<string | null>(null)
   const [openMonths, setOpenMonths] = useState<Record<string, boolean>>({})
-  const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set())
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([])
   const [monthFilters, setMonthFilters] = useState<Record<string, {
     categories: string[]
     types: string[]
@@ -128,7 +129,52 @@ export default function SalesPage() {
   const [combinedPlDialogOpen, setCombinedPlDialogOpen] = useState(false)
   const [clearAllDialogOpen, setClearAllDialogOpen] = useState(false)
   const [clearing, setClearing] = useState(false)
+  const searchParams = useSearchParams()
+  const [activeTab, setActiveTab] = useState('productos')
   const router = useRouter()
+
+  // Detectar parámetro de query para activar el tab correspondiente
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab === 'dashboard') {
+      setActiveTab('dashboard')
+    } else if (tab === 'productos') {
+      setActiveTab('productos')
+    }
+  }, [searchParams])
+  
+  // Estados para Dashboard
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth())
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
+  const [dailySales, setDailySales] = useState<Array<{
+    sale_date: string
+    quantity: number
+    amount: number
+  }>>([])
+  const [last10Sales, setLast10Sales] = useState<Array<{
+    id: string
+    sale_date: string
+    quantity: number
+    amount: number
+    country_code: CountryCode
+    product_id: string | null
+    description: string | null
+    product_name?: string
+    product_sku?: string
+  }>>([])
+  const [selectedDateSales, setSelectedDateSales] = useState<Array<{
+    id: string
+    sale_date: string
+    quantity: number
+    amount: number
+    country_code: CountryCode
+    product_id: string | null
+    description: string | null
+    product_name?: string
+    product_sku?: string
+  }>>([])
+  const [loadingDailySales, setLoadingDailySales] = useState(false)
 
   // Cerrar dropdowns al hacer click fuera
   useEffect(() => {
@@ -286,6 +332,117 @@ export default function SalesPage() {
 
     loadSalesData()
   }, [selectedCountry, userId])
+
+  // Cargar últimas 10 ventas diarias para el Dashboard
+  useEffect(() => {
+    if (!userId || activeTab !== 'dashboard') return
+
+    const loadLast10Sales = async () => {
+      setLoadingDailySales(true)
+      try {
+        const { data, error } = await (supabase as any)
+          .from('daily_sales')
+          .select(`
+            *,
+            products(name, sku)
+          `)
+          .eq('user_id', userId)
+          .order('sale_date', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(10)
+
+        if (error) {
+          console.error('Error cargando últimas ventas:', error)
+        } else {
+          const salesWithProductInfo = (data || []).map((sale: any) => ({
+            id: sale.id,
+            sale_date: sale.sale_date,
+            quantity: sale.quantity,
+            amount: sale.amount,
+            country_code: sale.country_code,
+            product_id: sale.product_id,
+            description: sale.description,
+            product_name: sale.products?.name || null,
+            product_sku: sale.products?.sku || null,
+          }))
+          setLast10Sales(salesWithProductInfo)
+        }
+      } catch (error) {
+        console.error('Error cargando últimas ventas:', error)
+      } finally {
+        setLoadingDailySales(false)
+      }
+    }
+
+    loadLast10Sales()
+  }, [userId, activeTab])
+
+  // Cargar ventas de una fecha específica
+  const loadSalesForDate = async (date: Date) => {
+    if (!userId) return
+
+    setLoadingDailySales(true)
+    try {
+      const dateStr = date.toISOString().split('T')[0]
+      const supabaseClient = supabase as any
+      const { data, error } = await supabaseClient
+        .from('daily_sales')
+        .select(`
+          *,
+          products(name, sku)
+        `)
+        .eq('user_id', userId)
+        .eq('sale_date', dateStr)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Error cargando ventas de la fecha:', error)
+      } else {
+        const salesWithProductInfo = (data || []).map((sale: any) => ({
+          id: sale.id,
+          sale_date: sale.sale_date,
+          quantity: sale.quantity,
+          amount: sale.amount,
+          country_code: sale.country_code,
+          product_id: sale.product_id,
+          description: sale.description,
+          product_name: sale.products?.name || null,
+          product_sku: sale.products?.sku || null,
+        }))
+        setSelectedDateSales(salesWithProductInfo)
+      }
+    } catch (error) {
+      console.error('Error cargando ventas de la fecha:', error)
+    } finally {
+      setLoadingDailySales(false)
+    }
+  }
+
+  // Cargar todas las ventas diarias para el calendario
+  useEffect(() => {
+    if (!userId || activeTab !== 'dashboard') return
+
+    const loadAllDailySales = async () => {
+      try {
+        const { data, error } = await (supabase as any)
+          .from('daily_sales')
+          .select('sale_date, quantity, amount')
+          .eq('user_id', userId)
+          .gte('sale_date', `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`)
+          .lte('sale_date', `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-31`)
+
+        if (error) {
+          console.error('Error cargando ventas diarias:', error)
+        } else {
+          setDailySales((data as any) || [])
+        }
+      } catch (error) {
+        console.error('Error cargando ventas diarias:', error)
+      }
+    }
+
+    loadAllDailySales()
+  }, [userId, currentMonth, currentYear, activeTab])
 
   /**
    * Parsea el Excel y extrae datos de ventas
@@ -1175,10 +1332,70 @@ export default function SalesPage() {
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ]
 
+  // Funciones para el calendario
+  const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+
+  const getDaysInMonth = (month: number, year: number) => {
+    return new Date(year, month + 1, 0).getDate()
+  }
+
+  const getFirstDayOfMonth = (month: number, year: number) => {
+    return new Date(year, month, 1).getDay()
+  }
+
+  const handleDateClick = (day: number) => {
+    const date = new Date(currentYear, currentMonth, day)
+    setSelectedDate(date)
+    loadSalesForDate(date)
+  }
+
+  const goToPreviousMonth = () => {
+    if (currentMonth === 0) {
+      setCurrentMonth(11)
+      setCurrentYear(currentYear - 1)
+    } else {
+      setCurrentMonth(currentMonth - 1)
+    }
+  }
+
+  const goToNextMonth = () => {
+    if (currentMonth === 11) {
+      setCurrentMonth(0)
+      setCurrentYear(currentYear + 1)
+    } else {
+      setCurrentMonth(currentMonth + 1)
+    }
+  }
+
+  const getSalesForDay = (day: number) => {
+    const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    return dailySales.filter(sale => sale.sale_date === dateStr)
+  }
+
+  const getTotalSalesForDay = (day: number) => {
+    const sales = getSalesForDay(day)
+    return sales.reduce((sum, sale) => sum + (sale.amount || 0), 0)
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       <div className="container mx-auto px-4 py-8">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <div className="mb-6">
+            <TabsList className="inline-flex h-12 items-center justify-center rounded-lg bg-gray-100 p-1 text-gray-600 w-full max-w-md">
+              <TabsTrigger value="productos" className="flex items-center gap-2 px-6 py-2 data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm">
+                <Package className="w-4 h-4" />
+                Productos
+              </TabsTrigger>
+              <TabsTrigger value="dashboard" className="flex items-center gap-2 px-6 py-2 data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm">
+                <BarChart3 className="w-4 h-4" />
+                Dashboard
+              </TabsTrigger>
+            </TabsList>
+          </div>
+
+          <TabsContent value="productos" className="space-y-6">
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -1362,7 +1579,7 @@ export default function SalesPage() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+      </div>
           </CardContent>
         </Card>
 
@@ -1430,7 +1647,7 @@ export default function SalesPage() {
                   let combinedAvailableCategories = new Set<string>()
                   let combinedAvailableTypes = new Set<string>()
                   
-                  if (selectedMonths.size > 1) {
+                  if (selectedMonths.length > 1) {
                     selectedMonths.forEach(monthKey => {
                       const [year, month] = monthKey.split('-').map(Number)
                       const monthData = sortedMonths.find(m => m.year === year && m.month === month)
@@ -1489,14 +1706,14 @@ export default function SalesPage() {
                   return (
                     <>
                       {/* Vista combinada de meses seleccionados */}
-                      {selectedMonths.size > 1 && (
+                      {selectedMonths.length > 1 && (
                         <div className="border border-blue-300 rounded overflow-hidden mb-4 bg-blue-50">
                           <div className="bg-blue-200 px-2 py-1 border-b border-blue-300">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center justify-between w-full">
                                 <h3 className="font-semibold text-gray-900 text-sm flex items-center gap-2">
                                   <Package className="w-4 h-4" />
-                                  Meses Combinados ({Array.from(selectedMonths).map(key => {
+                                  Meses Combinados ({selectedMonths.map(key => {
                                     const [year, month] = key.split('-').map(Number)
                                     return `${monthNames[month - 1]} ${year}`
                                   }).join(', ')})
@@ -1544,12 +1761,12 @@ export default function SalesPage() {
                                     P&L
                                   </Button>
                                   <button
-                                    onClick={() => setSelectedMonths(new Set())}
+                                    onClick={() => setSelectedMonths([])}
                                     className="text-xs px-2 py-1 bg-white border border-gray-300 rounded hover:bg-gray-50"
                                   >
                                     Deseleccionar todos
                                   </button>
-                                </div>
+    </div>
                               </div>
                             </div>
                           </div>
@@ -2207,7 +2424,7 @@ export default function SalesPage() {
                           }
                         })
                         
-                        const isSelected = selectedMonths.has(monthKey)
+                        const isSelected = selectedMonths.includes(monthKey)
                         
                         return (
                           <div key={monthKey} className="border border-gray-200 rounded overflow-hidden">
@@ -2224,13 +2441,11 @@ export default function SalesPage() {
                                     onChange={(e) => {
                                       e.stopPropagation()
                                       setSelectedMonths(prev => {
-                                        const newSet = new Set(prev)
                                         if (e.target.checked) {
-                                          newSet.add(monthKey)
+                                          return prev.includes(monthKey) ? prev : [...prev, monthKey]
                                         } else {
-                                          newSet.delete(monthKey)
+                                          return prev.filter(m => m !== monthKey)
                                         }
-                                        return newSet
                                       })
                                     }}
                                     onClick={(e) => e.stopPropagation()}
@@ -3267,6 +3482,288 @@ export default function SalesPage() {
             )}
           </CardContent>
         </Card>
+          </TabsContent>
+
+          <TabsContent value="dashboard" className="space-y-6">
+            {/* Dashboard con calendario y ventas del día seleccionado */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Calendario */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Calendar className="w-6 h-6 text-blue-600" />
+                    Calendario de Ventas
+                  </CardTitle>
+                  <CardDescription>
+                    Haz clic en una fecha para ver las ventas del día
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {/* Navegación del mes */}
+                    <div className="flex items-center justify-between">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={goToPreviousMonth}
+                        className="flex items-center gap-2"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                        Anterior
+                      </Button>
+                      <h3 className="text-lg font-semibold">
+                        {monthNames[currentMonth]} {currentYear}
+                      </h3>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={goToNextMonth}
+                        className="flex items-center gap-2"
+                      >
+                        Siguiente
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+      </div>
+
+                    {/* Calendario */}
+                    <div className="grid grid-cols-7 gap-1">
+                      {/* Días de la semana */}
+                      {dayNames.map(day => (
+                        <div
+                          key={day}
+                          className="text-center text-xs font-semibold text-gray-600 py-2"
+                        >
+                          {day}
+    </div>
+                      ))}
+
+                      {/* Días vacíos al inicio */}
+                      {Array.from({ length: getFirstDayOfMonth(currentMonth, currentYear) }).map((_, idx) => (
+                        <div key={`empty-${idx}`} className="aspect-square" />
+                      ))}
+
+                      {/* Días del mes */}
+                      {Array.from({ length: getDaysInMonth(currentMonth, currentYear) }).map((_, idx) => {
+                        const day = idx + 1
+                        const sales = getSalesForDay(day)
+                        const totalSales = getTotalSalesForDay(day)
+                        const isToday = new Date().getDate() === day &&
+                          new Date().getMonth() === currentMonth &&
+                          new Date().getFullYear() === currentYear
+                        const isSelected = selectedDate &&
+                          selectedDate.getDate() === day &&
+                          selectedDate.getMonth() === currentMonth &&
+                          selectedDate.getFullYear() === currentYear
+
+                        return (
+                          <button
+                            key={day}
+                            onClick={() => handleDateClick(day)}
+                            className={`
+                              aspect-square rounded-lg transition-all duration-200
+                              flex flex-col items-center justify-center p-1
+                              ${isSelected
+                                ? 'bg-blue-600 text-white shadow-lg scale-105'
+                                : isToday
+                                ? 'bg-blue-100 text-blue-700 border-2 border-blue-400'
+                                : sales.length > 0
+                                ? 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
+                                : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
+                              }
+                            `}
+                          >
+                            <span className="text-sm font-medium">{day}</span>
+                            {sales.length > 0 && (
+                              <span className="text-xs font-semibold">
+                                {formatCurrency(totalSales)}
+                              </span>
+                            )}
+                            {sales.length > 0 && (
+                              <span className="text-[10px] opacity-75">
+                                {sales.length} {sales.length === 1 ? 'venta' : 'ventas'}
+                              </span>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Ventas del día seleccionado */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="w-6 h-6 text-purple-600" />
+                    {selectedDate ? (
+                      <>Ventas del {selectedDate.toLocaleDateString('es-ES', {
+                        weekday: 'long',
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric'
+                      })}</>
+                    ) : (
+                      <>Ventas del Día</>
+                    )}
+                  </CardTitle>
+                  <CardDescription>
+                    {selectedDate 
+                      ? 'Detalle de todas las ventas realizadas en esta fecha'
+                      : 'Selecciona una fecha en el calendario para ver las ventas'
+                    }
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {!selectedDate ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <Calendar className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                      <p>Selecciona una fecha en el calendario</p>
+                      <p className="text-sm mt-1">para ver las ventas de ese día</p>
+                    </div>
+                  ) : loadingDailySales ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                      <p>Cargando ventas...</p>
+                    </div>
+                  ) : selectedDateSales.length > 0 ? (
+                    <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+                      <table className="w-full text-sm">
+                        <thead className="sticky top-0 bg-white">
+                          <tr className="bg-gray-100 border-b border-gray-200">
+                            <th className="text-left py-2 px-3 font-semibold text-gray-700">Producto</th>
+                            <th className="text-left py-2 px-3 font-semibold text-gray-700">País</th>
+                            <th className="text-right py-2 px-3 font-semibold text-gray-700">Cantidad</th>
+                            <th className="text-right py-2 px-3 font-semibold text-gray-700">Monto</th>
+                            <th className="text-left py-2 px-3 font-semibold text-gray-700">Descripción</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedDateSales.map((sale) => (
+                            <tr key={sale.id} className="border-b border-gray-100 hover:bg-gray-50">
+                              <td className="py-2 px-3">
+                                <div>
+                                  <div className="font-medium">{sale.product_name || 'Producto sin nombre'}</div>
+                                  {sale.product_sku && (
+                                    <div className="text-xs text-gray-500">{sale.product_sku}</div>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="flex items-center gap-1">
+                                  {COUNTRY_FLAGS[sale.country_code]} {COUNTRY_NAMES[sale.country_code]}
+                                </span>
+                              </td>
+                              <td className="py-2 px-3 text-right">{sale.quantity}</td>
+                              <td className="py-2 px-3 text-right font-semibold text-green-600">
+                                {formatCurrency(sale.amount)}
+                              </td>
+                              <td className="py-2 px-3 text-gray-500 text-xs">
+                                {sale.description || '-'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="sticky bottom-0 bg-white">
+                          <tr className="bg-gray-100 font-semibold border-t-2 border-gray-300">
+                            <td colSpan={2} className="py-2 px-3">Total</td>
+                            <td className="py-2 px-3 text-right">
+                              {selectedDateSales.reduce((sum, s) => sum + s.quantity, 0)}
+                            </td>
+                            <td className="py-2 px-3 text-right text-green-600">
+                              {formatCurrency(selectedDateSales.reduce((sum, s) => sum + s.amount, 0))}
+                            </td>
+                            <td className="py-2 px-3"></td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <Calendar className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                      <p>No hay ventas registradas para esta fecha</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Últimas 10 ventas */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="w-6 h-6 text-green-600" />
+                  Últimas 10 Ventas
+                </CardTitle>
+                <CardDescription>
+                  Ventas más recientes registradas
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingDailySales ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                    <p>Cargando ventas...</p>
+                  </div>
+                ) : last10Sales.length > 0 ? (
+                  <div className="space-y-3">
+                    {last10Sales.map((sale) => (
+                      <div
+                        key={sale.id}
+                        className="p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-300 transition-colors"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-sm font-semibold text-gray-900">
+                                {sale.product_name || 'Producto sin nombre'}
+                              </span>
+                              {sale.product_sku && (
+                                <span className="text-xs text-gray-500">
+                                  ({sale.product_sku})
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 text-xs text-gray-600">
+                              <span className="flex items-center gap-1">
+                                <Calendar className="w-3 h-3" />
+                                {new Date(sale.sale_date).toLocaleDateString('es-ES', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric'
+                                })}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                {COUNTRY_FLAGS[sale.country_code]} {COUNTRY_NAMES[sale.country_code]}
+                              </span>
+                              <span className="text-gray-500">
+                                Cantidad: {sale.quantity}
+                              </span>
+                            </div>
+                            {sale.description && (
+                              <p className="text-xs text-gray-500 mt-1">{sale.description}</p>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <div className="text-lg font-bold text-green-600">
+                              {formatCurrency(sale.amount)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p>No hay ventas registradas</p>
+                    <p className="text-sm mt-1">Las ventas aparecerán aquí cuando se registren</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   )

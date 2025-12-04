@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { FlaskConical, MessageSquare } from 'lucide-react'
+import { FlaskConical, MessageSquare, Calculator } from 'lucide-react'
 
 interface ProductCountryTableSimulacroProps {
   product: Product
@@ -24,6 +24,7 @@ export function ProductCountryTableSimulacro({ product, countryCode, onOverrides
   const [mxConfigType, setMxConfigType] = useState<MxConfigType>('precio_lista')
   const [clConfigType, setClConfigType] = useState<ClConfigType>('precio_lista')
   const [colConfigType, setColConfigType] = useState<ColConfigType>('precio_lista')
+  const [multiplier, setMultiplier] = useState<number>(1)
   
   // Estado para comentarios
   const [commentDialogOpen, setCommentDialogOpen] = useState(false)
@@ -233,7 +234,7 @@ export function ProductCountryTableSimulacro({ product, countryCode, onOverrides
               onDoubleClick={() => startEditing(amountKey, amountValue)}
               className="text-sm text-gray-900 hover:bg-blue-50 cursor-pointer font-medium px-2 py-1 rounded"
             >
-              {formatCurrency(amountValue)}
+              {formatCurrency(amountValue * multiplier)}
             </div>
           )}
         </td>
@@ -307,7 +308,7 @@ export function ProductCountryTableSimulacro({ product, countryCode, onOverrides
               onDoubleClick={() => startEditing(key, grossSales.amount)}
               className="text-sm text-gray-900 hover:bg-blue-50 cursor-pointer font-medium px-2 py-1 rounded"
             >
-              {formatCurrency(grossSales.amount)}
+              {formatCurrency(grossSales.amount * multiplier)}
             </div>
           )}
         </td>
@@ -322,10 +323,34 @@ export function ProductCountryTableSimulacro({ product, countryCode, onOverrides
     <Card className="overflow-hidden border-purple-200 shadow-lg">
       {/* Banner de modo simulacro */}
       <div className="px-6 py-3 border-b border-purple-200 bg-purple-50">
-        <div className="flex items-center gap-2">
-          <FlaskConical className="w-5 h-5 text-purple-600" />
-          <span className="text-sm font-semibold text-purple-900">Modo Simulacro</span>
-          <span className="text-xs text-purple-700">- Los cambios se guardan solo en tu navegador</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <FlaskConical className="w-5 h-5 text-purple-600" />
+            <span className="text-sm font-semibold text-purple-900">Modo Simulacro</span>
+            <span className="text-xs text-purple-700">- Los cambios se guardan solo en tu navegador</span>
+          </div>
+          
+          {/* Multiplicador de valores */}
+          <div className="flex items-center gap-3">
+            <Calculator className="w-4 h-4 text-purple-600" />
+            <label className="text-sm font-medium text-purple-900">
+              Multiplicador:
+            </label>
+            <Input
+              type="number"
+              min="0.01"
+              step="1"
+              value={multiplier}
+              onChange={(e) => {
+                const value = parseFloat(e.target.value)
+                if (!isNaN(value) && value > 0) {
+                  setMultiplier(value)
+                }
+              }}
+              className="w-24 text-right bg-white border-purple-300 focus:border-purple-500 focus:ring-purple-500"
+            />
+            <span className="text-xs text-purple-700">× todos los valores</span>
+          </div>
         </div>
       </div>
 
@@ -470,7 +495,7 @@ export function ProductCountryTableSimulacro({ product, countryCode, onOverrides
               
               <tr className="bg-gray-100 border-b-2 border-gray-300">
                 <td className="px-6 py-3 text-sm font-semibold text-gray-900">{salesRevenue.label}</td>
-                <td className="px-6 py-3 text-right text-sm font-bold text-gray-900">{formatCurrency(salesRevenue.amount)}</td>
+                <td className="px-6 py-3 text-right text-sm font-bold text-gray-900">{formatCurrency(salesRevenue.amount * multiplier)}</td>
                 <td className="px-6 py-3 text-right text-sm font-bold text-gray-900">{formatPercentage(salesRevenue.pct)}</td>
               </tr>
 
@@ -501,13 +526,13 @@ export function ProductCountryTableSimulacro({ product, countryCode, onOverrides
 
               <tr className="bg-gray-100 border-b-2 border-gray-300">
                 <td className="px-6 py-3 text-sm font-semibold text-gray-900">{totalCostOfSales.label}</td>
-                <td className="px-6 py-3 text-right text-sm font-bold text-gray-900">{formatCurrency(totalCostOfSales.amount)}</td>
+                <td className="px-6 py-3 text-right text-sm font-bold text-gray-900">{formatCurrency(totalCostOfSales.amount * multiplier)}</td>
                 <td className="px-6 py-3 text-right text-sm font-bold text-gray-900">{formatPercentage(totalCostOfSales.pct)}</td>
               </tr>
 
               <tr className="bg-emerald-50 border-b-2 border-emerald-200">
                 <td className="px-6 py-4 text-base font-bold text-emerald-900">{grossProfit.label}</td>
-                <td className="px-6 py-4 text-right text-base font-bold text-emerald-900">{formatCurrency(grossProfit.amount)}</td>
+                <td className="px-6 py-4 text-right text-base font-bold text-emerald-900">{formatCurrency(grossProfit.amount * multiplier)}</td>
                 <td className="px-6 py-4 text-right text-base font-bold text-emerald-900">{formatPercentage(grossProfit.pct)}</td>
               </tr>
             </tbody>

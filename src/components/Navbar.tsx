@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
-import { Settings, User, LogOut, BarChart3, FlaskConical, Home, DollarSign } from 'lucide-react'
+import { Settings, User, LogOut, BarChart3, FlaskConical, Home, DollarSign, LayoutDashboard } from 'lucide-react'
 
 export function Navbar() {
   const [user, setUser] = useState<any>(null)
@@ -67,11 +67,20 @@ export function Navbar() {
               <Button 
                 variant="ghost" 
                 size="sm"
+                onClick={() => router.push('/sales?tab=dashboard')}
+                className="flex items-center gap-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50"
+              >
+                <LayoutDashboard className="w-4 h-4" />
+                Dashboard
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm"
                 onClick={() => router.push('/products')}
                 className="flex items-center gap-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50"
               >
                 <Home className="w-4 h-4" />
-                Inicio
+                Productos
               </Button>
               <Button 
                 variant="ghost" 
