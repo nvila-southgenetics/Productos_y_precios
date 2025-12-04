@@ -63,6 +63,8 @@ export default function SalesPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [processingProgress, setProcessingProgress] = useState<{ current: number; total: number } | null>(null)
   const [selectedCountry, setSelectedCountry] = useState<CountryCode | 'all'>('all')
+  const [selectedProduct, setSelectedProduct] = useState<string>('all')
+  const [productSearchTerm, setProductSearchTerm] = useState<string>('')
   const [monthlySales, setMonthlySales] = useState<MonthlySales[]>([])
   const [productSales, setProductSales] = useState<Array<{
     id: string
@@ -231,7 +233,7 @@ export default function SalesPage() {
     loadData()
   }, [router])
 
-  // Cargar ventas mensuales y detalle de productos cuando cambia el país seleccionado
+  // Cargar ventas mensuales y detalle de productos cuando cambia el país o producto seleccionado
   useEffect(() => {
     if (!userId) return
 
@@ -250,6 +252,10 @@ export default function SalesPage() {
 
       if (selectedCountry !== 'all') {
         query = query.eq('country_code', selectedCountry)
+      }
+
+      if (selectedProduct !== 'all') {
+        query = query.eq('product_id', selectedProduct)
       }
 
       const { data, error } = await query
@@ -331,7 +337,7 @@ export default function SalesPage() {
     }
 
     loadSalesData()
-  }, [selectedCountry, userId])
+  }, [selectedCountry, selectedProduct, userId])
 
   // Cargar últimas 10 ventas diarias para el Dashboard
   useEffect(() => {
@@ -1564,22 +1570,155 @@ export default function SalesPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-4">
-              <label className="text-sm font-medium">País:</label>
-              <Select value={selectedCountry} onValueChange={(value) => setSelectedCountry(value as CountryCode | 'all')}>
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los países</SelectItem>
-                  {Object.entries(COUNTRY_NAMES).map(([code, name]) => (
-                    <SelectItem key={code} value={code}>
-                      {COUNTRY_FLAGS[code as CountryCode]} {name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-      </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-center gap-4">
+                <label className="text-sm font-medium">País:</label>
+                <Select value={selectedCountry} onValueChange={(value) => setSelectedCountry(value as CountryCode | 'all')}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los países</SelectItem>
+                    {Object.entries(COUNTRY_NAMES).map(([code, name]) => (
+                      <SelectItem key={code} value={code}>
+                        {COUNTRY_FLAGS[code as CountryCode]} {name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="flex items-center gap-4">
+                <label className="text-sm font-medium">Producto:</label>
+                <Select 
+                  value={selectedProduct} 
+                  onValueChange={(value) => {
+                    setSelectedProduct(value)
+                    setProductSearchTerm('')
+                  }}
+                  onOpenChange={(open) => {
+                    if (!open) setProductSearchTerm('')
+                  }}
+                >
+                  <SelectTrigger className="w-[400px]">
+                    <SelectValue placeholder="Todos los productos">
+                      {selectedProduct !== 'all' && (() => {
+                        const product = productSales.find(s => s.product_id === selectedProduct)
+                        return product ? (
+                          <div className="flex flex-col items-start">
+                            <span className="font-medium">{product.product_name}</span>
+                            <span className="text-xs text-gray-500">SKU: {product.product_sku}</span>
+                          </div>
+                        ) : 'Producto seleccionado'
+                      })()}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[300px]">
+                    <div className="p-2 sticky top-0 bg-white z-10">
+                      <input
+                        type="text"
+                        placeholder="Buscar producto..."
+                        value={productSearchTerm}
+                        onChange={(e) => setProductSearchTerm(e.target.value)}
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                    <SelectItem value="all">Todos los productos</SelectItem>
+                    {(() => {
+                      const searchTerm = productSearchTerm.toLowerCase().trim()
+                      const uniqueProducts = Array.from(new Set(productSales.map(sale => sale.product_id)))
+                        .map(productId => {
+                          const sale = productSales.find(s => s.product_id === productId)
+                          return sale ? { id: productId, name: sale.product_name, sku: sale.product_sku } : null
+                        })
+                        .filter((p): p is { id: string; name: string; sku: string } => p !== null)
+                      
+                      if (searchTerm === '') {
+                        return uniqueProducts
+                          .sort((a, b) => a.name.localeCompare(b.name))
+                          .map(product => (
+                            <SelectItem key={product.id} value={product.id}>
+                              <div className="flex flex-col">
+                                <span className="font-medium">{product.name}</span>
+                                <span className="text-xs text-gray-500">SKU: {product.sku}</span>
+                              </div>
+                            </SelectItem>
+                          ))
+                      }
+                      
+                      // Buscar coincidencias exactas primero
+                      const exactMatches = uniqueProducts.filter(product => {
+                        const nameLower = product.name.toLowerCase()
+                        const skuLower = product.sku.toLowerCase()
+                        return nameLower === searchTerm || skuLower === searchTerm
+                      })
+                      
+                      // Si hay coincidencias exactas, SOLO mostrar esas
+                      if (exactMatches.length > 0) {
+                        return exactMatches
+                          .sort((a, b) => a.name.localeCompare(b.name))
+                          .map(product => (
+                            <SelectItem key={product.id} value={product.id}>
+                              <div className="flex flex-col">
+                                <span className="font-medium">{product.name}</span>
+                                <span className="text-xs text-gray-500">SKU: {product.sku}</span>
+                              </div>
+                            </SelectItem>
+                          ))
+                      }
+                      
+                      // Si no hay coincidencias exactas, buscar que contengan el término
+                      const filteredProducts = uniqueProducts
+                        .filter(product => {
+                          const nameLower = product.name.toLowerCase()
+                          const skuLower = product.sku.toLowerCase()
+                          return nameLower.includes(searchTerm) || skuLower.includes(searchTerm)
+                        })
+                        .sort((a, b) => {
+                          // Ordenar por: primero los que empiezan con el término, luego alfabético
+                          const aStarts = a.name.toLowerCase().startsWith(searchTerm)
+                          const bStarts = b.name.toLowerCase().startsWith(searchTerm)
+                          if (aStarts && !bStarts) return -1
+                          if (!aStarts && bStarts) return 1
+                          return a.name.localeCompare(b.name)
+                        })
+                      
+                      if (filteredProducts.length === 0) {
+                        return (
+                          <div className="p-2 text-sm text-gray-500 text-center">
+                            No se encontraron productos
+                          </div>
+                        )
+                      }
+                      
+                      return filteredProducts.map(product => (
+                        <SelectItem key={product.id} value={product.id}>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{product.name}</span>
+                            <span className="text-xs text-gray-500">SKU: {product.sku}</span>
+                          </div>
+                        </SelectItem>
+                      ))
+                    })()}
+                  </SelectContent>
+                </Select>
+                {selectedProduct !== 'all' && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedProduct('all')
+                      setProductSearchTerm('')
+                    }}
+                    className="text-gray-600 hover:text-gray-900"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -1683,9 +1822,9 @@ export default function SalesPage() {
                     // Aplicar filtros a la vista combinada
                     filteredCombinedSales = finalCombinedSales
                     if (combinedFilter.productName && combinedFilter.productName.trim()) {
-                      const searchTerm = combinedFilter.productName.toLowerCase().trim()
+                      const selectedProductName = combinedFilter.productName.trim()
                       filteredCombinedSales = filteredCombinedSales.filter(sale => {
-                        return sale.product_name.toLowerCase().includes(searchTerm)
+                        return sale.product_name === selectedProductName
                       })
                     }
                     if (combinedFilter.categories.length > 0) {
@@ -1729,8 +1868,8 @@ export default function SalesPage() {
                                       }, {} as Record<string, typeof productSales[0]>))
                                       
                                       if (combinedFilter.productName && combinedFilter.productName.trim()) {
-                                        const searchTerm = combinedFilter.productName.toLowerCase().trim()
-                                        filtered = filtered.filter(sale => sale.product_name.toLowerCase().includes(searchTerm))
+                                        const selectedProductName = combinedFilter.productName.trim()
+                                        filtered = filtered.filter(sale => sale.product_name === selectedProductName)
                                       }
                                       if (combinedFilter.categories.length > 0) {
                                         filtered = filtered.filter(sale => {
@@ -1802,26 +1941,74 @@ export default function SalesPage() {
                                               setCombinedFilterOpen(false)
                                             }}
                                           />
-                                          <div className="fixed bg-white border border-gray-300 rounded-lg shadow-xl z-[100] p-3 min-w-[250px] max-w-[90vw]" style={{
+                                          <div className="fixed bg-white border border-gray-300 rounded-lg shadow-xl z-[100] p-3 min-w-[400px] max-w-[90vw]" style={{
                                             top: '50%',
                                             left: '50%',
                                             transform: 'translate(-50%, -50%)'
                                           }}>
                                             <div className="space-y-2">
-                                              <label className="text-xs font-semibold block text-gray-700">Buscar producto:</label>
-                                              <input
-                                                type="text"
-                                                value={combinedFilter.productName || ''}
-                                                onChange={(e) => {
-                                                  setCombinedFilter(prev => ({
-                                                    ...prev,
-                                                    productName: e.target.value
-                                                  }))
-                                                }}
-                                                placeholder="Escribe el nombre..."
-                                                className="w-full text-xs px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                autoFocus
-                                              />
+                                              <label className="text-xs font-semibold block text-gray-700">Seleccionar producto:</label>
+                                              <div className="max-h-[300px] overflow-y-auto border border-gray-300 rounded">
+                                                <input
+                                                  type="text"
+                                                  value={combinedFilter.productName || ''}
+                                                  onChange={(e) => {
+                                                    setCombinedFilter(prev => ({
+                                                      ...prev,
+                                                      productName: e.target.value
+                                                    }))
+                                                  }}
+                                                  placeholder="Escribe para buscar..."
+                                                  className="sticky top-0 w-full text-sm px-3 py-2 border-b border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white z-10"
+                                                  autoFocus
+                                                />
+                                                <div className="p-1">
+                                                  {(() => {
+                                                    const searchTerm = (combinedFilter.productName || '').toLowerCase().trim()
+                                                    const allProducts = Array.from(new Set(combinedSales.map(sale => sale.product_id)))
+                                                      .map(productId => {
+                                                        const sale = combinedSales.find(s => s.product_id === productId)
+                                                        return sale ? { id: productId, name: sale.product_name, sku: sale.product_sku } : null
+                                                      })
+                                                      .filter((p): p is { id: string; name: string; sku: string } => p !== null)
+                                                      .sort((a, b) => a.name.localeCompare(b.name))
+                                                    
+                                                    const filteredProducts = searchTerm === '' 
+                                                      ? allProducts
+                                                      : allProducts.filter(product => 
+                                                          product.name.toLowerCase().includes(searchTerm) ||
+                                                          product.sku.toLowerCase().includes(searchTerm)
+                                                        )
+                                                    
+                                                    if (filteredProducts.length === 0) {
+                                                      return (
+                                                        <div className="px-3 py-2 text-xs text-gray-500 text-center">
+                                                          No se encontraron productos
+                                                        </div>
+                                                      )
+                                                    }
+                                                    
+                                                    return filteredProducts.map(product => (
+                                                      <button
+                                                        key={product.id}
+                                                        onClick={() => {
+                                                          setCombinedFilter(prev => ({
+                                                            ...prev,
+                                                            productName: product.name
+                                                          }))
+                                                          setCombinedFilterOpen(false)
+                                                        }}
+                                                        className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded transition-colors ${
+                                                          combinedFilter.productName === product.name ? 'bg-blue-100 font-medium' : ''
+                                                        }`}
+                                                      >
+                                                        <div className="font-medium">{product.name}</div>
+                                                        <div className="text-xs text-gray-500">SKU: {product.sku}</div>
+                                                      </button>
+                                                    ))
+                                                  })()}
+                                                </div>
+                                              </div>
                                               {combinedFilter.productName && (
                                                 <button
                                                   onClick={() => {
@@ -1835,9 +2022,9 @@ export default function SalesPage() {
                                                   <X className="w-3 h-3" />
                                                   Limpiar
                                                 </button>
-        )}
-      </div>
-    </div>
+                                              )}
+                                            </div>
+                                          </div>
                                         </>
                                       )}
                                     </div>
@@ -2198,9 +2385,9 @@ export default function SalesPage() {
                                   }, {} as Record<string, typeof productSales[0]>))
                                   
                                   if (combinedFilter.productName && combinedFilter.productName.trim()) {
-                                    const searchTerm = combinedFilter.productName.toLowerCase().trim()
+                                    const selectedProductName = combinedFilter.productName.trim()
                                     filteredCombinedSalesForPl = filteredCombinedSalesForPl.filter(sale => {
-                                      return sale.product_name.toLowerCase().includes(searchTerm)
+                                      return sale.product_name === selectedProductName
                                     })
                                   }
                                   if (combinedFilter.categories.length > 0) {
@@ -2391,9 +2578,9 @@ export default function SalesPage() {
                         
                         // Filtro por nombre de producto
                         if (monthFilter.productName && monthFilter.productName.trim()) {
-                          const searchTerm = monthFilter.productName.toLowerCase().trim()
+                          const selectedProductName = monthFilter.productName.trim()
                           filteredMonthSales = filteredMonthSales.filter(sale => {
-                            return sale.product_name.toLowerCase().includes(searchTerm)
+                            return sale.product_name === selectedProductName
                           })
                         }
                         
@@ -2512,49 +2699,102 @@ export default function SalesPage() {
                                               setProductFilterOpen(prev => ({ ...prev, [monthKey]: false }))
                                             }}
                                           />
-                                          <div className="fixed bg-white border border-gray-300 rounded-lg shadow-xl z-[100] p-3 min-w-[250px] max-w-[90vw]" style={{
+                                          <div className="fixed bg-white border border-gray-300 rounded-lg shadow-xl z-[100] p-3 min-w-[400px] max-w-[90vw]" style={{
                                             top: '50%',
                                             left: '50%',
                                             transform: 'translate(-50%, -50%)'
                                           }}>
-                                          <div className="space-y-2">
-                                            <label className="text-xs font-semibold block text-gray-700">Buscar producto:</label>
-                                            <input
-                                              type="text"
-                                              value={monthFilters[monthKey]?.productName || ''}
-                                              onChange={(e) => {
-                                                const currentFilter = monthFilters[monthKey] || { categories: [], types: [], productName: '' }
-                                                setMonthFilters(prev => ({
-                                                  ...prev,
-                                                  [monthKey]: {
-                                                    ...currentFilter,
-                                                    productName: e.target.value
-                                                  }
-                                                }))
-                                              }}
-                                              placeholder="Escribe el nombre..."
-                                              className="w-full text-xs px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                              autoFocus
-                                            />
-                                            {monthFilters[monthKey]?.productName && (
-                                              <button
-                                                onClick={() => {
-                                                  const currentFilter = monthFilters[monthKey] || { categories: [], types: [], productName: '' }
-                                                  setMonthFilters(prev => ({
-                                                    ...prev,
-                                                    [monthKey]: {
-                                                      ...currentFilter,
-                                                      productName: ''
+                                            <div className="space-y-2">
+                                              <label className="text-xs font-semibold block text-gray-700">Seleccionar producto:</label>
+                                              <div className="max-h-[300px] overflow-y-auto border border-gray-300 rounded">
+                                                <input
+                                                  type="text"
+                                                  value={monthFilters[monthKey]?.productName || ''}
+                                                  onChange={(e) => {
+                                                    const currentFilter = monthFilters[monthKey] || { categories: [], types: [], productName: '' }
+                                                    setMonthFilters(prev => ({
+                                                      ...prev,
+                                                      [monthKey]: {
+                                                        ...currentFilter,
+                                                        productName: e.target.value
+                                                      }
+                                                    }))
+                                                  }}
+                                                  placeholder="Escribe para buscar..."
+                                                  className="sticky top-0 w-full text-sm px-3 py-2 border-b border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white z-10"
+                                                  autoFocus
+                                                />
+                                                <div className="p-1">
+                                                  {(() => {
+                                                    const searchTerm = (monthFilters[monthKey]?.productName || '').toLowerCase().trim()
+                                                    const monthSales = monthData.sales
+                                                    const allProducts = Array.from(new Set(monthSales.map(sale => sale.product_id)))
+                                                      .map(productId => {
+                                                        const sale = monthSales.find(s => s.product_id === productId)
+                                                        return sale ? { id: productId, name: sale.product_name, sku: sale.product_sku } : null
+                                                      })
+                                                      .filter((p): p is { id: string; name: string; sku: string } => p !== null)
+                                                      .sort((a, b) => a.name.localeCompare(b.name))
+                                                    
+                                                    const filteredProducts = searchTerm === '' 
+                                                      ? allProducts
+                                                      : allProducts.filter(product => 
+                                                          product.name.toLowerCase().includes(searchTerm) ||
+                                                          product.sku.toLowerCase().includes(searchTerm)
+                                                        )
+                                                    
+                                                    if (filteredProducts.length === 0) {
+                                                      return (
+                                                        <div className="px-3 py-2 text-xs text-gray-500 text-center">
+                                                          No se encontraron productos
+                                                        </div>
+                                                      )
                                                     }
-                                                  }))
-                                                }}
-                                                className="w-full text-xs px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 transition-colors flex items-center justify-center gap-1"
-                                              >
-                                                <X className="w-3 h-3" />
-                                                Limpiar
-                                              </button>
-                                            )}
-                                          </div>
+                                                    
+                                                    return filteredProducts.map(product => (
+                                                      <button
+                                                        key={product.id}
+                                                        onClick={() => {
+                                                          const currentFilter = monthFilters[monthKey] || { categories: [], types: [], productName: '' }
+                                                          setMonthFilters(prev => ({
+                                                            ...prev,
+                                                            [monthKey]: {
+                                                              ...currentFilter,
+                                                              productName: product.name
+                                                            }
+                                                          }))
+                                                          setProductFilterOpen(prev => ({ ...prev, [monthKey]: false }))
+                                                        }}
+                                                        className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded transition-colors ${
+                                                          monthFilters[monthKey]?.productName === product.name ? 'bg-blue-100 font-medium' : ''
+                                                        }`}
+                                                      >
+                                                        <div className="font-medium">{product.name}</div>
+                                                        <div className="text-xs text-gray-500">SKU: {product.sku}</div>
+                                                      </button>
+                                                    ))
+                                                  })()}
+                                                </div>
+                                              </div>
+                                              {monthFilters[monthKey]?.productName && (
+                                                <button
+                                                  onClick={() => {
+                                                    const currentFilter = monthFilters[monthKey] || { categories: [], types: [], productName: '' }
+                                                    setMonthFilters(prev => ({
+                                                      ...prev,
+                                                      [monthKey]: {
+                                                        ...currentFilter,
+                                                        productName: ''
+                                                      }
+                                                    }))
+                                                  }}
+                                                  className="w-full text-xs px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 transition-colors flex items-center justify-center gap-1"
+                                                >
+                                                  <X className="w-3 h-3" />
+                                                  Limpiar
+                                                </button>
+                                              )}
+                                            </div>
                                           </div>
                                         </>
                                       )}
@@ -2692,9 +2932,9 @@ export default function SalesPage() {
                                   
                                   // Filtro por nombre de producto
                                   if (monthFilter.productName && monthFilter.productName.trim()) {
-                                    const searchTerm = monthFilter.productName.toLowerCase().trim()
+                                    const selectedProductName = monthFilter.productName.trim()
                                     filteredMonthSales = filteredMonthSales.filter(sale => {
-                                      return sale.product_name.toLowerCase().includes(searchTerm)
+                                      return sale.product_name === selectedProductName
                                     })
                                   }
                                   
@@ -2897,9 +3137,9 @@ export default function SalesPage() {
                                       
                                       // Filtro por nombre de producto
                                       if (monthFilter.productName && monthFilter.productName.trim()) {
-                                        const searchTerm = monthFilter.productName.toLowerCase().trim()
+                                        const selectedProductName = monthFilter.productName.trim()
                                         filteredMonthSales = filteredMonthSales.filter(sale => {
-                                          return sale.product_name.toLowerCase().includes(searchTerm)
+                                          return sale.product_name === selectedProductName
                                         })
                                       }
                                       
@@ -2997,9 +3237,9 @@ export default function SalesPage() {
                                     
                                     // Filtro por nombre de producto
                                     if (monthFilter.productName && monthFilter.productName.trim()) {
-                                      const searchTerm = monthFilter.productName.toLowerCase().trim()
+                                      const selectedProductName = monthFilter.productName.trim()
                                       filteredMonthSales = filteredMonthSales.filter(sale => {
-                                        return sale.product_name.toLowerCase().includes(searchTerm)
+                                        return sale.product_name === selectedProductName
                                       })
                                     }
                                     
