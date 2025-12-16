@@ -8,7 +8,7 @@ import Link from 'next/link'
 import { Navbar } from '@/components/Navbar'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Upload, FileSpreadsheet, Save, BarChart3, TrendingUp, Package, AlertCircle, ChevronDown, ChevronRight, Filter, X, Calculator, Trash2, AlertTriangle, Edit2, Calendar, ChevronLeft } from 'lucide-react'
+import { Upload, FileSpreadsheet, Save, BarChart3, TrendingUp, Package, AlertCircle, ChevronDown, ChevronRight, Filter, X, Calculator, Trash2, AlertTriangle, Edit2, Calendar, ChevronLeft, FlaskConical } from 'lucide-react'
 import { CategoryBadge } from '@/components/CategoryBadge'
 import { TypeBadge } from '@/components/TypeBadge'
 import { formatCurrency, formatPercentage, computePricing } from '@/lib/compute'
@@ -145,38 +145,176 @@ export default function SalesPage() {
     }
   }, [searchParams])
   
-  // Estados para Dashboard
+  // Estados para Dashboard - VERSIÓN SIMPLIFICADA
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth())
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
-  const [dailySales, setDailySales] = useState<Array<{
-    sale_date: string
-    quantity: number
+  const [ventasDelDia, setVentasDelDia] = useState<Array<{
+    test: string
     amount: number
+    company: string
+    fecha: string
   }>>([])
-  const [last10Sales, setLast10Sales] = useState<Array<{
-    id: string
-    sale_date: string
-    quantity: number
+  const [ultimas10Ventas, setUltimas10Ventas] = useState<Array<{
+    test: string
     amount: number
-    country_code: CountryCode
-    product_id: string | null
-    description: string | null
-    product_name?: string
-    product_sku?: string
+    company: string
+    fecha: string
   }>>([])
-  const [selectedDateSales, setSelectedDateSales] = useState<Array<{
-    id: string
-    sale_date: string
-    quantity: number
-    amount: number
-    country_code: CountryCode
-    product_id: string | null
-    description: string | null
-    product_name?: string
-    product_sku?: string
-  }>>([])
-  const [loadingDailySales, setLoadingDailySales] = useState(false)
+  const [ventasDelMes, setVentasDelMes] = useState<Record<string, number>>({})
+  const [loadingVentas, setLoadingVentas] = useState(false)
+  const [selectedCompanyFilter, setSelectedCompanyFilter] = useState<string>('all')
+  
+  // Cargar ventas del mes para el calendario
+  useEffect(() => {
+    if (activeTab !== 'dashboard') return
+    
+    const loadVentasDelMes = async () => {
+      try {
+        const supabaseClient = supabase as any
+        
+        // Obtener todas las ventas y filtrar manualmente
+        const { data, error } = await supabaseClient
+          .from('ventas')
+          .select('fecha, amount')
+        
+        if (error) {
+          console.error('Error cargando ventas del mes:', error)
+          return
+        }
+        
+        // Agrupar por fecha, normalizando el formato
+        const ventasPorFecha: Record<string, number> = {}
+        if (data) {
+          data.forEach((venta: any) => {
+            let fecha = venta.fecha
+            
+            // Normalizar formato de fecha
+            if (typeof fecha === 'string') {
+              fecha = fecha.split('T')[0] // Quitar la parte de tiempo si existe
+            } else if (fecha instanceof Date) {
+              const year = fecha.getFullYear()
+              const month = String(fecha.getMonth() + 1).padStart(2, '0')
+              const day = String(fecha.getDate()).padStart(2, '0')
+              fecha = `${year}-${month}-${day}`
+            }
+            
+            // Filtrar solo las del mes actual
+            const fechaObj = new Date(fecha)
+            if (fechaObj.getMonth() === currentMonth && fechaObj.getFullYear() === currentYear) {
+              if (!ventasPorFecha[fecha]) {
+                ventasPorFecha[fecha] = 0
+              }
+              ventasPorFecha[fecha] += parseFloat(venta.amount) || 0
+            }
+          })
+        }
+        
+        console.log('📅 Ventas del mes:', ventasPorFecha)
+        setVentasDelMes(ventasPorFecha)
+      } catch (error) {
+        console.error('Error cargando ventas del mes:', error)
+      }
+    }
+    
+    loadVentasDelMes()
+  }, [activeTab, currentMonth, currentYear])
+  
+  // Cargar últimas 10 ventas
+  useEffect(() => {
+    if (activeTab !== 'dashboard') return
+    
+    const loadUltimas10Ventas = async () => {
+      try {
+        const supabaseClient = supabase as any
+        const { data, error } = await supabaseClient
+          .from('ventas')
+          .select('test, amount, company, fecha')
+          .order('created_at', { ascending: false })
+          .limit(10)
+        
+        if (error) {
+          console.error('Error cargando últimas ventas:', error)
+          return
+        }
+        
+        setUltimas10Ventas(data || [])
+      } catch (error) {
+        console.error('Error cargando últimas ventas:', error)
+      }
+    }
+    
+    loadUltimas10Ventas()
+  }, [activeTab])
+  
+  // Cargar ventas del día seleccionado
+  const loadVentasDelDia = async (date: Date) => {
+    setLoadingVentas(true)
+    setVentasDelDia([])
+    
+    try {
+      // Formatear fecha en formato YYYY-MM-DD
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      const dateStr = `${year}-${month}-${day}`
+      
+      console.log('🔍 Buscando ventas para fecha:', dateStr)
+      console.log('📅 Fecha objeto:', date)
+      
+      const supabaseClient = supabase as any
+      
+      // Primero intentar obtener todas las ventas para ver el formato
+      const { data: allData, error: allError } = await supabaseClient
+        .from('ventas')
+        .select('test, amount, company, fecha')
+        .limit(5)
+      
+      console.log('📊 Ejemplo de datos en la tabla:', allData)
+      
+      // Ahora buscar por fecha
+      const { data, error } = await supabaseClient
+        .from('ventas')
+        .select('test, amount, company, fecha')
+        .order('created_at', { ascending: false })
+      
+      if (error) {
+        console.error('❌ Error cargando ventas del día:', error)
+        setVentasDelDia([])
+        return
+      }
+      
+      console.log('📊 Todas las ventas obtenidas:', data?.length)
+      
+      // Filtrar manualmente por fecha porque puede haber problemas de formato
+      const ventasFiltradas = (data || []).filter((venta: any) => {
+        let ventaFecha = venta.fecha
+        
+        // Si la fecha viene como string, extraer solo la parte de fecha
+        if (typeof ventaFecha === 'string') {
+          ventaFecha = ventaFecha.split('T')[0] // Quitar la parte de tiempo si existe
+        } else if (ventaFecha instanceof Date) {
+          // Si es un objeto Date, convertir a string
+          const year = ventaFecha.getFullYear()
+          const month = String(ventaFecha.getMonth() + 1).padStart(2, '0')
+          const day = String(ventaFecha.getDate()).padStart(2, '0')
+          ventaFecha = `${year}-${month}-${day}`
+        }
+        
+        console.log(`🔍 Comparando: "${ventaFecha}" === "${dateStr}"`)
+        return ventaFecha === dateStr
+      })
+      
+      console.log('✅ Ventas filtradas para la fecha:', ventasFiltradas.length, ventasFiltradas)
+      
+      setVentasDelDia(ventasFiltradas)
+    } catch (error) {
+      console.error('❌ Error cargando ventas del día:', error)
+      setVentasDelDia([])
+    } finally {
+      setLoadingVentas(false)
+    }
+  }
 
   // Cerrar dropdowns al hacer click fuera
   useEffect(() => {
@@ -339,116 +477,6 @@ export default function SalesPage() {
     loadSalesData()
   }, [selectedCountry, selectedProduct, userId])
 
-  // Cargar últimas 10 ventas diarias para el Dashboard
-  useEffect(() => {
-    if (!userId || activeTab !== 'dashboard') return
-
-    const loadLast10Sales = async () => {
-      setLoadingDailySales(true)
-      try {
-        const { data, error } = await (supabase as any)
-          .from('daily_sales')
-          .select(`
-            *,
-            products(name, sku)
-          `)
-          .eq('user_id', userId)
-          .order('sale_date', { ascending: false })
-          .order('created_at', { ascending: false })
-          .limit(10)
-
-        if (error) {
-          console.error('Error cargando últimas ventas:', error)
-        } else {
-          const salesWithProductInfo = (data || []).map((sale: any) => ({
-            id: sale.id,
-            sale_date: sale.sale_date,
-            quantity: sale.quantity,
-            amount: sale.amount,
-            country_code: sale.country_code,
-            product_id: sale.product_id,
-            description: sale.description,
-            product_name: sale.products?.name || null,
-            product_sku: sale.products?.sku || null,
-          }))
-          setLast10Sales(salesWithProductInfo)
-        }
-      } catch (error) {
-        console.error('Error cargando últimas ventas:', error)
-      } finally {
-        setLoadingDailySales(false)
-      }
-    }
-
-    loadLast10Sales()
-  }, [userId, activeTab])
-
-  // Cargar ventas de una fecha específica
-  const loadSalesForDate = async (date: Date) => {
-    if (!userId) return
-
-    setLoadingDailySales(true)
-    try {
-      const dateStr = date.toISOString().split('T')[0]
-      const supabaseClient = supabase as any
-      const { data, error } = await supabaseClient
-        .from('daily_sales')
-        .select(`
-          *,
-          products(name, sku)
-        `)
-        .eq('user_id', userId)
-        .eq('sale_date', dateStr)
-        .order('created_at', { ascending: false })
-
-      if (error) {
-        console.error('Error cargando ventas de la fecha:', error)
-      } else {
-        const salesWithProductInfo = (data || []).map((sale: any) => ({
-          id: sale.id,
-          sale_date: sale.sale_date,
-          quantity: sale.quantity,
-          amount: sale.amount,
-          country_code: sale.country_code,
-          product_id: sale.product_id,
-          description: sale.description,
-          product_name: sale.products?.name || null,
-          product_sku: sale.products?.sku || null,
-        }))
-        setSelectedDateSales(salesWithProductInfo)
-      }
-    } catch (error) {
-      console.error('Error cargando ventas de la fecha:', error)
-    } finally {
-      setLoadingDailySales(false)
-    }
-  }
-
-  // Cargar todas las ventas diarias para el calendario
-  useEffect(() => {
-    if (!userId || activeTab !== 'dashboard') return
-
-    const loadAllDailySales = async () => {
-      try {
-        const { data, error } = await (supabase as any)
-          .from('daily_sales')
-          .select('sale_date, quantity, amount')
-          .eq('user_id', userId)
-          .gte('sale_date', `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`)
-          .lte('sale_date', `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-31`)
-
-        if (error) {
-          console.error('Error cargando ventas diarias:', error)
-        } else {
-          setDailySales((data as any) || [])
-        }
-      } catch (error) {
-        console.error('Error cargando ventas diarias:', error)
-      }
-    }
-
-    loadAllDailySales()
-  }, [userId, currentMonth, currentYear, activeTab])
 
   /**
    * Parsea el Excel y extrae datos de ventas
@@ -1352,7 +1380,8 @@ export default function SalesPage() {
   const handleDateClick = (day: number) => {
     const date = new Date(currentYear, currentMonth, day)
     setSelectedDate(date)
-    loadSalesForDate(date)
+    setSelectedCompanyFilter('all')
+    loadVentasDelDia(date)
   }
 
   const goToPreviousMonth = () => {
@@ -1373,14 +1402,16 @@ export default function SalesPage() {
     }
   }
 
-  const getSalesForDay = (day: number) => {
-    const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    return dailySales.filter(sale => sale.sale_date === dateStr)
-  }
-
   const getTotalSalesForDay = (day: number) => {
-    const sales = getSalesForDay(day)
-    return sales.reduce((sum, sale) => sum + (sale.amount || 0), 0)
+    const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    return ventasDelMes[dateStr] || 0
+  }
+  
+  const getCantidadVentasDelDia = (day: number) => {
+    const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    // Contar cuántas ventas hay para este día (necesitamos hacer una consulta o mantener un contador)
+    // Por ahora, solo mostramos el total
+    return 0
   }
 
   return (
@@ -1571,21 +1602,21 @@ export default function SalesPage() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex items-center gap-4">
-                <label className="text-sm font-medium">País:</label>
-                <Select value={selectedCountry} onValueChange={(value) => setSelectedCountry(value as CountryCode | 'all')}>
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos los países</SelectItem>
-                    {Object.entries(COUNTRY_NAMES).map(([code, name]) => (
-                      <SelectItem key={code} value={code}>
-                        {COUNTRY_FLAGS[code as CountryCode]} {name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-medium">País:</label>
+              <Select value={selectedCountry} onValueChange={(value) => setSelectedCountry(value as CountryCode | 'all')}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los países</SelectItem>
+                  {Object.entries(COUNTRY_NAMES).map(([code, name]) => (
+                    <SelectItem key={code} value={code}>
+                      {COUNTRY_FLAGS[code as CountryCode]} {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               </div>
               
               <div className="flex items-center gap-4">
@@ -1718,7 +1749,7 @@ export default function SalesPage() {
                   </Button>
                 )}
               </div>
-            </div>
+      </div>
           </CardContent>
         </Card>
 
@@ -1949,19 +1980,19 @@ export default function SalesPage() {
                                             <div className="space-y-2">
                                               <label className="text-xs font-semibold block text-gray-700">Seleccionar producto:</label>
                                               <div className="max-h-[300px] overflow-y-auto border border-gray-300 rounded">
-                                                <input
-                                                  type="text"
-                                                  value={combinedFilter.productName || ''}
-                                                  onChange={(e) => {
-                                                    setCombinedFilter(prev => ({
-                                                      ...prev,
-                                                      productName: e.target.value
-                                                    }))
-                                                  }}
+                                              <input
+                                                type="text"
+                                                value={combinedFilter.productName || ''}
+                                                onChange={(e) => {
+                                                  setCombinedFilter(prev => ({
+                                                    ...prev,
+                                                    productName: e.target.value
+                                                  }))
+                                                }}
                                                   placeholder="Escribe para buscar..."
                                                   className="sticky top-0 w-full text-sm px-3 py-2 border-b border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white z-10"
-                                                  autoFocus
-                                                />
+                                                autoFocus
+                                              />
                                                 <div className="p-1">
                                                   {(() => {
                                                     const searchTerm = (combinedFilter.productName || '').toLowerCase().trim()
@@ -2022,9 +2053,9 @@ export default function SalesPage() {
                                                   <X className="w-3 h-3" />
                                                   Limpiar
                                                 </button>
-                                              )}
-                                            </div>
-                                          </div>
+        )}
+      </div>
+    </div>
                                         </>
                                       )}
                                     </div>
@@ -2704,26 +2735,26 @@ export default function SalesPage() {
                                             left: '50%',
                                             transform: 'translate(-50%, -50%)'
                                           }}>
-                                            <div className="space-y-2">
+                                          <div className="space-y-2">
                                               <label className="text-xs font-semibold block text-gray-700">Seleccionar producto:</label>
                                               <div className="max-h-[300px] overflow-y-auto border border-gray-300 rounded">
-                                                <input
-                                                  type="text"
-                                                  value={monthFilters[monthKey]?.productName || ''}
-                                                  onChange={(e) => {
-                                                    const currentFilter = monthFilters[monthKey] || { categories: [], types: [], productName: '' }
-                                                    setMonthFilters(prev => ({
-                                                      ...prev,
-                                                      [monthKey]: {
-                                                        ...currentFilter,
-                                                        productName: e.target.value
-                                                      }
-                                                    }))
-                                                  }}
+                                            <input
+                                              type="text"
+                                              value={monthFilters[monthKey]?.productName || ''}
+                                              onChange={(e) => {
+                                                const currentFilter = monthFilters[monthKey] || { categories: [], types: [], productName: '' }
+                                                setMonthFilters(prev => ({
+                                                  ...prev,
+                                                  [monthKey]: {
+                                                    ...currentFilter,
+                                                    productName: e.target.value
+                                                  }
+                                                }))
+                                              }}
                                                   placeholder="Escribe para buscar..."
                                                   className="sticky top-0 w-full text-sm px-3 py-2 border-b border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white z-10"
-                                                  autoFocus
-                                                />
+                                              autoFocus
+                                            />
                                                 <div className="p-1">
                                                   {(() => {
                                                     const searchTerm = (monthFilters[monthKey]?.productName || '').toLowerCase().trim()
@@ -2776,25 +2807,25 @@ export default function SalesPage() {
                                                   })()}
                                                 </div>
                                               </div>
-                                              {monthFilters[monthKey]?.productName && (
-                                                <button
-                                                  onClick={() => {
-                                                    const currentFilter = monthFilters[monthKey] || { categories: [], types: [], productName: '' }
-                                                    setMonthFilters(prev => ({
-                                                      ...prev,
-                                                      [monthKey]: {
-                                                        ...currentFilter,
-                                                        productName: ''
-                                                      }
-                                                    }))
-                                                  }}
-                                                  className="w-full text-xs px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 transition-colors flex items-center justify-center gap-1"
-                                                >
-                                                  <X className="w-3 h-3" />
-                                                  Limpiar
-                                                </button>
-                                              )}
-                                            </div>
+                                            {monthFilters[monthKey]?.productName && (
+                                              <button
+                                                onClick={() => {
+                                                  const currentFilter = monthFilters[monthKey] || { categories: [], types: [], productName: '' }
+                                                  setMonthFilters(prev => ({
+                                                    ...prev,
+                                                    [monthKey]: {
+                                                      ...currentFilter,
+                                                      productName: ''
+                                                    }
+                                                  }))
+                                                }}
+                                                className="w-full text-xs px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 transition-colors flex items-center justify-center gap-1"
+                                              >
+                                                <X className="w-3 h-3" />
+                                                Limpiar
+                                              </button>
+                                            )}
+                                          </div>
                                           </div>
                                         </>
                                       )}
@@ -3785,8 +3816,9 @@ export default function SalesPage() {
                       {/* Días del mes */}
                       {Array.from({ length: getDaysInMonth(currentMonth, currentYear) }).map((_, idx) => {
                         const day = idx + 1
-                        const sales = getSalesForDay(day)
                         const totalSales = getTotalSalesForDay(day)
+                        const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+                        const hasSales = totalSales > 0
                         const isToday = new Date().getDate() === day &&
                           new Date().getMonth() === currentMonth &&
                           new Date().getFullYear() === currentYear
@@ -3806,21 +3838,16 @@ export default function SalesPage() {
                                 ? 'bg-blue-600 text-white shadow-lg scale-105'
                                 : isToday
                                 ? 'bg-blue-100 text-blue-700 border-2 border-blue-400'
-                                : sales.length > 0
+                                : hasSales
                                 ? 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
                                 : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
                               }
                             `}
                           >
                             <span className="text-sm font-medium">{day}</span>
-                            {sales.length > 0 && (
+                            {hasSales && (
                               <span className="text-xs font-semibold">
                                 {formatCurrency(totalSales)}
-                              </span>
-                            )}
-                            {sales.length > 0 && (
-                              <span className="text-[10px] opacity-75">
-                                {sales.length} {sales.length === 1 ? 'venta' : 'ventas'}
                               </span>
                             )}
                           </button>
@@ -3861,68 +3888,134 @@ export default function SalesPage() {
                       <p>Selecciona una fecha en el calendario</p>
                       <p className="text-sm mt-1">para ver las ventas de ese día</p>
                     </div>
-                  ) : loadingDailySales ? (
-                    <div className="text-center py-8 text-gray-500">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-                      <p>Cargando ventas...</p>
-                    </div>
-                  ) : selectedDateSales.length > 0 ? (
-                    <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
-                      <table className="w-full text-sm">
-                        <thead className="sticky top-0 bg-white">
-                          <tr className="bg-gray-100 border-b border-gray-200">
-                            <th className="text-left py-2 px-3 font-semibold text-gray-700">Producto</th>
-                            <th className="text-left py-2 px-3 font-semibold text-gray-700">País</th>
-                            <th className="text-right py-2 px-3 font-semibold text-gray-700">Cantidad</th>
-                            <th className="text-right py-2 px-3 font-semibold text-gray-700">Monto</th>
-                            <th className="text-left py-2 px-3 font-semibold text-gray-700">Descripción</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {selectedDateSales.map((sale) => (
-                            <tr key={sale.id} className="border-b border-gray-100 hover:bg-gray-50">
-                              <td className="py-2 px-3">
-                                <div>
-                                  <div className="font-medium">{sale.product_name || 'Producto sin nombre'}</div>
-                                  {sale.product_sku && (
-                                    <div className="text-xs text-gray-500">{sale.product_sku}</div>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="py-2 px-3">
-                                <span className="flex items-center gap-1">
-                                  {COUNTRY_FLAGS[sale.country_code]} {COUNTRY_NAMES[sale.country_code]}
-                                </span>
-                              </td>
-                              <td className="py-2 px-3 text-right">{sale.quantity}</td>
-                              <td className="py-2 px-3 text-right font-semibold text-green-600">
-                                {formatCurrency(sale.amount)}
-                              </td>
-                              <td className="py-2 px-3 text-gray-500 text-xs">
-                                {sale.description || '-'}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot className="sticky bottom-0 bg-white">
-                          <tr className="bg-gray-100 font-semibold border-t-2 border-gray-300">
-                            <td colSpan={2} className="py-2 px-3">Total</td>
-                            <td className="py-2 px-3 text-right">
-                              {selectedDateSales.reduce((sum, s) => sum + s.quantity, 0)}
-                            </td>
-                            <td className="py-2 px-3 text-right text-green-600">
-                              {formatCurrency(selectedDateSales.reduce((sum, s) => sum + s.amount, 0))}
-                            </td>
-                            <td className="py-2 px-3"></td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
                   ) : (
-                    <div className="text-center py-8 text-gray-500">
-                      <Calendar className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                      <p>No hay ventas registradas para esta fecha</p>
-                    </div>
+                    <>
+                      {loadingVentas ? (
+                        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                          <div className="flex items-center gap-2 text-blue-700">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                            <span className="text-sm">Cargando ventas...</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mb-4 p-3 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <FlaskConical className="w-4 h-4 text-purple-600" />
+                              <h4 className="text-sm font-semibold text-purple-900">
+                                Ventas del Día
+                              </h4>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="text-xs text-purple-700">
+                                <span className="font-semibold">Total:</span>{' '}
+                                <span className="font-bold text-purple-900">
+                                  {(() => {
+                                    const filtered = selectedCompanyFilter === 'all' 
+                                      ? ventasDelDia 
+                                      : ventasDelDia.filter(item => item.company === selectedCompanyFilter)
+                                    return filtered.length
+                                  })()}
+                                </span>
+                                {' '}ventas
+                              </div>
+                              {ventasDelDia.length > 0 && (
+                                <Select 
+                                  value={selectedCompanyFilter} 
+                                  onValueChange={setSelectedCompanyFilter}
+                                >
+                                  <SelectTrigger className="h-7 text-xs w-[180px]">
+                                    <SelectValue placeholder="Filtrar por compañía" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="all">Todas las compañías</SelectItem>
+                                    {Array.from(new Set(ventasDelDia.map(item => item.company).filter(Boolean)))
+                                      .sort()
+                                      .map(company => (
+                                        <SelectItem key={company} value={company}>
+                                          {company}
+                                        </SelectItem>
+                                      ))
+                                    }
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            </div>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="border-b border-purple-300">
+                                  <th className="text-left py-1.5 px-2 font-semibold text-purple-900">Test</th>
+                                  <th className="text-right py-1.5 px-2 font-semibold text-purple-900">Costo</th>
+                                  <th className="text-left py-1.5 px-2 font-semibold text-purple-900">Compañía</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {ventasDelDia.length === 0 ? (
+                                  <tr>
+                                    <td colSpan={3} className="py-4 text-center text-gray-500">
+                                      No hay ventas registradas para esta fecha
+                                    </td>
+                                  </tr>
+                                ) : (
+                                  (() => {
+                                    const filtered = selectedCompanyFilter === 'all' 
+                                      ? ventasDelDia 
+                                      : ventasDelDia.filter(item => item.company === selectedCompanyFilter)
+                                    
+                                    if (filtered.length === 0) {
+                                      return (
+                                        <tr>
+                                          <td colSpan={3} className="py-4 text-center text-gray-500">
+                                            No hay ventas para la compañía seleccionada
+                                          </td>
+                                        </tr>
+                                      )
+                                    }
+                                    
+                                    return filtered.map((venta, index) => (
+                                      <tr key={index} className="border-b border-purple-100 hover:bg-purple-50/50">
+                                        <td className="py-1.5 px-2 text-gray-900">
+                                          {venta.test || 'N/A'}
+                                        </td>
+                                        <td className="py-1.5 px-2 text-right text-green-600 font-semibold">
+                                          {formatCurrency(parseFloat(venta.amount.toString()) || 0)}
+                                        </td>
+                                        <td className="py-1.5 px-2 text-gray-900">
+                                          {venta.company || 'N/A'}
+                                        </td>
+                                      </tr>
+                                    ))
+                                  })()
+                                )}
+                              </tbody>
+                              {(() => {
+                                const filtered = selectedCompanyFilter === 'all' 
+                                  ? ventasDelDia 
+                                  : ventasDelDia.filter(item => item.company === selectedCompanyFilter)
+                                
+                                if (filtered.length > 0) {
+                                  const total = filtered.reduce((sum, item) => sum + (parseFloat(item.amount.toString()) || 0), 0)
+                                  return (
+                                    <tfoot>
+                                      <tr className="border-t-2 border-purple-300 bg-purple-100/50">
+                                        <td className="py-1.5 px-2 font-semibold text-purple-900">Total</td>
+                                        <td className="py-1.5 px-2 text-right font-bold text-green-600">
+                                          {formatCurrency(total)}
+                                        </td>
+                                        <td className="py-1.5 px-2"></td>
+                                      </tr>
+                                    </tfoot>
+                                  )
+                                }
+                                return null
+                              })()}
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                 </CardContent>
               </Card>
@@ -3940,53 +4033,39 @@ export default function SalesPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {loadingDailySales ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-                    <p>Cargando ventas...</p>
-                  </div>
-                ) : last10Sales.length > 0 ? (
+                {ultimas10Ventas.length > 0 ? (
                   <div className="space-y-3">
-                    {last10Sales.map((sale) => (
+                    {ultimas10Ventas.map((venta, index) => (
                       <div
-                        key={sale.id}
+                        key={index}
                         className="p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-300 transition-colors"
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                               <span className="text-sm font-semibold text-gray-900">
-                                {sale.product_name || 'Producto sin nombre'}
+                                {venta.test || 'Test sin nombre'}
                               </span>
-                              {sale.product_sku && (
-                                <span className="text-xs text-gray-500">
-                                  ({sale.product_sku})
-                                </span>
-                              )}
                             </div>
                             <div className="flex items-center gap-3 text-xs text-gray-600">
                               <span className="flex items-center gap-1">
                                 <Calendar className="w-3 h-3" />
-                                {new Date(sale.sale_date).toLocaleDateString('es-ES', {
+                                {new Date(venta.fecha).toLocaleDateString('es-ES', {
                                   day: '2-digit',
                                   month: '2-digit',
                                   year: 'numeric'
                                 })}
                               </span>
-                              <span className="flex items-center gap-1">
-                                {COUNTRY_FLAGS[sale.country_code]} {COUNTRY_NAMES[sale.country_code]}
-                              </span>
-                              <span className="text-gray-500">
-                                Cantidad: {sale.quantity}
-                              </span>
+                              {venta.company && (
+                                <span className="text-gray-500">
+                                  {venta.company}
+                                </span>
+                              )}
                             </div>
-                            {sale.description && (
-                              <p className="text-xs text-gray-500 mt-1">{sale.description}</p>
-                            )}
                           </div>
                           <div className="text-right">
                             <div className="text-lg font-bold text-green-600">
-                              {formatCurrency(sale.amount)}
+                              {formatCurrency(parseFloat(venta.amount.toString()) || 0)}
                             </div>
                           </div>
                         </div>
