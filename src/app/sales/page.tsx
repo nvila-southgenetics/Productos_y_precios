@@ -8,8 +8,6 @@ import Link from 'next/link'
 import { Navbar } from '@/components/Navbar'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Upload, FileSpreadsheet, Save, BarChart3, TrendingUp, Package, AlertCircle, ChevronDown, ChevronRight, Filter, X, Calculator, Trash2, AlertTriangle, Edit2, Calendar, ChevronLeft, FlaskConical } from 'lucide-react'
 import { CategoryBadge } from '@/components/CategoryBadge'
 import { TypeBadge } from '@/components/TypeBadge'
@@ -151,33 +149,175 @@ export default function SalesPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth())
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
-  const [webhookResponse, setWebhookResponse] = useState<any>(null)
-  const [loadingWebhook, setLoadingWebhook] = useState(false)
-  const [filterNombreTest, setFilterNombreTest] = useState<string>('')
-  const [filterCompanyId, setFilterCompanyId] = useState<string>('')
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false)
+  const [selectedDates, setSelectedDates] = useState<Date[]>([])
+  const [ventasDelDia, setVentasDelDia] = useState<Array<{
+    test: string
+    amount: number
+    company: string
+    fecha: string
+  }>>([])
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
-  // Datos estáticos para el frontend (sin consultas a base de datos)
-  const ventasDelDia: Array<{
+  const [ultimas10Ventas, setUltimas10Ventas] = useState<Array<{
     test: string
     amount: number
     company: string
     fecha: string
-  }> = []
-  
-  const ultimas10Ventas: Array<{
-    test: string
-    amount: number
-    company: string
-    fecha: string
-  }> = []
-  
-  const ventasDelMes: Record<string, number> = {}
-  const loadingVentas = false
+  }>>([])
+  const [ventasDelMes, setVentasDelMes] = useState<Record<string, number>>({})
+  const [loadingVentas, setLoadingVentas] = useState(false)
   const [selectedCompanyFilter, setSelectedCompanyFilter] = useState<string>('all')
   
-  // Dashboard solo frontend - sin carga de datos de base de datos
+  // Cargar ventas del mes para el calendario
+  useEffect(() => {
+    if (activeTab !== 'dashboard') return
+    
+    const loadVentasDelMes = async () => {
+      try {
+        const supabaseClient = supabase as any
+        
+        // Obtener todas las ventas y filtrar manualmente
+        const { data, error } = await supabaseClient
+          .from('ventas')
+          .select('fecha, amount')
+        
+        if (error) {
+          console.error('Error cargando ventas del mes:', error)
+          return
+        }
+        
+        // Agrupar por fecha, normalizando el formato
+        const ventasPorFecha: Record<string, number> = {}
+        if (data) {
+          data.forEach((venta: any) => {
+            let fecha = venta.fecha
+            
+            // Normalizar formato de fecha
+            if (typeof fecha === 'string') {
+              fecha = fecha.split('T')[0] // Quitar la parte de tiempo si existe
+            } else if (fecha instanceof Date) {
+              const year = fecha.getFullYear()
+              const month = String(fecha.getMonth() + 1).padStart(2, '0')
+              const day = String(fecha.getDate()).padStart(2, '0')
+              fecha = `${year}-${month}-${day}`
+            }
+            
+            // Filtrar solo las del mes actual
+            const fechaObj = new Date(fecha)
+            if (fechaObj.getMonth() === currentMonth && fechaObj.getFullYear() === currentYear) {
+              if (!ventasPorFecha[fecha]) {
+                ventasPorFecha[fecha] = 0
+              }
+              ventasPorFecha[fecha] += parseFloat(venta.amount) || 0
+            }
+          })
+        }
+        
+        console.log('📅 Ventas del mes:', ventasPorFecha)
+        setVentasDelMes(ventasPorFecha)
+      } catch (error) {
+        console.error('Error cargando ventas del mes:', error)
+      }
+    }
+    
+    loadVentasDelMes()
+  }, [activeTab, currentMonth, currentYear])
   
-  // Dashboard solo frontend - función de carga eliminada
+  // Cargar últimas 10 ventas
+  useEffect(() => {
+    if (activeTab !== 'dashboard') return
+    
+    const loadUltimas10Ventas = async () => {
+      try {
+        const supabaseClient = supabase as any
+        const { data, error } = await supabaseClient
+          .from('ventas')
+          .select('test, amount, company, fecha')
+          .order('created_at', { ascending: false })
+          .limit(10)
+        
+        if (error) {
+          console.error('Error cargando últimas ventas:', error)
+          return
+        }
+        
+        setUltimas10Ventas(data || [])
+      } catch (error) {
+        console.error('Error cargando últimas ventas:', error)
+      }
+    }
+    
+    loadUltimas10Ventas()
+  }, [activeTab])
+  
+  // Cargar ventas del día seleccionado
+  const loadVentasDelDia = async (date: Date) => {
+    setLoadingVentas(true)
+    setVentasDelDia([])
+    
+    try {
+      // Formatear fecha en formato YYYY-MM-DD
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      const dateStr = `${year}-${month}-${day}`
+      
+      console.log('🔍 Buscando ventas para fecha:', dateStr)
+      console.log('📅 Fecha objeto:', date)
+      
+      const supabaseClient = supabase as any
+      
+      // Primero intentar obtener todas las ventas para ver el formato
+      const { data: allData, error: allError } = await supabaseClient
+        .from('ventas')
+        .select('test, amount, company, fecha')
+        .limit(5)
+      
+      console.log('📊 Ejemplo de datos en la tabla:', allData)
+      
+      // Ahora buscar por fecha
+      const { data, error } = await supabaseClient
+        .from('ventas')
+        .select('test, amount, company, fecha')
+        .order('created_at', { ascending: false })
+      
+      if (error) {
+        console.error('❌ Error cargando ventas del día:', error)
+        setVentasDelDia([])
+        return
+      }
+      
+      console.log('📊 Todas las ventas obtenidas:', data?.length)
+      
+      // Filtrar manualmente por fecha porque puede haber problemas de formato
+      const ventasFiltradas = (data || []).filter((venta: any) => {
+        let ventaFecha = venta.fecha
+        
+        // Si la fecha viene como string, extraer solo la parte de fecha
+        if (typeof ventaFecha === 'string') {
+          ventaFecha = ventaFecha.split('T')[0] // Quitar la parte de tiempo si existe
+        } else if (ventaFecha instanceof Date) {
+          // Si es un objeto Date, convertir a string
+          const year = ventaFecha.getFullYear()
+          const month = String(ventaFecha.getMonth() + 1).padStart(2, '0')
+          const day = String(ventaFecha.getDate()).padStart(2, '0')
+          ventaFecha = `${year}-${month}-${day}`
+        }
+        
+        console.log(`🔍 Comparando: "${ventaFecha}" === "${dateStr}"`)
+        return ventaFecha === dateStr
+      })
+      
+      console.log('✅ Ventas filtradas para la fecha:', ventasFiltradas.length, ventasFiltradas)
+      
+      setVentasDelDia(ventasFiltradas)
+    } catch (error) {
+      console.error('❌ Error cargando ventas del día:', error)
+      setVentasDelDia([])
+    } finally {
+      setLoadingVentas(false)
+    }
+  }
 
   // Cerrar dropdowns al hacer click fuera
   useEffect(() => {
@@ -1242,27 +1382,107 @@ export default function SalesPage() {
 
   const handleDateClick = async (day: number) => {
     const date = new Date(currentYear, currentMonth, day)
-    setSelectedDate(date)
-    setSelectedCompanyFilter('all')
-    setWebhookResponse(null)
-    setLoadingWebhook(true)
-    setFilterNombreTest('')
-    setFilterCompanyId('')
     
-    // Enviar webhook con la información de la fecha seleccionada
+    if (isMultiSelectMode) {
+      // Modo selección múltiple - seleccionar rango entre dos fechas
+      setSelectedDates(prev => {
+        if (prev.length === 0) {
+          // Primera fecha seleccionada
+          return [date]
+        } else if (prev.length === 1) {
+          // Segunda fecha seleccionada - seleccionar todas las fechas entre las dos
+          const firstDate = prev[0]
+          const secondDate = date
+          
+          // Determinar fecha mínima y máxima
+          const minDate = firstDate < secondDate ? firstDate : secondDate
+          const maxDate = firstDate > secondDate ? firstDate : secondDate
+          
+          // Generar todas las fechas entre minDate y maxDate (inclusive)
+          const allDates: Date[] = []
+          const current = new Date(minDate)
+          
+          while (current <= maxDate) {
+            allDates.push(new Date(current))
+            current.setDate(current.getDate() + 1)
+          }
+          
+          return allDates
+        } else {
+          // Si ya hay un rango seleccionado, empezar de nuevo con esta fecha
+          return [date]
+        }
+      })
+    } else {
+      // Modo selección simple - enviar webhook inmediatamente
+      setSelectedDate(date)
+      setSelectedCompanyFilter('all')
+      
+      // Enviar webhook con la fecha única
+      setLoadingVentas(true)
+      setVentasDelDia([])
+      
+      try {
+        const webhookUrl = 'https://n8n.srv908725.hstgr.cloud/webhook/info_de_ventas'
+        const fechaStr = date.toISOString().split('T')[0]
+        const payload = {
+          fecha_minima: fechaStr,
+          fecha_maxima: fechaStr,
+          fechas_seleccionadas: [fechaStr],
+          cantidad_fechas: 1
+        }
+        
+        const response = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload)
+        })
+        
+        const responseData = await response.json()
+        
+        // Procesar respuesta del webhook
+        if (responseData && responseData.data && Array.isArray(responseData.data)) {
+          const ventasWebhook = responseData.data.map((item: any) => ({
+            test: item.nombre_test || 'N/A',
+            amount: item.amount_total || 0,
+            company: item.company_id || 'N/A',
+            fecha: item.fecha || fechaStr
+          }))
+          setVentasDelDia(ventasWebhook)
+        } else {
+          // Si no hay datos del webhook, cargar desde la base de datos
+          await loadVentasDelDia(date)
+        }
+      } catch (error) {
+        console.error('Error enviando webhook:', error)
+        // Aún así cargar las ventas del día
+        await loadVentasDelDia(date)
+      } finally {
+        setLoadingVentas(false)
+      }
+    }
+  }
+
+  const handleSendWebhook = async () => {
+    if (selectedDates.length === 0) return
+
+    setLoadingVentas(true)
+    setVentasDelDia([])
+    
     try {
+      // Ordenar fechas y obtener mínima y máxima
+      const sortedDates = [...selectedDates].sort((a, b) => a.getTime() - b.getTime())
+      const minDate = sortedDates[0]
+      const maxDate = sortedDates[sortedDates.length - 1]
+      
       const webhookUrl = 'https://n8n.srv908725.hstgr.cloud/webhook/info_de_ventas'
       const payload = {
-        fecha: date.toISOString().split('T')[0], // Formato YYYY-MM-DD
-        dia: day,
-        mes: currentMonth + 1, // Los meses en JS son 0-indexed
-        año: currentYear,
-        fechaCompleta: date.toLocaleDateString('es-ES', {
-          weekday: 'long',
-          day: 'numeric',
-          month: 'long',
-          year: 'numeric'
-        })
+        fecha_minima: minDate.toISOString().split('T')[0], // Formato YYYY-MM-DD
+        fecha_maxima: maxDate.toISOString().split('T')[0], // Formato YYYY-MM-DD
+        fechas_seleccionadas: selectedDates.map(d => d.toISOString().split('T')[0]),
+        cantidad_fechas: selectedDates.length
       }
       
       const response = await fetch(webhookUrl, {
@@ -1273,14 +1493,57 @@ export default function SalesPage() {
         body: JSON.stringify(payload)
       })
       
-      // Obtener la respuesta del webhook
-      const responseData = await response.json()
-      setWebhookResponse(responseData)
+        const responseData = await response.json()
+        
+        // Procesar respuesta del webhook
+        if (responseData && responseData.data && Array.isArray(responseData.data)) {
+          const ventasWebhook = responseData.data.map((item: any) => ({
+            test: item.nombre_test || 'N/A',
+            amount: item.amount_total || 0,
+            company: item.company_id || 'N/A',
+            fecha: item.fecha || minDate.toISOString().split('T')[0]
+          }))
+          setVentasDelDia(ventasWebhook)
+        } else {
+          // Si no hay datos del webhook, cargar desde la base de datos
+          const allVentas: Array<{ test: string; amount: number; company: string; fecha: string }> = []
+          
+          for (const date of sortedDates) {
+            const year = date.getFullYear()
+            const month = String(date.getMonth() + 1).padStart(2, '0')
+            const day = String(date.getDate()).padStart(2, '0')
+            const dateStr = `${year}-${month}-${day}`
+            
+            const supabaseClient = supabase as any
+            const { data, error } = await supabaseClient
+              .from('ventas')
+              .select('test, amount, company, fecha')
+              .order('created_at', { ascending: false })
+            
+            if (!error && data) {
+              const ventasFiltradas = data.filter((venta: any) => {
+                let ventaFecha = venta.fecha
+                if (typeof ventaFecha === 'string') {
+                  ventaFecha = ventaFecha.split('T')[0]
+                } else if (ventaFecha instanceof Date) {
+                  const year = ventaFecha.getFullYear()
+                  const month = String(ventaFecha.getMonth() + 1).padStart(2, '0')
+                  const day = String(ventaFecha.getDate()).padStart(2, '0')
+                  ventaFecha = `${year}-${month}-${day}`
+                }
+                return ventaFecha === dateStr
+              })
+              
+              allVentas.push(...ventasFiltradas)
+            }
+          }
+          
+          setVentasDelDia(allVentas)
+        }
     } catch (error) {
       console.error('Error enviando webhook:', error)
-      setWebhookResponse({ error: 'Error al obtener respuesta del webhook' })
     } finally {
-      setLoadingWebhook(false)
+      setLoadingVentas(false)
     }
   }
 
@@ -1303,20 +1566,34 @@ export default function SalesPage() {
   }
 
   const getTotalSalesForDay = (day: number) => {
-    // Solo frontend - sin datos de base de datos
-    return 0
+    const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    return ventasDelMes[dateStr] || 0
   }
   
   const getCantidadVentasDelDia = (day: number) => {
-    // Solo frontend - sin datos de base de datos
+    const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    // Contar cuántas ventas hay para este día (necesitamos hacer una consulta o mantener un contador)
+    // Por ahora, solo mostramos el total
     return 0
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
-      <div className="container mx-auto px-4 py-4">
+      <div className="container mx-auto px-4 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <div className="mb-6">
+            <TabsList className="inline-flex h-12 items-center justify-center rounded-lg bg-gray-100 p-1 text-gray-600 w-full max-w-md">
+              <TabsTrigger value="productos" className="flex items-center gap-2 px-6 py-2 data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm">
+                <Package className="w-4 h-4" />
+                Productos
+              </TabsTrigger>
+              <TabsTrigger value="dashboard" className="flex items-center gap-2 px-6 py-2 data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm">
+                <BarChart3 className="w-4 h-4" />
+                Dashboard
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="productos" className="space-y-6">
         <Card className="mb-6">
@@ -3641,41 +3918,64 @@ export default function SalesPage() {
         </Card>
           </TabsContent>
 
-          <TabsContent value="dashboard" className="space-y-3">
+          <TabsContent value="dashboard" className="space-y-6">
             {/* Dashboard con calendario y ventas del día seleccionado */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 max-w-4xl mx-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Calendario */}
-              <Card className="max-w-full shadow-sm flex flex-col" style={{ height: '500px', maxHeight: '500px', overflow: 'hidden' }}>
-                <CardHeader className="pb-2 pt-3 px-4 flex-shrink-0">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <Calendar className="w-5 h-5 text-blue-600" />
-                    Calendario de Ventas
-                  </CardTitle>
-                  <CardDescription className="text-xs mt-1">
-                    Haz clic en una fecha para ver las ventas del día
-                  </CardDescription>
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Calendar className="w-6 h-6 text-blue-600" />
+                        Calendario de Ventas
+                      </CardTitle>
+                      <CardDescription>
+                        {isMultiSelectMode 
+                          ? 'Modo selección múltiple activo - Haz clic en varias fechas'
+                          : 'Haz clic en una fecha para ver las ventas del día'
+                        }
+                      </CardDescription>
+                    </div>
+                    <Button
+                      variant={isMultiSelectMode ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setIsMultiSelectMode(!isMultiSelectMode)
+                        if (!isMultiSelectMode) {
+                          setSelectedDates([])
+                          setSelectedDate(null)
+                        } else {
+                          setSelectedDate(null)
+                        }
+                      }}
+                      className={isMultiSelectMode ? "bg-blue-600 text-white" : ""}
+                    >
+                      {isMultiSelectMode ? "Cancelar" : "Seleccionar"}
+                    </Button>
+                  </div>
                 </CardHeader>
-                <CardContent className="pt-0 px-4 pb-4 flex-1 flex flex-col overflow-hidden">
-                  <div className="space-y-3">
+                <CardContent>
+                  <div className="space-y-4">
                     {/* Navegación del mes */}
                     <div className="flex items-center justify-between">
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={goToPreviousMonth}
-                        className="flex items-center gap-1.5 h-8 text-sm px-3"
+                        className="flex items-center gap-2"
                       >
                         <ChevronLeft className="w-4 h-4" />
                         Anterior
                       </Button>
-                      <h3 className="text-base font-semibold">
+                      <h3 className="text-lg font-semibold">
                         {monthNames[currentMonth]} {currentYear}
                       </h3>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={goToNextMonth}
-                        className="flex items-center gap-1.5 h-8 text-sm px-3"
+                        className="flex items-center gap-2"
                       >
                         Siguiente
                         <ChevronRight className="w-4 h-4" />
@@ -3688,7 +3988,7 @@ export default function SalesPage() {
                       {dayNames.map(day => (
                         <div
                           key={day}
-                          className="text-center text-xs font-semibold text-gray-600 py-1.5"
+                          className="text-center text-xs font-semibold text-gray-600 py-2"
                         >
                           {day}
     </div>
@@ -3708,10 +4008,15 @@ export default function SalesPage() {
                         const isToday = new Date().getDate() === day &&
                           new Date().getMonth() === currentMonth &&
                           new Date().getFullYear() === currentYear
-                        const isSelected = selectedDate &&
-                          selectedDate.getDate() === day &&
-                          selectedDate.getMonth() === currentMonth &&
-                          selectedDate.getFullYear() === currentYear
+                        const dateForDay = new Date(currentYear, currentMonth, day)
+                        const dateStrForDay = dateForDay.toISOString().split('T')[0]
+                        
+                        const isSelected = isMultiSelectMode
+                          ? selectedDates.some(d => d.toISOString().split('T')[0] === dateStrForDay)
+                          : selectedDate &&
+                            selectedDate.getDate() === day &&
+                            selectedDate.getMonth() === currentMonth &&
+                            selectedDate.getFullYear() === currentYear
 
                         return (
                           <button
@@ -3721,7 +4026,9 @@ export default function SalesPage() {
                               aspect-square rounded-lg transition-all duration-200
                               flex flex-col items-center justify-center p-1
                               ${isSelected
-                                ? 'bg-blue-600 text-white shadow-lg scale-105'
+                                ? isMultiSelectMode
+                                  ? 'bg-purple-600 text-white shadow-lg scale-105 border-2 border-purple-400'
+                                  : 'bg-blue-600 text-white shadow-lg scale-105'
                                 : isToday
                                 ? 'bg-blue-100 text-blue-700 border-2 border-blue-400'
                                 : hasSales
@@ -3730,9 +4037,9 @@ export default function SalesPage() {
                               }
                             `}
                           >
-                            <span className="text-xs font-medium">{day}</span>
+                            <span className="text-sm font-medium">{day}</span>
                             {hasSales && (
-                              <span className="text-[10px] font-semibold leading-tight">
+                              <span className="text-xs font-semibold">
                                 {formatCurrency(totalSales)}
                               </span>
                             )}
@@ -3740,240 +4047,281 @@ export default function SalesPage() {
                         )
                       })}
                     </div>
+                    
+                    {/* Botón para enviar webhook si hay fechas seleccionadas en modo múltiple */}
+                    {isMultiSelectMode && selectedDates.length > 0 && (
+                      <div className="flex items-center justify-between pt-2 border-t">
+                        <div className="text-sm text-gray-600">
+                          {selectedDates.length} fecha(s) seleccionada(s)
+                        </div>
+                        <Button
+                          onClick={handleSendWebhook}
+                          disabled={loadingVentas}
+                          className="bg-blue-600 text-white hover:bg-blue-700"
+                        >
+                          {loadingVentas ? 'Enviando...' : 'Consultar Webhook'}
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
 
               {/* Ventas del día seleccionado */}
-              <Card className="max-w-full shadow-sm flex flex-col" style={{ height: '500px', maxHeight: '500px', overflow: 'hidden' }}>
-                <CardHeader className="pb-2 pt-3 px-4 flex-shrink-0">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <BarChart3 className="w-5 h-5 text-purple-600" />
-                    <span>Ventas del Día</span>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="w-6 h-6 text-purple-600" />
+                    {isMultiSelectMode && selectedDates.length > 0 ? (
+                      <>Ventas ({selectedDates.length} fecha{selectedDates.length > 1 ? 's' : ''})</>
+                    ) : selectedDate ? (
+                      <>Ventas del {selectedDate.toLocaleDateString('es-ES', {
+                        weekday: 'long',
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric'
+                      })}</>
+                    ) : (
+                      <>Ventas del Día</>
+                    )}
                   </CardTitle>
+                  <CardDescription>
+                    {isMultiSelectMode && selectedDates.length > 0
+                      ? `Rango: ${selectedDates.sort((a, b) => a.getTime() - b.getTime())[0].toLocaleDateString('es-ES')} - ${selectedDates.sort((a, b) => a.getTime() - b.getTime())[selectedDates.length - 1].toLocaleDateString('es-ES')}`
+                      : selectedDate 
+                        ? 'Detalle de todas las ventas realizadas en esta fecha'
+                        : 'Selecciona una fecha en el calendario para ver las ventas'
+                    }
+                  </CardDescription>
                 </CardHeader>
-                <CardContent className="pt-0 px-4 pb-4 flex-1 flex flex-col min-h-0 overflow-hidden">
-                  {!selectedDate ? (
-                    <div className="text-center py-6 text-gray-500">
-                      <Calendar className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                      <p className="text-xs">Selecciona una fecha en el calendario</p>
-                      <p className="text-[10px] mt-1">para ver la respuesta del webhook</p>
+                <CardContent>
+                  {!selectedDate && (!isMultiSelectMode || selectedDates.length === 0) ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <Calendar className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                      <p>Selecciona una fecha en el calendario</p>
+                      <p className="text-sm mt-1">para ver las ventas de ese día</p>
                     </div>
                   ) : (
                     <>
-                      {loadingWebhook ? (
-                        <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      {loadingVentas ? (
+                        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                           <div className="flex items-center gap-2 text-blue-700">
                             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                            <span className="text-sm">Enviando webhook y cargando respuesta...</span>
+                            <span className="text-sm">Cargando ventas...</span>
                           </div>
-                        </div>
-                      ) : webhookResponse ? (
-                        <div className="space-y-3 flex-1 flex flex-col min-h-0 overflow-hidden">
-                          {/* Filtros */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 flex-shrink-0">
-                            <div className="space-y-1">
-                              <Label htmlFor="filter-nombre-test" className="text-xs font-semibold text-gray-700">
-                                Filtrar por Nombre de Test
-                              </Label>
-                              <Input
-                                id="filter-nombre-test"
-                                type="text"
-                                placeholder="Buscar test..."
-                                value={filterNombreTest}
-                                onChange={(e) => setFilterNombreTest(e.target.value)}
-                                className="text-sm h-9"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <Label htmlFor="filter-company" className="text-xs font-semibold text-gray-700">
-                                Filtrar por Compañía
-                              </Label>
-                              <Input
-                                id="filter-company"
-                                type="text"
-                                placeholder="Buscar compañía..."
-                                value={filterCompanyId}
-                                onChange={(e) => setFilterCompanyId(e.target.value)}
-                                className="text-sm h-9"
-                              />
-                            </div>
-                          </div>
-
-                          {/* Tabla de datos */}
-                          {(() => {
-                            const data = webhookResponse?.data || []
-                            
-                            // Aplicar filtros primero
-                            const filteredData = data.filter((item: any) => {
-                              const nombreMatch = !filterNombreTest || 
-                                item.nombre_test?.toLowerCase().includes(filterNombreTest.toLowerCase())
-                              const companyMatch = !filterCompanyId || 
-                                item.company_id?.toLowerCase().includes(filterCompanyId.toLowerCase())
-                              return nombreMatch && companyMatch
-                            })
-
-                            // Agrupar por nombre_test + company_id
-                            const groupedData = filteredData.reduce((acc: any, item: any) => {
-                              const key = `${item.nombre_test || 'N/A'}_${item.company_id || 'N/A'}`
-                              if (!acc[key]) {
-                                acc[key] = {
-                                  nombre_test: item.nombre_test || 'N/A',
-                                  company_id: item.company_id || 'N/A',
-                                  amount_total: 0,
-                                  items: []
-                                }
-                              }
-                              acc[key].amount_total += item.amount_total || 0
-                              acc[key].items.push(item)
-                              return acc
-                            }, {})
-
-                            const groupedArray = Object.values(groupedData)
-                            const totalAmount = groupedArray.reduce((sum: number, item: any) => sum + (item.amount_total || 0), 0)
-
-                            const toggleRow = (key: string) => {
-                              setExpandedRows(prev => {
-                                const newSet = new Set(prev)
-                                if (newSet.has(key)) {
-                                  newSet.delete(key)
-                                } else {
-                                  newSet.add(key)
-                                }
-                                return newSet
-                              })
-                            }
-
-                            return (
-                              <div className="bg-white rounded-lg border border-gray-200 overflow-hidden flex flex-col flex-1 min-h-0" style={{ height: 0 }}>
-                                <div className="p-2 bg-gradient-to-r from-purple-50 to-blue-50 border-b border-gray-200 flex-shrink-0">
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                      <FlaskConical className="w-4 h-4 text-purple-600" />
-                                      <h4 className="text-sm font-semibold text-purple-900">
-                                        Ventas del Día
-                                      </h4>
-                                    </div>
-                                    <div className="text-xs text-purple-700">
-                                      <span className="font-semibold">{groupedArray.length}</span> grupo(s) | {' '}
-                                      <span className="font-semibold">{filteredData.length}</span> registro(s)
-                                    </div>
-                                  </div>
-                                </div>
-                                
-                                {groupedArray.length === 0 ? (
-                                  <div className="p-6 text-center text-gray-500 flex-shrink-0">
-                                    <Package className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                                    <p className="text-xs">No hay datos que coincidan con los filtros</p>
-                                  </div>
-                                ) : (
-                                  <div className="overflow-auto flex-1">
-                                    <table className="w-full text-xs">
-                                      <thead className="sticky top-0 bg-gray-50 z-10">
-                                        <tr className="border-b border-gray-200">
-                                          <th className="text-left py-2 px-3 font-semibold text-gray-900 w-10"></th>
-                                          <th className="text-left py-2 px-3 font-semibold text-gray-900">Nombre del Test</th>
-                                          <th className="text-right py-2 px-3 font-semibold text-gray-900">Monto Total</th>
-                                          <th className="text-left py-2 px-3 font-semibold text-gray-900">Compañía</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {groupedArray.map((group: any, index: number) => {
-                                          const rowKey = `${group.nombre_test}_${group.company_id}_${index}`
-                                          const isExpanded = expandedRows.has(rowKey)
-                                          const hasMultipleItems = group.items.length > 1
-
-                                          return (
-                                            <React.Fragment key={rowKey}>
-                                              <tr 
-                                                className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
-                                              >
-                                                <td className="py-2 px-3">
-                                                  {hasMultipleItems && (
-                                                    <button
-                                                      onClick={() => toggleRow(rowKey)}
-                                                      className="p-1 hover:bg-gray-200 rounded transition-colors"
-                                                      title={isExpanded ? "Ocultar detalles" : "Ver detalles"}
-                                                    >
-                                                      {isExpanded ? (
-                                                        <ChevronDown className="w-4 h-4 text-gray-600" />
-                                                      ) : (
-                                                        <ChevronRight className="w-4 h-4 text-gray-600" />
-                                                      )}
-                                                    </button>
-                                                  )}
-                                                </td>
-                                                <td className="py-2 px-3">
-                                                  <span className="font-medium text-gray-900 text-xs">
-                                                    {group.nombre_test}
-                                                  </span>
-                                                  {hasMultipleItems && (
-                                                    <span className="ml-2 text-[10px] text-gray-500">
-                                                      ({group.items.length} ventas)
-                                                    </span>
-                                                  )}
-                                                </td>
-                                                <td className="py-2 px-3 text-right">
-                                                  <span className="font-semibold text-green-600 text-xs">
-                                                    {formatCurrency(group.amount_total || 0)}
-                                                  </span>
-                                                </td>
-                                                <td className="py-2 px-3">
-                                                  <span className="text-gray-700 text-xs">
-                                                    {group.company_id}
-                                                  </span>
-                                                </td>
-                                              </tr>
-                                              {isExpanded && hasMultipleItems && (
-                                                <tr>
-                                                  <td colSpan={4} className="py-2 px-3 bg-gray-50">
-                                                    <div className="pl-3 border-l-2 border-purple-300">
-                                                      <div className="text-xs font-semibold text-gray-700 mb-1.5">
-                                                        Detalle de ventas individuales:
-                                                      </div>
-                                                      <div className="space-y-1">
-                                                        {group.items.map((item: any, itemIndex: number) => (
-                                                          <div 
-                                                            key={itemIndex}
-                                                            className="flex items-center justify-between py-1.5 px-2 bg-white rounded border border-gray-200"
-                                                          >
-                                                            <span className="text-xs text-gray-600">
-                                                              Venta #{itemIndex + 1}
-                                                            </span>
-                                                            <span className="text-xs font-semibold text-green-600">
-                                                              {formatCurrency(item.amount_total || 0)}
-                                                            </span>
-                                                          </div>
-                                                        ))}
-                                                      </div>
-                                                    </div>
-                                                  </td>
-                                                </tr>
-                                              )}
-                                            </React.Fragment>
-                                          )
-                                        })}
-                                      </tbody>
-                                      <tfoot>
-                                        <tr className="bg-purple-50 border-t-2 border-purple-300">
-                                          <td className="py-2 px-3 font-semibold text-purple-900 text-xs" colSpan={2}>Total</td>
-                                          <td className="py-2 px-3 text-right font-bold text-green-600 text-xs">
-                                            {formatCurrency(totalAmount)}
-                                          </td>
-                                          <td className="py-2 px-3"></td>
-                                        </tr>
-                                      </tfoot>
-                                    </table>
-                                  </div>
-                                )}
-                              </div>
-                            )
-                          })()}
                         </div>
                       ) : (
-                        <div className="text-center py-6 text-gray-500">
-                          <AlertCircle className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                          <p className="text-xs">No se recibió respuesta del webhook</p>
+                        <div className="mb-4 p-3 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <FlaskConical className="w-4 h-4 text-purple-600" />
+                              <h4 className="text-sm font-semibold text-purple-900">
+                                Ventas del Día
+                              </h4>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="text-xs text-purple-700">
+                                <span className="font-semibold">Total:</span>{' '}
+                                <span className="font-bold text-purple-900">
+                                  {(() => {
+                                    const filtered = selectedCompanyFilter === 'all' 
+                                      ? ventasDelDia 
+                                      : ventasDelDia.filter(item => item.company === selectedCompanyFilter)
+                                    return filtered.length
+                                  })()}
+                                </span>
+                                {' '}ventas
+                              </div>
+                              {ventasDelDia.length > 0 && (
+                                <Select 
+                                  value={selectedCompanyFilter} 
+                                  onValueChange={setSelectedCompanyFilter}
+                                >
+                                  <SelectTrigger className="h-7 text-xs w-[180px]">
+                                    <SelectValue placeholder="Filtrar por compañía" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="all">Todas las compañías</SelectItem>
+                                    {Array.from(new Set(ventasDelDia.map(item => item.company).filter(Boolean)))
+                                      .sort()
+                                      .map(company => (
+                                        <SelectItem key={company} value={company}>
+                                          {company}
+                                        </SelectItem>
+                                      ))
+                                    }
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            </div>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="border-b border-purple-300">
+                                  <th className="text-left py-1.5 px-2 font-semibold text-purple-900 w-10"></th>
+                                  <th className="text-left py-1.5 px-2 font-semibold text-purple-900">Test</th>
+                                  <th className="text-right py-1.5 px-2 font-semibold text-purple-900">Costo</th>
+                                  <th className="text-left py-1.5 px-2 font-semibold text-purple-900">Compañía</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {ventasDelDia.length === 0 ? (
+                                  <tr>
+                                    <td colSpan={4} className="py-4 text-center text-gray-500">
+                                      No hay ventas registradas para esta fecha
+                                    </td>
+                                  </tr>
+                                ) : (
+                                  (() => {
+                                    const filtered = selectedCompanyFilter === 'all' 
+                                      ? ventasDelDia 
+                                      : ventasDelDia.filter(item => item.company === selectedCompanyFilter)
+                                    
+                                    if (filtered.length === 0) {
+                                      return (
+                                        <tr>
+                                          <td colSpan={4} className="py-4 text-center text-gray-500">
+                                            No hay ventas para la compañía seleccionada
+                                          </td>
+                                        </tr>
+                                      )
+                                    }
+                                    
+                                    // Agrupar por test y company
+                                    const grouped = filtered.reduce((acc, venta) => {
+                                      const key = `${venta.test || 'N/A'}_${venta.company || 'N/A'}`
+                                      if (!acc[key]) {
+                                        acc[key] = {
+                                          test: venta.test || 'N/A',
+                                          company: venta.company || 'N/A',
+                                          items: [],
+                                          totalAmount: 0
+                                        }
+                                      }
+                                      acc[key].items.push(venta)
+                                      acc[key].totalAmount += parseFloat(venta.amount.toString()) || 0
+                                      return acc
+                                    }, {} as Record<string, { test: string; company: string; items: typeof filtered; totalAmount: number }>)
+                                    
+                                    const groupedArray = Object.values(grouped)
+                                    
+                                    const toggleRow = (key: string) => {
+                                      setExpandedRows(prev => {
+                                        const newSet = new Set(prev)
+                                        if (newSet.has(key)) {
+                                          newSet.delete(key)
+                                        } else {
+                                          newSet.add(key)
+                                        }
+                                        return newSet
+                                      })
+                                    }
+                                    
+                                    return groupedArray.map((group, index) => {
+                                      const rowKey = `${group.test}_${group.company}_${index}`
+                                      const isExpanded = expandedRows.has(rowKey)
+                                      const hasMultipleItems = group.items.length > 1
+                                      
+                                      return (
+                                        <React.Fragment key={rowKey}>
+                                          <tr className="border-b border-purple-100 hover:bg-purple-50/50">
+                                            <td className="py-1.5 px-2">
+                                              {hasMultipleItems && (
+                                                <button
+                                                  onClick={() => toggleRow(rowKey)}
+                                                  className="p-1 hover:bg-purple-200 rounded transition-colors"
+                                                  title={isExpanded ? "Ocultar detalles" : "Ver detalles"}
+                                                >
+                                                  {isExpanded ? (
+                                                    <ChevronDown className="w-3 h-3 text-purple-600" />
+                                                  ) : (
+                                                    <ChevronRight className="w-3 h-3 text-purple-600" />
+                                                  )}
+                                                </button>
+                                              )}
+                                            </td>
+                                            <td className="py-1.5 px-2 text-gray-900">
+                                              <span className="font-medium">{group.test}</span>
+                                              {hasMultipleItems && (
+                                                <span className="ml-2 text-[10px] text-gray-500">
+                                                  x{group.items.length}
+                                                </span>
+                                              )}
+                                            </td>
+                                            <td className="py-1.5 px-2 text-right text-green-600 font-semibold">
+                                              {formatCurrency(group.totalAmount)}
+                                            </td>
+                                            <td className="py-1.5 px-2 text-gray-900">
+                                              {group.company}
+                                            </td>
+                                          </tr>
+                                          {isExpanded && hasMultipleItems && (
+                                            <tr>
+                                              <td colSpan={4} className="py-2 px-2 bg-purple-50/30">
+                                                <div className="pl-3 border-l-2 border-purple-300">
+                                                  <div className="text-[10px] font-semibold text-gray-700 mb-1.5">
+                                                    Detalle de ventas individuales:
+                                                  </div>
+                                                  <div className="space-y-1">
+                                                    {group.items.map((item, itemIndex) => (
+                                                      <div 
+                                                        key={itemIndex}
+                                                        className="flex items-center justify-between py-1 px-2 bg-white rounded border border-purple-200"
+                                                      >
+                                                        <span className="text-[10px] text-gray-600">
+                                                          Venta #{itemIndex + 1}
+                                                        </span>
+                                                        <span className="text-[10px] font-semibold text-green-600">
+                                                          {formatCurrency(parseFloat(item.amount.toString()) || 0)}
+                                                        </span>
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          )}
+                                        </React.Fragment>
+                                      )
+                                    })
+                                  })()
+                                )}
+                              </tbody>
+                              {(() => {
+                                const filtered = selectedCompanyFilter === 'all' 
+                                  ? ventasDelDia 
+                                  : ventasDelDia.filter(item => item.company === selectedCompanyFilter)
+                                
+                                if (filtered.length > 0) {
+                                  // Calcular total usando los grupos para evitar duplicados
+                                  const grouped = filtered.reduce((acc, venta) => {
+                                    const key = `${venta.test || 'N/A'}_${venta.company || 'N/A'}`
+                                    if (!acc[key]) {
+                                      acc[key] = 0
+                                    }
+                                    acc[key] += parseFloat(venta.amount.toString()) || 0
+                                    return acc
+                                  }, {} as Record<string, number>)
+                                  
+                                  const total = Object.values(grouped).reduce((sum, amount) => sum + amount, 0)
+                                  
+                                  return (
+                                    <tfoot>
+                                      <tr className="border-t-2 border-purple-300 bg-purple-100/50">
+                                        <td className="py-1.5 px-2 font-semibold text-purple-900" colSpan={2}>Total</td>
+                                        <td className="py-1.5 px-2 text-right font-bold text-green-600">
+                                          {formatCurrency(total)}
+                                        </td>
+                                        <td className="py-1.5 px-2"></td>
+                                      </tr>
+                                    </tfoot>
+                                  )
+                                }
+                                return null
+                              })()}
+                            </table>
+                          </div>
                         </div>
                       )}
                     </>
@@ -3981,6 +4329,67 @@ export default function SalesPage() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Últimas 10 ventas */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="w-6 h-6 text-green-600" />
+                  Últimas 10 Ventas
+                </CardTitle>
+                <CardDescription>
+                  Ventas más recientes registradas
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {ultimas10Ventas.length > 0 ? (
+                  <div className="space-y-3">
+                    {ultimas10Ventas.map((venta, index) => (
+                      <div
+                        key={index}
+                        className="p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-300 transition-colors"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-sm font-semibold text-gray-900">
+                                {venta.test || 'Test sin nombre'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 text-xs text-gray-600">
+                              <span className="flex items-center gap-1">
+                                <Calendar className="w-3 h-3" />
+                                {new Date(venta.fecha).toLocaleDateString('es-ES', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric'
+                                })}
+                              </span>
+                              {venta.company && (
+                                <span className="text-gray-500">
+                                  {venta.company}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-lg font-bold text-green-600">
+                              {formatCurrency(parseFloat(venta.amount.toString()) || 0)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p>No hay ventas registradas</p>
+                    <p className="text-sm mt-1">Las ventas aparecerán aquí cuando se registren</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>

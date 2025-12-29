@@ -265,62 +265,62 @@ export default function ProductsPage() {
     <div className="min-h-screen bg-gray-50">
       <Navbar />
       
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
+      <div className="container mx-auto px-4 py-3 max-w-[90%]">
+        <div className="flex items-center justify-between mb-3">
           <div>
-            <h1 className="text-3xl font-semibold text-gray-900">Productos</h1>
-            <p className="text-muted-foreground mt-1">
+            <h1 className="text-2xl font-semibold text-gray-900">Productos</h1>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
               Gestiona tus productos y configura precios por país
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center bg-white border border-gray-200 rounded-lg p-1">
+          <div className="flex items-center gap-1.5">
+            <div className="flex items-center bg-white border border-gray-200 rounded-lg p-0.5">
               <Button
                 variant={viewMode === 'grid' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setViewMode('grid')}
-                className={viewMode === 'grid' ? 'bg-orange-600 text-white hover:bg-orange-700' : 'text-gray-600 hover:text-orange-600 hover:bg-orange-50'}
+                className={`h-6 px-1.5 ${viewMode === 'grid' ? 'bg-orange-600 text-white hover:bg-orange-700' : 'text-gray-600 hover:text-orange-600 hover:bg-orange-50'}`}
               >
-                <Grid3X3 className="w-4 h-4" />
+                <Grid3X3 className="w-2.5 h-2.5" />
               </Button>
               <Button
                 variant={viewMode === 'table' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setViewMode('table')}
-                className={viewMode === 'table' ? 'bg-orange-600 text-white hover:bg-orange-700' : 'text-gray-600 hover:text-orange-600 hover:bg-orange-50'}
+                className={`h-6 px-1.5 ${viewMode === 'table' ? 'bg-orange-600 text-white hover:bg-orange-700' : 'text-gray-600 hover:text-orange-600 hover:bg-orange-50'}`}
               >
-                <List className="w-4 h-4" />
+                <List className="w-2.5 h-2.5" />
               </Button>
             </div>
-            <Button onClick={() => router.push('/products/new')} className="bg-blue-600 text-white hover:bg-blue-700">
-              <Plus className="w-4 h-4 mr-2" />
+            <Button onClick={() => router.push('/products/new')} className="bg-blue-600 text-white hover:bg-blue-700 h-6 text-[10px] px-2">
+              <Plus className="w-2.5 h-2.5 mr-1" />
               Nuevo Producto
             </Button>
           </div>
         </div>
 
         {/* Quick Country Navigation */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Globe className="w-5 h-5 text-blue-600" />
+        <Card className="mb-3 shadow-sm">
+          <CardHeader className="pb-2 pt-3 px-4">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Globe className="w-3 h-3 text-blue-600" />
               Vista por País
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-[10px] mt-1">
               Compara todos los productos y sus precios por país
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0 px-4 pb-4">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               {(Object.keys(COUNTRY_NAMES) as Array<keyof typeof COUNTRY_NAMES>).map((countryCode) => (
                 <Button
                   key={countryCode}
                   variant="outline"
                   onClick={() => router.push(`/countries/${countryCode}`)}
-                  className="flex flex-col items-center gap-2 h-auto py-4 hover:bg-orange-50 hover:border-orange-300 hover:text-orange-600"
+                  className="flex flex-col items-center gap-1 h-auto py-2 hover:bg-orange-50 hover:border-orange-300 hover:text-orange-600"
                 >
-                  <span className="text-2xl">{COUNTRY_FLAGS[countryCode]}</span>
-                  <span className="text-sm font-medium">{COUNTRY_NAMES[countryCode]}</span>
+                  <span className="text-lg">{COUNTRY_FLAGS[countryCode]}</span>
+                  <span className="text-xs font-medium">{COUNTRY_NAMES[countryCode]}</span>
                 </Button>
               ))}
             </div>
@@ -328,18 +328,18 @@ export default function ProductsPage() {
         </Card>
 
         {/* Búsqueda y filtros - Minimalista */}
-        <div className="mb-6 space-y-4">
+        <div className="mb-3 space-y-1.5">
           {/* Búsqueda y ordenamiento */}
-          <div className="flex flex-col sm:flex-row gap-3 items-center">
+          <div className="flex flex-col sm:flex-row gap-1.5 items-center">
             {/* Buscador */}
             <div className="relative flex-1 w-full">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-2.5 h-2.5 text-gray-400" />
               <Input
                 type="text"
                 placeholder="Buscar productos..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                className="pl-7 h-7 text-[10px]"
               />
             </div>
             
@@ -348,23 +348,23 @@ export default function ProductsPage() {
               variant="outline"
               size="sm"
               onClick={toggleSortOrder}
-              className="flex items-center gap-2 min-w-[140px]"
+              className="flex items-center gap-1 min-w-[100px] h-7 text-[10px] px-2"
             >
               {sortOrder === 'none' && (
                 <>
-                  <ArrowUpDown className="w-4 h-4" />
+                  <ArrowUpDown className="w-2.5 h-2.5" />
                   Ordenar
                 </>
               )}
               {sortOrder === 'asc' && (
                 <>
-                  <ArrowUp className="w-4 h-4" />
+                  <ArrowUp className="w-2.5 h-2.5" />
                   Precio ↑
                 </>
               )}
               {sortOrder === 'desc' && (
                 <>
-                  <ArrowDown className="w-4 h-4" />
+                  <ArrowDown className="w-2.5 h-2.5" />
                   Precio ↓
                 </>
               )}
@@ -580,84 +580,84 @@ export default function ProductsPage() {
           </Card>
         ) : (
           <>
-            {viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+             {viewMode === 'grid' ? (
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {filteredAndSortedProducts.map((product) => (
-                  <Card 
-                    key={product.id} 
-                    className="hover:shadow-xl transition-all duration-200"
-                  >
-                    <CardHeader>
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1">
-                          <CardTitle className="text-xl">{product.name}</CardTitle>
-                          <CardDescription className="mt-1">
-                            SKU: {product.sku}
-                          </CardDescription>
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            <CategoryBadge category={product.category} productName={product.name} />
-                            <TypeBadge type={(product as any).tipo} />
-                          </div>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      {product.description && (
-                        <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
-                          {product.description}
-                        </p>
-                      )}
-                      <div className="flex flex-col gap-2 mt-4">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            router.push(`/products/compare/${product.id}`)
-                          }}
-                          className="w-full hover:bg-orange-50 hover:border-orange-300 hover:text-orange-600"
-                        >
-                          <GitCompare className="w-4 h-4 mr-2" />
-                          Comparar Países
-                        </Button>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              router.push(`/products/${product.id}`)
-                            }}
-                            className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
-                          >
-                            <Eye className="w-4 h-4 mr-1" />
-                            Ver
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleEditProduct(product)
-                            }}
-                            className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setDeleteDialog({ open: true, product })
-                            }}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                   <Card 
+                     key={product.id} 
+                     className="hover:shadow-lg transition-all duration-200 shadow-sm aspect-[4/3] flex flex-col"
+                   >
+                     <CardHeader className="pb-2 pt-3 px-3 flex-shrink-0">
+                       <div className="flex items-start justify-between gap-1.5">
+                         <div className="flex-1">
+                           <CardTitle className="text-xs">{product.name}</CardTitle>
+                           <CardDescription className="mt-0.5 text-[10px]">
+                             SKU: {product.sku}
+                           </CardDescription>
+                           <div className="mt-1 flex flex-wrap gap-1">
+                             <CategoryBadge category={product.category} productName={product.name} />
+                             <TypeBadge type={(product as any).tipo} />
+                           </div>
+                         </div>
+                       </div>
+                     </CardHeader>
+                     <CardContent className="pt-0 px-3 pb-3 flex-1 flex flex-col justify-between">
+                       {product.description && (
+                         <p className="text-[10px] text-muted-foreground line-clamp-2 mb-2">
+                           {product.description}
+                         </p>
+                       )}
+                       <div className="flex flex-col gap-1.5 mt-auto">
+                         <Button
+                           size="sm"
+                           variant="outline"
+                           onClick={(e) => {
+                             e.stopPropagation()
+                             router.push(`/products/compare/${product.id}`)
+                           }}
+                           className="w-full hover:bg-orange-50 hover:border-orange-300 hover:text-orange-600 h-6 text-[10px] px-2"
+                         >
+                           <GitCompare className="w-2.5 h-2.5 mr-1" />
+                           Comparar Países
+                         </Button>
+                         <div className="flex gap-1.5">
+                           <Button
+                             size="sm"
+                             onClick={(e) => {
+                               e.stopPropagation()
+                               router.push(`/products/${product.id}`)
+                             }}
+                             className="flex-1 bg-blue-600 text-white hover:bg-blue-700 h-6 text-[10px] px-2"
+                           >
+                             <Eye className="w-2.5 h-2.5 mr-0.5" />
+                             Ver
+                           </Button>
+                           <Button
+                             size="sm"
+                             variant="outline"
+                             onClick={(e) => {
+                               e.stopPropagation()
+                               handleEditProduct(product)
+                             }}
+                             className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 h-6 w-6 p-0"
+                           >
+                             <Edit className="w-2.5 h-2.5" />
+                           </Button>
+                           <Button
+                             size="sm"
+                             variant="outline"
+                             onClick={(e) => {
+                               e.stopPropagation()
+                               setDeleteDialog({ open: true, product })
+                             }}
+                             className="text-red-600 hover:text-red-700 hover:bg-red-50 h-6 w-6 p-0"
+                           >
+                             <Trash2 className="w-2.5 h-2.5" />
+                           </Button>
+                         </div>
+                       </div>
+                     </CardContent>
+                   </Card>
                 ))}
               </div>
             ) : (
