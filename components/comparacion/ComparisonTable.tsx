@@ -105,17 +105,42 @@ const extractCountryCode = (companyName: string): string => {
   return 'XX';
 };
 
-// Normalizar nombre del producto para comparación
+// Normalizar nombre del producto para comparación (versión mejorada)
 const normalizeProductName = (productName: string): string => {
   if (!productName) return '';
   
-  return productName
+  // Normalizar: eliminar corchetes, espacios, caracteres especiales, convertir a mayúsculas
+  let normalized = productName
     .trim()
     .toUpperCase()
-    .replace(/\s+/g, ' ') // Múltiples espacios → un espacio
     .replace(/\[.*?\]/g, '') // Eliminar corchetes y su contenido
-    .replace(/[^\w\s]/g, '') // Eliminar caracteres especiales excepto espacios
-    .replace(/\s/g, ''); // Eliminar todos los espacios para comparación estricta
+    .replace(/[^\w]/g, '') // Eliminar todos los caracteres no alfanuméricos
+    .replace(/\s+/g, ''); // Eliminar todos los espacios
+  
+  return normalized;
+};
+
+// Función para verificar si dos nombres de productos coinciden (match flexible)
+const productNamesMatch = (name1: string, name2: string): boolean => {
+  const norm1 = normalizeProductName(name1);
+  const norm2 = normalizeProductName(name2);
+  
+  // Match exacto después de normalización
+  if (norm1 === norm2) return true;
+  
+  // Match parcial: si uno contiene al otro (para casos como "Genomind" vs "Genomind Professional PGx")
+  if (norm1.length > 0 && norm2.length > 0) {
+    // Si el nombre más corto está contenido en el más largo
+    const shorter = norm1.length < norm2.length ? norm1 : norm2;
+    const longer = norm1.length >= norm2.length ? norm1 : norm2;
+    
+    // Solo hacer match parcial si el nombre corto tiene al menos 5 caracteres
+    if (shorter.length >= 5 && longer.includes(shorter)) {
+      return true;
+    }
+  }
+  
+  return false;
 };
 
 export function ComparisonTable({ month, country, product }: ComparisonTableProps) {
@@ -148,20 +173,11 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
       const { data: budgetData, error: budgetError } = await budgetQuery;
       if (budgetError) throw budgetError;
 
-      // 2. Fetch Real 2025
+      // 2. Fetch Real 2025 - SIN FILTROS EN QUERY (aplicar después para mejor control)
       let realQuery = supabase
         .from('ventas_mensuales_view')
         .select('*')
         .eq('año', 2025);
-
-      if (country !== 'all') {
-        const companies = countryToCompanies(country);
-        realQuery = realQuery.in('compañia', companies);
-      }
-
-      if (product !== 'all') {
-        realQuery = realQuery.eq('producto', product);
-      }
 
       const { data: realData, error: realError } = await realQuery;
       if (realError) {
@@ -193,13 +209,13 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
         // Normalizar nombre de producto
         const normalizedProduct = normalizeProductName(row.producto);
         
-        // Crear key única
+        // Crear key única usando el nombre normalizado
         const key = `${countryCodeFromCompany}-${normalizedProduct}`;
 
         // Aplicar filtros
         const matchesCountry = country === 'all' || countryCodeFromCompany === country;
         const matchesProduct = product === 'all' || 
-                             normalizeProductName(product) === normalizedProduct;
+                             productNamesMatch(product, row.producto);
         const matchesMonth = !isMonthFiltered || row.mes === parseInt(month);
 
         if (matchesCountry && matchesProduct && matchesMonth) {
@@ -207,7 +223,11 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
           realGrouped[key] = (realGrouped[key] || 0) + cantidad;
           
           if (process.env.NODE_ENV === 'development' && cantidad > 0) {
-            console.log(`✅ Match: ${key} = ${cantidad} (total: ${realGrouped[key]})`);
+            console.log(`✅ Match: ${row.producto} (${countryCodeFromCompany}) = ${cantidad} (key: ${key}, total: ${realGrouped[key]})`);
+          }
+        } else {
+          if (process.env.NODE_ENV === 'development' && matchesCountry && !matchesProduct && product !== 'all') {
+            console.log(`❌ No match producto: "${row.producto}" vs "${product}" (normalized: "${normalizedProduct}" vs "${normalizeProductName(product)}")`);
           }
         }
       });
@@ -226,21 +246,58 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
           ? (budgetRow[monthKey] || 0)
           : (budgetRow.total_units || 0);
 
-        // Crear key normalizada para buscar en realGrouped
-        const normalizedProductName = normalizeProductName(budgetRow.product_name);
-        const key = `${budgetRow.country_code}-${normalizedProductName}`;
+        // Buscar en realGrouped usando match flexible
+        // Buscar todas las keys del mismo país y hacer match flexible con el nombre del producto
+        const matchingKeys = Object.keys(realGrouped).filter(k => {
+          const [countryCode, normalizedProductFromKey] = k.split('-');
+          
+          // Primero verificar que el país coincida
+          if (countryCode !== budgetRow.country_code) return false;
+          
+          // Luego hacer match flexible del nombre del producto
+          // Necesitamos comparar el nombre normalizado de budget con el nombre normalizado de la key
+          const normalizedBudgetName = normalizeProductName(budgetRow.product_name);
+          
+          // Match exacto
+          if (normalizedBudgetName === normalizedProductFromKey) return true;
+          
+          // Match parcial: si uno contiene al otro
+          if (normalizedBudgetName.length >= 5 && normalizedProductFromKey.includes(normalizedBudgetName)) return true;
+          if (normalizedProductFromKey.length >= 5 && normalizedBudgetName.includes(normalizedProductFromKey)) return true;
+          
+          return false;
+        });
         
-        const real = realGrouped[key] || 0;
+        // Sumar todas las ventas que coincidan
+        let real = matchingKeys.reduce((sum, k) => sum + (realGrouped[k] || 0), 0);
+        
+        if (process.env.NODE_ENV === 'development') {
+          if (real > 0 && matchingKeys.length > 0) {
+            console.log(`🔍 Match encontrado para "${budgetRow.product_name}" (${budgetRow.country_code}):`, {
+              matchingKeys,
+              real,
+              normalizedBudget: normalizeProductName(budgetRow.product_name),
+            });
+          } else if (budgetRow.total_units > 0) {
+            console.log(`⚠️ No se encontró match para "${budgetRow.product_name}" (${budgetRow.country_code})`, {
+              normalizedBudget: normalizeProductName(budgetRow.product_name),
+              keysDisponibles: Object.keys(realGrouped).filter(k => k.startsWith(`${budgetRow.country_code}-`)),
+            });
+          }
+        }
+        
         const difference = budget - real;
         const growthPercent = real > 0 ? (difference / real) * 100 : 0;
 
         // Log para debugging
         if (process.env.NODE_ENV === 'development' && budget > 0) {
           console.log(`📊 ${budgetRow.product_name} (${budgetRow.country_code}):`, {
+            normalized: normalizedProductName,
             key,
             budget,
             real,
             difference,
+            keysDisponibles: Object.keys(realGrouped).filter(k => k.startsWith(`${budgetRow.country_code}-`)),
           });
         }
 

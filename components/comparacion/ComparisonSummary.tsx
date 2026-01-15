@@ -84,17 +84,38 @@ const extractCountryCodeFromCompany = (companyName: string): string => {
   return 'XX';
 };
 
-// Normalizar nombre del producto para comparación
+// Normalizar nombre del producto para comparación (versión mejorada)
 const normalizeProductName = (productName: string): string => {
   if (!productName) return '';
   
   return productName
     .trim()
     .toUpperCase()
-    .replace(/\s+/g, ' ')
     .replace(/\[.*?\]/g, '') // Eliminar corchetes y su contenido
-    .replace(/[^\w\s]/g, '')
-    .replace(/\s/g, '');
+    .replace(/[^\w]/g, '') // Eliminar todos los caracteres no alfanuméricos
+    .replace(/\s+/g, ''); // Eliminar todos los espacios
+};
+
+// Función para verificar si dos nombres de productos coinciden (match flexible)
+const productNamesMatch = (name1: string, name2: string): boolean => {
+  const norm1 = normalizeProductName(name1);
+  const norm2 = normalizeProductName(name2);
+  
+  // Match exacto después de normalización
+  if (norm1 === norm2) return true;
+  
+  // Match parcial: si uno contiene al otro (para casos como "Genomind" vs "Genomind Professional PGx")
+  if (norm1.length > 0 && norm2.length > 0) {
+    const shorter = norm1.length < norm2.length ? norm1 : norm2;
+    const longer = norm1.length >= norm2.length ? norm1 : norm2;
+    
+    // Solo hacer match parcial si el nombre corto tiene al menos 5 caracteres
+    if (shorter.length >= 5 && longer.includes(shorter)) {
+      return true;
+    }
+  }
+  
+  return false;
 };
 
 // Mapeo inverso: código de país a nombres de compañías
@@ -178,16 +199,20 @@ export function ComparisonSummary({ month, country, product }: ComparisonSummary
       // Sumar Real - CON FILTROS APLICADOS MANUALMENTE
       realData?.forEach((row: any) => {
         const countryCodeFromCompany = extractCountryCodeFromCompany(row.compañia);
-        const normalizedProduct = normalizeProductName(row.producto);
 
         // Aplicar filtros
         const matchesCountry = country === 'all' || countryCodeFromCompany === country;
         const matchesProduct = product === 'all' || 
-                             normalizeProductName(product) === normalizedProduct;
+                             productNamesMatch(product, row.producto);
         const matchesMonth = !isMonthFiltered || row.mes === parseInt(month);
 
         if (matchesCountry && matchesProduct && matchesMonth) {
-          real2025 += parseInt(row.cantidad_ventas) || 0;
+          const cantidad = parseInt(row.cantidad_ventas) || 0;
+          real2025 += cantidad;
+          
+          if (process.env.NODE_ENV === 'development' && cantidad > 0) {
+            console.log(`✅ Summary Match: ${row.producto} (${countryCodeFromCompany}) = ${cantidad}`);
+          }
         }
       });
 
