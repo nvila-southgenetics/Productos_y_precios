@@ -149,11 +149,6 @@ export function BudgetTable({ year, country, product, month }: BudgetTableProps)
         .select("id, name")
         .in("id", productIds.length > 0 ? productIds : [null])
 
-      // Obtener overrides
-      const { data: overrides } = await supabase
-        .from("product_country_overrides")
-        .select("*")
-
       // Mapear productos por nombre e ID
       const productMap = new Map<string, string>()
       products?.forEach((p) => {
@@ -166,36 +161,55 @@ export function BudgetTable({ year, country, product, month }: BudgetTableProps)
       const monthKey = isMonthFiltered ? MONTH_KEYS[monthIndex] : null
 
       // Procesar datos y calcular financieros
-      const processedData: BudgetRow[] = budgetData.map((row) => {
-        const productId = row.product_id || productMap.get(row.product_name) || null
+      // IMPORTANTE: Hacer query individual para cada override para asegurar el país correcto
+      const processedData: BudgetRow[] = await Promise.all(
+        budgetData.map(async (row) => {
+          const productId = row.product_id || productMap.get(row.product_name) || null
 
-        let totalGrossSale = 0
-        let totalGrossProfit = 0
-        let monthlyUnits = row.total_units || 0
-        let monthlyGrossSale = 0
-        let monthlyGrossProfit = 0
+          let totalGrossSale = 0
+          let totalGrossProfit = 0
+          let monthlyUnits = row.total_units || 0
+          let monthlyGrossSale = 0
+          let monthlyGrossProfit = 0
 
-        if (productId) {
-          const countryOverrides = overrides?.filter(
-            (o) => o.product_id === productId && o.country_code === row.country_code
-          )
+          if (productId) {
+            // CRÍTICO: Buscar el override ESPECÍFICO para este producto Y este país
+            // Priorizar el override "default" si hay múltiples
+            const { data: overrideData } = await supabase
+              .from("product_country_overrides")
+              .select("overrides, cl_config_type, mx_config_type, col_config_type")
+              .eq("product_id", productId)
+              .eq("country_code", row.country_code)
+              .order("cl_config_type", { ascending: true }) // "default" viene primero alfabéticamente
+              .order("mx_config_type", { ascending: true })
+              .order("col_config_type", { ascending: true })
+              .limit(1)
+              .maybeSingle()
 
-          const override = countryOverrides?.[0]
-          const overrideData = override?.overrides || {}
+            // Si no hay override "default", tomar el primero disponible
+            const override = overrideData || null
+            const overrideDataObj = override?.overrides || {}
 
-          const grossSaleUSD = overrideData.grossSalesUSD || 0
-          const grossProfitUSD = calculateGrossProfit(overrideData)
+            const grossSaleUSD = overrideDataObj.grossSalesUSD || 0
+            const grossProfitUSD = calculateGrossProfit(overrideDataObj)
 
-          totalGrossSale = grossSaleUSD * row.total_units
-          totalGrossProfit = grossProfitUSD * row.total_units
+            // Debug log (solo en desarrollo)
+            if (process.env.NODE_ENV === "development" && grossSaleUSD === 0) {
+              console.warn(
+                `⚠️ No se encontró override para ${row.product_name} en ${row.country_code} (product_id: ${productId})`
+              )
+            }
 
-          // Calcular valores específicos del mes si está filtrado
-          if (isMonthFiltered && monthKey) {
-            monthlyUnits = row[monthKey as keyof typeof row] || 0
-            monthlyGrossSale = grossSaleUSD * monthlyUnits
-            monthlyGrossProfit = grossProfitUSD * monthlyUnits
+            totalGrossSale = grossSaleUSD * row.total_units
+            totalGrossProfit = grossProfitUSD * row.total_units
+
+            // Calcular valores específicos del mes si está filtrado
+            if (isMonthFiltered && monthKey) {
+              monthlyUnits = row[monthKey as keyof typeof row] || 0
+              monthlyGrossSale = grossSaleUSD * monthlyUnits
+              monthlyGrossProfit = grossProfitUSD * monthlyUnits
+            }
           }
-        }
 
         return {
           id: row.id,
@@ -222,7 +236,8 @@ export function BudgetTable({ year, country, product, month }: BudgetTableProps)
           monthly_gross_sale: monthlyGrossSale,
           monthly_gross_profit: monthlyGrossProfit,
         }
-      })
+        })
+      )
 
       // Ordenar por país y luego por producto
       processedData.sort((a, b) => {

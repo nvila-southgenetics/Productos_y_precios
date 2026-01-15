@@ -120,11 +120,6 @@ export function BudgetSummary({ year, country, product, month }: BudgetSummaryPr
         .select("id, name")
         .in("id", productIds.length > 0 ? productIds : [null])
 
-      // Obtener overrides
-      const { data: overrides } = await supabase
-        .from("product_country_overrides")
-        .select("*")
-
       // Mapear productos por nombre e ID
       const productMap = new Map<string, string>()
       products?.forEach((p) => {
@@ -140,30 +135,42 @@ export function BudgetSummary({ year, country, product, month }: BudgetSummaryPr
       const isMonthFiltered = month !== "all"
       const monthKey = isMonthFiltered ? MONTH_KEYS[parseInt(month) - 1] : null
 
-      budgetData.forEach((row) => {
-        // Si hay filtro de mes, usar solo ese mes
-        const units = isMonthFiltered
-          ? row[monthKey as keyof typeof row] || 0
-          : row.total_units || 0
+      // Procesar cada registro con query individual para override correcto
+      await Promise.all(
+        budgetData.map(async (row) => {
+          // Si hay filtro de mes, usar solo ese mes
+          const units = isMonthFiltered
+            ? row[monthKey as keyof typeof row] || 0
+            : row.total_units || 0
 
-        totalUnits += units
+          totalUnits += units
 
-        const productId = row.product_id || productMap.get(row.product_name)
-        if (!productId) return
+          const productId = row.product_id || productMap.get(row.product_name)
+          if (!productId) return
 
-        const countryOverrides = overrides?.filter(
-          (o) => o.product_id === productId && o.country_code === row.country_code
-        )
+          // CRÍTICO: Buscar el override ESPECÍFICO para este producto Y este país
+          // Priorizar el override "default" si hay múltiples
+          const { data: overrideData } = await supabase
+            .from("product_country_overrides")
+            .select("overrides")
+            .eq("product_id", productId)
+            .eq("country_code", row.country_code)
+            .order("cl_config_type", { ascending: true }) // "default" viene primero
+            .order("mx_config_type", { ascending: true })
+            .order("col_config_type", { ascending: true })
+            .limit(1)
+            .maybeSingle()
 
-        const override = countryOverrides?.[0]
-        const overrideData = override?.overrides || {}
+          const override = overrideData || null
+          const overrideDataObj = override?.overrides || {}
 
-        const grossSaleUSD = overrideData.grossSalesUSD || 0
-        const grossProfitUSD = calculateGrossProfit(overrideData)
+          const grossSaleUSD = overrideDataObj.grossSalesUSD || 0
+          const grossProfitUSD = calculateGrossProfit(overrideDataObj)
 
-        totalGrossSale += grossSaleUSD * units
-        totalGrossProfit += grossProfitUSD * units
-      })
+          totalGrossSale += grossSaleUSD * units
+          totalGrossProfit += grossProfitUSD * units
+        })
+      )
 
       const avgGrossMargin =
         totalGrossSale > 0 ? (totalGrossProfit / totalGrossSale) * 100 : 0
