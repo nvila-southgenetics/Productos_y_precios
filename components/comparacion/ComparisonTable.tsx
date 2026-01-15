@@ -171,7 +171,17 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
       }
 
       const { data: budgetData, error: budgetError } = await budgetQuery;
-      if (budgetError) throw budgetError;
+      if (budgetError) {
+        console.error('❌ Error fetching budget data:', budgetError);
+        throw budgetError;
+      }
+      
+      if (!budgetData || budgetData.length === 0) {
+        console.warn('⚠️ No hay datos de budget para los filtros seleccionados');
+        setData([]);
+        setLoading(false);
+        return;
+      }
 
       // 2. Fetch Real 2025 - SIN FILTROS EN QUERY (aplicar después para mejor control)
       let realQuery = supabase
@@ -184,17 +194,22 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
         console.error('❌ Error fetching real data:', realError);
         throw realError;
       }
+      
+      if (!realData) {
+        console.warn('⚠️ No se obtuvieron datos de ventas');
+        setData([]);
+        setLoading(false);
+        return;
+      }
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log('📊 Budget Data:', budgetData?.length, 'registros');
-        console.log('📈 Real Data (2025):', realData?.length, 'registros');
-        if (realData && realData.length > 0) {
-          console.log('🔍 Muestra de datos reales:', {
-            primerRegistro: realData[0],
-            compañías: [...new Set(realData.map((r: any) => r.compañia))].slice(0, 5),
-            productos: [...new Set(realData.map((r: any) => r.producto))].slice(0, 5),
-          });
-        }
+      console.log('📊 Budget Data:', budgetData?.length, 'registros');
+      console.log('📈 Real Data (2025):', realData?.length, 'registros');
+      if (realData && realData.length > 0) {
+        console.log('🔍 Muestra de datos reales:', {
+          primerRegistro: realData[0],
+          compañías: [...new Set(realData.map((r: any) => r.compañia))].slice(0, 5),
+          productos: [...new Set(realData.map((r: any) => r.producto))].slice(0, 5),
+        });
       }
 
       // 3. Agrupar datos reales por producto y país
@@ -222,19 +237,15 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
           const cantidad = parseInt(row.cantidad_ventas) || 0;
           realGrouped[key] = (realGrouped[key] || 0) + cantidad;
           
-          if (process.env.NODE_ENV === 'development' && cantidad > 0) {
+          if (cantidad > 0) {
             console.log(`✅ Match: ${row.producto} (${countryCodeFromCompany}) = ${cantidad} (key: ${key}, total: ${realGrouped[key]})`);
-          }
-        } else {
-          if (process.env.NODE_ENV === 'development' && matchesCountry && !matchesProduct && product !== 'all') {
-            console.log(`❌ No match producto: "${row.producto}" vs "${product}" (normalized: "${normalizedProduct}" vs "${normalizeProductName(product)}")`);
           }
         }
       });
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log('📦 Datos agrupados:', Object.keys(realGrouped).length, 'grupos');
-        console.log('🔍 Grupos con ventas:', realGrouped);
+      console.log('📦 Datos agrupados:', Object.keys(realGrouped).length, 'grupos');
+      if (Object.keys(realGrouped).length > 0) {
+        console.log('🔍 Primeros 10 grupos con ventas:', Object.entries(realGrouped).slice(0, 10));
       }
 
       // 4. Combinar datos de budget con reales
@@ -271,19 +282,17 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
         // Sumar todas las ventas que coincidan
         let real = matchingKeys.reduce((sum, k) => sum + (realGrouped[k] || 0), 0);
         
-        if (process.env.NODE_ENV === 'development') {
-          if (real > 0 && matchingKeys.length > 0) {
-            console.log(`🔍 Match encontrado para "${budgetRow.product_name}" (${budgetRow.country_code}):`, {
-              matchingKeys,
-              real,
-              normalizedBudget: normalizeProductName(budgetRow.product_name),
-            });
-          } else if (budgetRow.total_units > 0) {
-            console.log(`⚠️ No se encontró match para "${budgetRow.product_name}" (${budgetRow.country_code})`, {
-              normalizedBudget: normalizeProductName(budgetRow.product_name),
-              keysDisponibles: Object.keys(realGrouped).filter(k => k.startsWith(`${budgetRow.country_code}-`)),
-            });
-          }
+        if (real > 0 && matchingKeys.length > 0) {
+          console.log(`🔍 Match encontrado para "${budgetRow.product_name}" (${budgetRow.country_code}):`, {
+            matchingKeys,
+            real,
+            normalizedBudget: normalizeProductName(budgetRow.product_name),
+          });
+        } else if (budgetRow.total_units > 0 && Object.keys(realGrouped).length > 0) {
+          console.log(`⚠️ No se encontró match para "${budgetRow.product_name}" (${budgetRow.country_code})`, {
+            normalizedBudget: normalizeProductName(budgetRow.product_name),
+            keysDisponibles: Object.keys(realGrouped).filter(k => k.startsWith(`${budgetRow.country_code}-`)).slice(0, 5),
+          });
         }
         
         const difference = budget - real;
@@ -291,9 +300,10 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
 
         // Log para debugging
         if (process.env.NODE_ENV === 'development' && budget > 0) {
+          const normalizedBudgetName = normalizeProductName(budgetRow.product_name);
           console.log(`📊 ${budgetRow.product_name} (${budgetRow.country_code}):`, {
-            normalized: normalizedProductName,
-            key,
+            normalized: normalizedBudgetName,
+            matchingKeys,
             budget,
             real,
             difference,
@@ -322,8 +332,11 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
 
       setData(sorted);
       
-      if (process.env.NODE_ENV === 'development') {
-        console.log('✅ Datos finales:', sorted.length, 'registros');
+      console.log('✅ Datos finales procesados:', sorted.length, 'registros');
+      if (sorted.length > 0) {
+        console.log('📊 Primeros 3 registros:', sorted.slice(0, 3));
+      } else {
+        console.warn('⚠️ No se generaron datos de comparación. Verificar logs anteriores.');
       }
     } catch (error) {
       console.error('❌ Error en fetchComparisonData:', error);
