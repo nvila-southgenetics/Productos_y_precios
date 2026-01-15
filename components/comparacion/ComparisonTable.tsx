@@ -251,7 +251,17 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
       // 4. Combinar datos de budget con reales
       const monthKey = isMonthFiltered ? MONTH_KEYS[parseInt(month) - 1] : null;
 
-      const comparisonData: ComparisonRow[] = budgetData?.map((budgetRow: any) => {
+      // Verificar que hay datos de budget
+      if (!budgetData || budgetData.length === 0) {
+        console.warn('⚠️ No hay datos de budget para mostrar');
+        setData([]);
+        setLoading(false);
+        return;
+      }
+
+      console.log('📋 Procesando', budgetData.length, 'registros de budget');
+
+      const comparisonData: ComparisonRow[] = budgetData.map((budgetRow: any) => {
         // Calcular budget correctamente
         const budget = isMonthFiltered && monthKey
           ? (budgetRow[monthKey] || 0)
