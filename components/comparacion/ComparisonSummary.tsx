@@ -35,6 +35,68 @@ const companyToCountry: Record<string, string> = {
   'SouthGenetics LLC Venezuela': 'VE',
 };
 
+// Extraer código de país de nombre de compañía (versión mejorada)
+const extractCountryCodeFromCompany = (companyName: string): string => {
+  if (!companyName) return 'XX';
+  
+  const upperName = companyName.toUpperCase();
+  
+  // Mapeo exhaustivo de todos los países
+  const countryMappings: Record<string, string> = {
+    'CHILE': 'CL',
+    'URUGUAY': 'UY',
+    'ARGENTINA': 'AR',
+    'ARGE': 'AR',
+    'MÉXICO': 'MX',
+    'MEXICO': 'MX',
+    'COLOMBIA': 'CO',
+    'VENEZUELA': 'VE',
+    'DOMINICANA': 'DO',
+    'REPÚBLICA DOMINICANA': 'DO',
+    'ECUADOR': 'EC',
+    'PARAGUAY': 'PY',
+    'JAMAICA': 'JM',
+    'BOLIVIA': 'BO',
+    'TRINIDAD': 'TT',
+    'TOBAGO': 'TT',
+    'BAHAMAS': 'BS',
+    'BARBADOS': 'BB',
+    'BERMUDA': 'BM',
+    'CAYMAN': 'KY',
+    'PERÚ': 'PE',
+    'PERU': 'PE',
+  };
+
+  // Buscar coincidencia
+  for (const [key, code] of Object.entries(countryMappings)) {
+    if (upperName.includes(key)) {
+      return code;
+    }
+  }
+
+  // Fallback al mapeo original
+  for (const [company, code] of Object.entries(companyToCountry)) {
+    if (upperName.includes(company.toUpperCase())) {
+      return code;
+    }
+  }
+
+  return 'XX';
+};
+
+// Normalizar nombre del producto para comparación
+const normalizeProductName = (productName: string): string => {
+  if (!productName) return '';
+  
+  return productName
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, ' ')
+    .replace(/\[.*?\]/g, '') // Eliminar corchetes y su contenido
+    .replace(/[^\w\s]/g, '')
+    .replace(/\s/g, '');
+};
+
 // Mapeo inverso: código de país a nombres de compañías
 const countryToCompanies = (countryCode: string): string[] => {
   const mapping: Record<string, string[]> = {
@@ -81,23 +143,21 @@ export function ComparisonSummary({ month, country, product }: ComparisonSummary
       const { data: budgetData, error: budgetError } = await budgetQuery;
       if (budgetError) throw budgetError;
 
-      // 2. Fetch Real 2025
+      // 2. Fetch Real 2025 - SIN FILTROS PREVIOS (aplicar después)
       let realQuery = supabase
         .from('ventas_mensuales_view')
         .select('*')
         .eq('año', 2025);
 
-      if (country !== 'all') {
-        const companies = countryToCompanies(country);
-        realQuery = realQuery.in('compañia', companies);
-      }
-
-      if (product !== 'all') {
-        realQuery = realQuery.eq('producto', product);
-      }
-
       const { data: realData, error: realError } = await realQuery;
-      if (realError) throw realError;
+      if (realError) {
+        console.error('❌ Error fetching real data:', realError);
+        throw realError;
+      }
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('📊 Summary - Real Data:', realData?.length, 'registros');
+      }
 
       // 3. Calcular totales
       let budget2026 = 0;
@@ -115,18 +175,25 @@ export function ComparisonSummary({ month, country, product }: ComparisonSummary
         }
       });
 
-      // Sumar Real
+      // Sumar Real - CON FILTROS APLICADOS MANUALMENTE
       realData?.forEach((row: any) => {
-        if (isMonthFiltered) {
-          // Si el mes del registro coincide con el filtro
-          if (row.mes === parseInt(month)) {
-            real2025 += row.cantidad_ventas || 0;
-          }
-        } else {
-          // Sumar todas las ventas
-          real2025 += row.cantidad_ventas || 0;
+        const countryCodeFromCompany = extractCountryCodeFromCompany(row.compañia);
+        const normalizedProduct = normalizeProductName(row.producto);
+
+        // Aplicar filtros
+        const matchesCountry = country === 'all' || countryCodeFromCompany === country;
+        const matchesProduct = product === 'all' || 
+                             normalizeProductName(product) === normalizedProduct;
+        const matchesMonth = !isMonthFiltered || row.mes === parseInt(month);
+
+        if (matchesCountry && matchesProduct && matchesMonth) {
+          real2025 += parseInt(row.cantidad_ventas) || 0;
         }
       });
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('📊 Summary Totals:', { budget2026, real2025 });
+      }
 
       // 4. Calcular diferencia y crecimiento
       const difference = budget2026 - real2025;

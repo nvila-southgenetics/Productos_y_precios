@@ -53,14 +53,69 @@ const countryToCompanies = (countryCode: string): string[] => {
   return mapping[countryCode] || [];
 };
 
-// Extraer código de país de nombre de compañía
+// Extraer código de país de nombre de compañía (versión mejorada)
 const extractCountryCode = (companyName: string): string => {
-  for (const [company, code] of Object.entries(companyToCountry)) {
-    if (companyName.includes(company) || companyName === company) {
+  if (!companyName) return 'XX';
+  
+  const upperName = companyName.toUpperCase();
+  
+  // Mapeo exhaustivo de todos los países
+  const countryMappings: Record<string, string> = {
+    'CHILE': 'CL',
+    'URUGUAY': 'UY',
+    'ARGENTINA': 'AR',
+    'ARGE': 'AR', // Posible abreviación
+    'MÉXICO': 'MX',
+    'MEXICO': 'MX',
+    'COLOMBIA': 'CO',
+    'VENEZUELA': 'VE',
+    'DOMINICANA': 'DO',
+    'REPÚBLICA DOMINICANA': 'DO',
+    'ECUADOR': 'EC',
+    'PARAGUAY': 'PY',
+    'JAMAICA': 'JM',
+    'BOLIVIA': 'BO',
+    'TRINIDAD': 'TT',
+    'TOBAGO': 'TT',
+    'BAHAMAS': 'BS',
+    'BARBADOS': 'BB',
+    'BERMUDA': 'BM',
+    'CAYMAN': 'KY',
+    'PERÚ': 'PE',
+    'PERU': 'PE',
+  };
+
+  // Buscar coincidencia
+  for (const [key, code] of Object.entries(countryMappings)) {
+    if (upperName.includes(key)) {
       return code;
     }
   }
+
+  // Fallback al mapeo original
+  for (const [company, code] of Object.entries(companyToCountry)) {
+    if (upperName.includes(company.toUpperCase())) {
+      return code;
+    }
+  }
+
+  if (process.env.NODE_ENV === 'development') {
+    console.warn(`⚠️ No se pudo mapear país para: "${companyName}"`);
+  }
   return 'XX';
+};
+
+// Normalizar nombre del producto para comparación
+const normalizeProductName = (productName: string): string => {
+  if (!productName) return '';
+  
+  return productName
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, ' ') // Múltiples espacios → un espacio
+    .replace(/\[.*?\]/g, '') // Eliminar corchetes y su contenido
+    .replace(/[^\w\s]/g, '') // Eliminar caracteres especiales excepto espacios
+    .replace(/\s/g, ''); // Eliminar todos los espacios para comparación estricta
 };
 
 export function ComparisonTable({ month, country, product }: ComparisonTableProps) {
@@ -109,7 +164,22 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
       }
 
       const { data: realData, error: realError } = await realQuery;
-      if (realError) throw realError;
+      if (realError) {
+        console.error('❌ Error fetching real data:', realError);
+        throw realError;
+      }
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('📊 Budget Data:', budgetData?.length, 'registros');
+        console.log('📈 Real Data (2025):', realData?.length, 'registros');
+        if (realData && realData.length > 0) {
+          console.log('🔍 Muestra de datos reales:', {
+            primerRegistro: realData[0],
+            compañías: [...new Set(realData.map((r: any) => r.compañia))].slice(0, 5),
+            productos: [...new Set(realData.map((r: any) => r.producto))].slice(0, 5),
+          });
+        }
+      }
 
       // 3. Agrupar datos reales por producto y país
       const realGrouped: Record<string, number> = {};
@@ -118,29 +188,61 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
 
       realData?.forEach((row: any) => {
         // Extraer código de país de la compañía
-        const countryCode = extractCountryCode(row.compañia);
-        const key = `${countryCode}-${row.producto}`;
+        const countryCodeFromCompany = extractCountryCode(row.compañia);
+        
+        // Normalizar nombre de producto
+        const normalizedProduct = normalizeProductName(row.producto);
+        
+        // Crear key única
+        const key = `${countryCodeFromCompany}-${normalizedProduct}`;
 
-        if (isMonthFiltered) {
-          if (row.mes === parseInt(month)) {
-            realGrouped[key] = (realGrouped[key] || 0) + (row.cantidad_ventas || 0);
+        // Aplicar filtros
+        const matchesCountry = country === 'all' || countryCodeFromCompany === country;
+        const matchesProduct = product === 'all' || 
+                             normalizeProductName(product) === normalizedProduct;
+        const matchesMonth = !isMonthFiltered || row.mes === parseInt(month);
+
+        if (matchesCountry && matchesProduct && matchesMonth) {
+          const cantidad = parseInt(row.cantidad_ventas) || 0;
+          realGrouped[key] = (realGrouped[key] || 0) + cantidad;
+          
+          if (process.env.NODE_ENV === 'development' && cantidad > 0) {
+            console.log(`✅ Match: ${key} = ${cantidad} (total: ${realGrouped[key]})`);
           }
-        } else {
-          realGrouped[key] = (realGrouped[key] || 0) + (row.cantidad_ventas || 0);
         }
       });
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('📦 Datos agrupados:', Object.keys(realGrouped).length, 'grupos');
+        console.log('🔍 Grupos con ventas:', realGrouped);
+      }
 
       // 4. Combinar datos de budget con reales
       const monthKey = isMonthFiltered ? MONTH_KEYS[parseInt(month) - 1] : null;
 
       const comparisonData: ComparisonRow[] = budgetData?.map((budgetRow: any) => {
-        const key = `${budgetRow.country_code}-${budgetRow.product_name}`;
+        // Calcular budget correctamente
         const budget = isMonthFiltered && monthKey
           ? (budgetRow[monthKey] || 0)
           : (budgetRow.total_units || 0);
+
+        // Crear key normalizada para buscar en realGrouped
+        const normalizedProductName = normalizeProductName(budgetRow.product_name);
+        const key = `${budgetRow.country_code}-${normalizedProductName}`;
+        
         const real = realGrouped[key] || 0;
         const difference = budget - real;
         const growthPercent = real > 0 ? (difference / real) * 100 : 0;
+
+        // Log para debugging
+        if (process.env.NODE_ENV === 'development' && budget > 0) {
+          console.log(`📊 ${budgetRow.product_name} (${budgetRow.country_code}):`, {
+            key,
+            budget,
+            real,
+            difference,
+          });
+        }
 
         return {
           country: budgetRow.country,
@@ -162,8 +264,12 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
       });
 
       setData(sorted);
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ Datos finales:', sorted.length, 'registros');
+      }
     } catch (error) {
-      console.error('Error fetching comparison data:', error);
+      console.error('❌ Error en fetchComparisonData:', error);
     } finally {
       setLoading(false);
     }
