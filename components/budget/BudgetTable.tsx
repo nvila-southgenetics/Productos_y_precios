@@ -175,6 +175,7 @@ export function BudgetTable({ year, country, product, month }: BudgetTableProps)
           let monthlyUnits = row.total_units || 0
           let monthlyGrossSale = 0
           let monthlyGrossProfit = 0
+          let commercialDiscountUSD = 0
 
           if (productId) {
             // CRÍTICO: Buscar el override ESPECÍFICO para este producto Y este país
@@ -195,7 +196,7 @@ export function BudgetTable({ year, country, product, month }: BudgetTableProps)
             const overrideDataObj = override?.overrides || {}
 
             const grossSaleUSD = overrideDataObj.grossSalesUSD || 0
-            const commercialDiscountUSD = overrideDataObj.commercialDiscountUSD || 0
+            commercialDiscountUSD = overrideDataObj.commercialDiscountUSD || 0
             const grossProfitUSD = calculateGrossProfit(overrideDataObj)
 
             // Debug log (solo en desarrollo)
