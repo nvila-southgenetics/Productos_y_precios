@@ -1,114 +1,231 @@
-# Sistema Profit & Loss - SouthGenetics
+# Sistema P&L - SouthGenetics
 
-Sistema web de Profit & Loss conectado a Odoo para SouthGenetics, una empresa de testing genético.
+Sistema integral de gestión de productos, análisis de ventas y proyecciones presupuestarias para SouthGenetics.
 
-## Stack Tecnológico
+## 🚀 Características
 
-- **Frontend**: Next.js 14+ con App Router
-- **Styling**: Tailwind CSS
-- **Base de datos**: Supabase
-- **Schema**: `public` (tablas: `products`, `product_country_overrides`)
+### Módulo de Productos
+- ✅ Gestión completa de productos genéticos
+- ✅ Cálculo de costos por país (Chile, Uruguay, Argentina, México, Colombia, etc.)
+- ✅ Control de gastos detallado con 13+ conceptos de costo
+- ✅ Gross Profit y Gross Sale por producto
+- ✅ Edición inline de valores USD con debounce
+- ✅ Filtros por país, categoría, tipo y búsqueda
+- ✅ Vista detallada con tabs por país
 
-## Configuración
+### Módulo P&L Import
+- ✅ Análisis de ventas mensuales reales desde Odoo
+- ✅ Vista consolidada por mes con dropdowns expandibles
+- ✅ Modal de P&L mensual agregado con cálculos consolidados
+- ✅ Cálculos automáticos de rentabilidad
+- ✅ Filtros por compañía y producto
+- ✅ Vista compacta optimizada
+- ✅ Indicadores visuales para productos sin precios configurados
 
-1. **Instalar dependencias:**
+### Módulo Budget
+- ✅ Proyecciones de ventas 2026
+- ✅ Filtros por año, país, producto y **mes**
+- ✅ Resumen ejecutivo con KPIs (Total Unidades, Gross Sale, Gross Profit, Margen Promedio)
+- ✅ Tabla con columna de **Margen (%)** con colores semáforo
+- ✅ Importación de Excel para proyecciones
+- ✅ Vista expandible con detalle mensual
+- ✅ Cálculos automáticos basados en `product_country_overrides`
+
+## 🛠️ Stack Tecnológico
+
+- **Frontend:** Next.js 14 (App Router), React 18, TypeScript
+- **Styling:** Tailwind CSS, shadcn/ui components
+- **Base de Datos:** Supabase (PostgreSQL) con MCP Server
+- **Integración:** N8N (Odoo connector)
+- **Librerías:**
+  - `xlsx` - Para importar proyecciones de Excel
+  - `lucide-react` - Iconos
+  - `date-fns` - Manejo de fechas
+
+## 📦 Instalación
+
 ```bash
+# Clonar el repositorio
+git clone https://github.com/nvila-southgenetics/Productos_y_precios.git
+cd Productos_y_precios
+
+# Instalar dependencias
 npm install
-```
 
-2. **Configurar variables de entorno:**
-Crea un archivo `.env.local` basado en `.env.local.example` y agrega tus credenciales de Supabase:
+# Configurar variables de entorno
+cp env.example .env.local
+# Editar .env.local con tus credenciales de Supabase:
+# NEXT_PUBLIC_SUPABASE_URL=tu_url
+# NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_key
 
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://cdrmxjcdgxjyakrcpxnp.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_anon_key_aqui
-```
-
-Para obtener las claves de Supabase, puedes usar el MCP o acceder al dashboard de Supabase.
-
-3. **Ejecutar el servidor de desarrollo:**
-```bash
+# Correr en desarrollo
 npm run dev
 ```
 
-Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
+La aplicación estará disponible en `http://localhost:3000`
 
-## Estructura del Proyecto
+## 🗄️ Base de Datos
+
+### Tablas principales:
+
+- **`products`** - Catálogo de productos genéticos
+  - Campos: `id`, `name`, `sku`, `description`, `category`, `tipo`
+  
+- **`product_country_overrides`** - Precios y costos por país
+  - Campos: `product_id`, `country_code`, `overrides` (JSONB)
+  - Países soportados: UY, AR, MX, CL, VE, CO
+  
+- **`budget`** - Proyecciones de ventas 2026
+  - Campos: `product_name`, `country_code`, `year`, `jan-dec`, `total_units`
+  - 86 registros, 43 productos únicos
+  
+- **`ventas_mensuales_view`** - Vista de ventas reales desde Odoo
+  - Campos: `producto`, `mes`, `año`, `compañia`, `cantidad_ventas`, `monto_total`
+
+### Setup inicial:
+
+1. Crear las tablas en Supabase usando las migraciones
+2. Importar datos de productos desde Odoo vía N8N
+3. Configurar precios y costos en `/productos`
+4. Importar proyecciones de ventas desde Excel en `/budget`
+
+## 🔗 Integraciones
+
+### N8N Workflows:
+- Sincronización automática con Odoo
+- Actualización de ventas mensuales
+- Generación de reportes
+
+### Supabase:
+- MCP Server conectado para operaciones server-side
+- Row Level Security (RLS) habilitado
+- Real-time subscriptions (opcional)
+
+## 📊 Estructura del Proyecto
 
 ```
+PYL2/
 ├── app/
-│   ├── productos/          # Página principal de productos
-│   ├── layout.tsx          # Layout principal
-│   ├── page.tsx            # Página de inicio (redirige a /productos)
-│   └── globals.css         # Estilos globales
+│   ├── productos/          # Gestión de productos
+│   │   ├── page.tsx        # Lista de productos
+│   │   └── [productId]/    # Detalle de producto
+│   ├── pl-import/          # Análisis de ventas
+│   │   └── page.tsx        # Vista mensual de ventas
+│   └── budget/             # Proyecciones presupuestarias
+│       └── page.tsx        # Tabla de budget con filtros
 ├── components/
-│   ├── products/           # Componentes relacionados con productos
-│   │   ├── ProductTable.tsx
-│   │   ├── ProductFilters.tsx
-│   │   ├── CountryPills.tsx
-│   │   └── ProductDetailModal.tsx
-│   └── ui/                 # Componentes UI base
+│   ├── products/           # Componentes de productos
+│   ├── pl-import/          # Componentes de P&L
+│   ├── budget/             # Componentes de budget
+│   ├── layout/             # Header y navegación
+│   └── ui/                 # Componentes shadcn/ui
 ├── lib/
-│   ├── supabase.ts         # Cliente de Supabase
-│   ├── supabase-mcp.ts     # Funciones de datos
+│   ├── supabase.ts         # Cliente Supabase
+│   ├── supabase-mcp.ts     # Funciones MCP
+│   ├── budgetParser.ts     # Parser de Excel
 │   └── utils.ts            # Utilidades
 └── types/
     └── mcp.ts              # Tipos TypeScript
 ```
 
-## Funcionalidades
+## 🎯 Casos de Uso
 
-### Página de Productos
+### 1. Configurar Precios de Productos
+1. Ir a `/productos`
+2. Seleccionar un producto
+3. Configurar precios y costos por país
+4. Los cálculos se actualizan automáticamente
 
-- **Vista principal**: Lista todos los productos con información básica
-- **Filtros**: 
-  - Búsqueda por nombre, SKU o descripción
-  - Filtro por categoría
-  - Filtro por tipo
-  - Vista por país (UY, AR, MX, CL, VE, CO)
-- **Acciones**: Ver, editar, eliminar productos
+### 2. Analizar Ventas Mensuales
+1. Ir a `/pl-import`
+2. Seleccionar compañía y producto (opcional)
+3. Expandir meses para ver detalles
+4. Click en "📄 P&L" para ver consolidado mensual
 
-### Vista Detallada de Producto
+### 3. Proyecciones Presupuestarias
+1. Ir a `/budget`
+2. Importar Excel con proyecciones
+3. Filtrar por año, país, producto o mes
+4. Ver resumen ejecutivo y tabla detallada
+5. Analizar márgenes con colores semáforo
 
-- **Cálculo de Costos**: Tabla interactiva con todos los costos del producto
-- **Edición inline**: Doble clic en valores USD para editarlos
-- **Cálculos automáticos**: 
-  - Sales Revenue = Gross Sales - Commercial Discount
-  - Total Cost of Sales = suma de costos activos
-  - Gross Profit = Sales Revenue - Total Cost of Sales
-  - Porcentajes calculados automáticamente
-- **Configuración por país**: Cada país puede tener sus propios valores
+### 4. Comparar Budget vs Real
+1. Ver proyecciones en `/budget`
+2. Ver ventas reales en `/pl-import`
+3. Comparar manualmente o exportar datos
 
-## Base de Datos
+## 🎨 Características de UI/UX
 
-### Tablas principales:
+- **Diseño moderno:** Tailwind CSS con tema personalizado
+- **Componentes reutilizables:** shadcn/ui
+- **Responsive:** Adaptado a móviles y tablets
+- **Feedback visual:** Toasts, loading states, indicadores
+- **Navegación intuitiva:** Header persistente con tabs
+- **Colores semáforo:** Verde/Amarillo/Naranja/Gris para márgenes
 
-1. **`products`**
-   - `id` (uuid)
-   - `name` (text)
-   - `sku` (text)
-   - `description` (text)
-   - `category` (text)
-   - `tipo` (text)
-   - `created_at` (timestamptz)
+## 📈 Métricas y KPIs
 
-2. **`product_country_overrides`**
-   - `id` (uuid)
-   - `product_id` (uuid) - FK a products
-   - `country_code` (text) - 'UY', 'AR', 'MX', 'CL', 'VE', 'CO'
-   - `overrides` (jsonb) - contiene todos los costos específicos por país
+### Resumen Budget:
+- Total Unidades proyectadas
+- Total Gross Sale
+- Total Gross Profit
+- Margen Promedio (%)
 
-## Próximos Pasos
+### Resumen P&L Import:
+- Ventas por mes y compañía
+- Gross Sale y Gross Profit calculados
+- Comparación con montos de Odoo
 
-- Dashboard de métricas agregadas
-- Reportes de P&L por período
-- Integración con Odoo para sincronización
-- Autenticación de usuarios
-- Permisos y roles
+## 🔒 Seguridad
 
-## Notas
+- Variables de entorno en `.env.local` (no versionadas)
+- Row Level Security en Supabase
+- Validación de inputs en formularios
+- Sanitización de datos de Excel
 
-- Los cambios en los overrides se guardan automáticamente al hacer clic en "Guardar Cambios"
-- Los valores con % se calculan automáticamente basados en Gross Sales
-- Gross Sales es editable por país según el mercado local
+## 🚀 Deployment
 
+### Vercel (Recomendado):
+```bash
+# Instalar Vercel CLI
+npm i -g vercel
+
+# Deploy
+vercel
+```
+
+### Variables de entorno en Vercel:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+## 🐛 Troubleshooting
+
+### Error: "Module not found: Can't resolve 'xlsx'"
+```bash
+npm install xlsx
+```
+
+### Error: "Failed to fetch budget data"
+- Verificar conexión a Supabase
+- Verificar que las tablas existan
+- Verificar permisos RLS
+
+### Error: "Product not found"
+- Verificar que el producto exista en la BD
+- Verificar que `product_id` esté correctamente linkeado
+
+## 📝 Changelog
+
+Ver [CHANGELOG.md](./CHANGELOG.md) para historial de cambios.
+
+## 👥 Equipo
+
+Desarrollado por el equipo de SouthGenetics
+
+## 📄 Licencia
+
+Privado - SouthGenetics LLC
+
+---
+
+**Última actualización:** Diciembre 2024
