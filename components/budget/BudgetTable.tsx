@@ -31,6 +31,8 @@ interface BudgetRow {
   monthly_units?: number
   monthly_gross_sale?: number
   monthly_gross_profit?: number
+  commercial_discount?: number
+  monthly_commercial_discount?: number
 }
 
 interface BudgetTableProps {
@@ -89,9 +91,11 @@ function calculateGrossProfit(overrides: any): number {
   return salesRevenueUSD - totalCosts
 }
 
-function calculateMargin(grossSale: number, grossProfit: number): number {
-  if (grossSale === 0) return 0
-  return (grossProfit / grossSale) * 100
+function calculateMargin(grossSale: number, grossProfit: number, commercialDiscount: number = 0): number {
+  // El margen se calcula sobre Sales Revenue (Gross Sales - Commercial Discount), no sobre Gross Sales
+  const salesRevenue = grossSale - commercialDiscount
+  if (salesRevenue === 0) return 0
+  return (grossProfit / salesRevenue) * 100
 }
 
 function formatMargin(margin: number): string {
@@ -191,6 +195,7 @@ export function BudgetTable({ year, country, product, month }: BudgetTableProps)
             const overrideDataObj = override?.overrides || {}
 
             const grossSaleUSD = overrideDataObj.grossSalesUSD || 0
+            const commercialDiscountUSD = overrideDataObj.commercialDiscountUSD || 0
             const grossProfitUSD = calculateGrossProfit(overrideDataObj)
 
             // Debug log (solo en desarrollo)
@@ -235,6 +240,11 @@ export function BudgetTable({ year, country, product, month }: BudgetTableProps)
           monthly_units: monthlyUnits,
           monthly_gross_sale: monthlyGrossSale,
           monthly_gross_profit: monthlyGrossProfit,
+          // Guardar commercialDiscount para el cálculo del margen
+          commercial_discount: commercialDiscountUSD * row.total_units,
+          monthly_commercial_discount: isMonthFiltered && monthKey 
+            ? commercialDiscountUSD * (row[monthKey as keyof typeof row] || 0)
+            : 0,
         }
         })
       )
@@ -321,7 +331,10 @@ export function BudgetTable({ year, country, product, month }: BudgetTableProps)
             const grossProfit = isMonthFiltered
               ? row.monthly_gross_profit || 0
               : row.total_gross_profit
-            const margin = calculateMargin(grossSale, grossProfit)
+            const commercialDiscount = isMonthFiltered
+              ? row.monthly_commercial_discount || 0
+              : row.commercial_discount || 0
+            const margin = calculateMargin(grossSale, grossProfit, commercialDiscount)
 
             return (
               <>

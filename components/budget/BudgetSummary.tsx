@@ -130,6 +130,7 @@ export function BudgetSummary({ year, country, product, month }: BudgetSummaryPr
       let totalUnits = 0
       let totalGrossSale = 0
       let totalGrossProfit = 0
+      let totalCommercialDiscount = 0
 
       // Determinar si estamos filtrando por mes
       const isMonthFiltered = month !== "all"
@@ -165,15 +166,19 @@ export function BudgetSummary({ year, country, product, month }: BudgetSummaryPr
           const overrideDataObj = override?.overrides || {}
 
           const grossSaleUSD = overrideDataObj.grossSalesUSD || 0
+          const commercialDiscountUSD = overrideDataObj.commercialDiscountUSD || 0
           const grossProfitUSD = calculateGrossProfit(overrideDataObj)
 
           totalGrossSale += grossSaleUSD * units
           totalGrossProfit += grossProfitUSD * units
+          totalCommercialDiscount += commercialDiscountUSD * units
         })
       )
 
+      // Calcular el margen promedio sobre Sales Revenue (Gross Sale - Commercial Discount)
+      const totalSalesRevenue = totalGrossSale - totalCommercialDiscount
       const avgGrossMargin =
-        totalGrossSale > 0 ? (totalGrossProfit / totalGrossSale) * 100 : 0
+        totalSalesRevenue > 0 ? (totalGrossProfit / totalSalesRevenue) * 100 : 0
 
       setSummary({
         totalUnits,
