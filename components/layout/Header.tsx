@@ -11,6 +11,7 @@ export function Header() {
     { href: "/productos", label: "Productos" },
     { href: "/pl-import", label: "P&L Import" },
     { href: "/budget", label: "Budget" },
+    { href: "/comparacion", label: "Comparación" },
   ]
 
   return (
