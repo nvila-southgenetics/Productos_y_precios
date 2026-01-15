@@ -133,10 +133,9 @@ export function ProductSalesTable({ sales }: ProductSalesTableProps) {
                       {formatCurrency(grossSale)}
                     </span>
                     {hasNoGrossSale && (
-                      <AlertTriangle
-                        className="h-3 w-3 text-amber-500"
-                        title="Este producto no tiene precios configurados para este país"
-                      />
+                      <span title="Este producto no tiene precios configurados para este país">
+                        <AlertTriangle className="h-3 w-3 text-amber-500" />
+                      </span>
                     )}
                   </div>
                 </td>
@@ -146,10 +145,9 @@ export function ProductSalesTable({ sales }: ProductSalesTableProps) {
                       {formatCurrency(grossProfit)}
                     </span>
                     {hasNoGrossProfit && (
-                      <AlertTriangle
-                        className="h-3 w-3 text-amber-500"
-                        title="Este producto no tiene precios configurados para este país"
-                      />
+                      <span title="Este producto no tiene precios configurados para este país">
+                        <AlertTriangle className="h-3 w-3 text-amber-500" />
+                      </span>
                     )}
                   </div>
                 </td>

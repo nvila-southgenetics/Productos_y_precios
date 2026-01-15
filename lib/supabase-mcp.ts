@@ -184,7 +184,9 @@ export async function getCompanies(): Promise<string[]> {
   if (error) throw error
   if (!data) return []
 
-  const uniqueCompanies = Array.from(new Set(data.map(item => item.compañia)))
+  const uniqueCompanies = Array.from(
+    new Set(data.map((item: any) => item.compañia))
+  )
   return uniqueCompanies
 }
 
@@ -200,7 +202,7 @@ export async function getProductsFromSales(): Promise<string[]> {
   if (error) throw error
   if (!data) return []
 
-  const uniqueProducts = Array.from(new Set(data.map(item => item.producto)))
+  const uniqueProducts = Array.from(new Set(data.map((item: any) => item.producto)))
   return uniqueProducts
 }
 
@@ -269,7 +271,7 @@ export async function getMonthlySales(
   const countryCode = companyToCountry[company] || 'UY'
 
   // Combinar datos
-  return sales.map(sale => {
+  return sales.map((sale: any) => {
     const product = products?.find(p => p.name === sale.producto)
     const productOverrides = overrides?.find(
       o => o.product_id === product?.id && o.country_code === countryCode
@@ -336,8 +338,8 @@ export async function getAnnualTotal(
   if (!sales) return []
 
   // Agregar por producto
-  const aggregated = sales.reduce((acc, sale) => {
-    const existing = acc.find(item => item.producto === sale.producto)
+  const aggregated = sales.reduce((acc, sale: any) => {
+    const existing = acc.find((item: any) => item.producto === sale.producto)
     if (existing) {
       existing.cantidad_ventas += sale.cantidad_ventas
       existing.monto_total = (existing.monto_total || 0) + (sale.monto_total || 0)
@@ -391,5 +393,5 @@ export async function getAnnualTotal(
       tipo: product?.tipo || null,
       overrides: productOverrides?.overrides,
     }
-  }).sort((a, b) => b.cantidad_ventas - a.cantidad_ventas)
+  }).sort((a: any, b: any) => b.cantidad_ventas - a.cantidad_ventas)
 }

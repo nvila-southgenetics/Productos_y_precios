@@ -350,7 +350,6 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
 
     const resetOverrides: ProductCountryOverride["overrides"] = {
       grossSalesUSD: overrides.grossSalesUSD || 0,
-      grossSalesPct: 100,
       commercialDiscountUSD: 0,
       commercialDiscountPct: 0,
       productCostUSD: 0,
