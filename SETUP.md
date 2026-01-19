@@ -53,3 +53,5 @@ El proyecto está conectado a Supabase y usa las siguientes tablas:
 - Reportes de P&L
 - Integración con Odoo
 
+
+

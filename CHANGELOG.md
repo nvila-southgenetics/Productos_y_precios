@@ -87,3 +87,5 @@
 - [ ] Agregar validaciones más robustas
 - [ ] Implementar optimistic updates
 
+
+
