@@ -73,7 +73,7 @@ export function MarginChart({ products, title }: MarginChartProps) {
               padding: "8px 12px",
             }}
             labelStyle={{ fontWeight: 600, color: "#1e293b" }}
-            formatter={(value: number) => [`${value.toFixed(1)}%`, "Margen"]}
+            formatter={(value: number | undefined) => [`${(value || 0).toFixed(1)}%`, "Margen"]}
           />
           <Bar dataKey="margin" radius={[8, 8, 0, 0]}>
             {data.map((entry, index) => (

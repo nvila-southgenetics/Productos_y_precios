@@ -65,13 +65,16 @@ export function SalesChart({ products, title, dataKey, color }: SalesChartProps)
               padding: "8px 12px",
             }}
             labelStyle={{ fontWeight: 600, color: "#1e293b" }}
-            formatter={(value: number) => [
+            formatter={(value: number | undefined) => [
               typeof value === "number"
                 ? value.toLocaleString("es-UY", {
                     minimumFractionDigits: 0,
                     maximumFractionDigits: 0,
                   })
-                : value,
+                : (value || 0).toLocaleString("es-UY", {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0,
+                  }),
               "",
             ]}
           />
