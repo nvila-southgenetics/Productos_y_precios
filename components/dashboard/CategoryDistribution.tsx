@@ -8,7 +8,6 @@ import {
   Tooltip,
   Legend,
 } from "recharts"
-import { motion } from "framer-motion"
 import type { DashboardProduct } from "@/lib/supabase-mcp"
 
 interface CategoryDistributionProps {
@@ -55,12 +54,7 @@ export function CategoryDistribution({
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.4 }}
-      className="rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4 shadow-sm"
-    >
+    <div className="rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4 shadow-sm">
       <h3 className="text-lg font-semibold text-white mb-4">{title}</h3>
       <ResponsiveContainer width="100%" height={300}>
         <PieChart>
@@ -70,7 +64,7 @@ export function CategoryDistribution({
             cy="50%"
             labelLine={false}
             label={({ name, percent }) =>
-              `${name}: ${(percent * 100).toFixed(0)}%`
+              `${name}: ${((percent || 0) * 100).toFixed(0)}%`
             }
             outerRadius={80}
             fill="#8884d8"
@@ -100,6 +94,6 @@ export function CategoryDistribution({
           />
         </PieChart>
       </ResponsiveContainer>
-    </motion.div>
+    </div>
   )
 }
