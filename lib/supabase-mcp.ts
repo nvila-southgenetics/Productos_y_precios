@@ -669,64 +669,66 @@ async function getProductsWithMetrics(
   }
   
   // Calcular métricas para cada producto
-  return Array.from(productMap.values())
-    .map((product: any) => {
-      const productInfo = products?.find(p => p.name === product.producto)
-      
-      // Si es todas las compañías, usar el primer override disponible
-      const countryCode = isAllCompanies 
-        ? null 
-        : (companyToCountry[company] || 'UY')
-      
-      const productOverride = isAllCompanies
-        ? overrides?.find(o => o.product_id === productInfo?.id)
-        : overrides?.find(o => o.product_id === productInfo?.id && o.country_code === countryCode)
-      
-      const overrideData = productOverride?.overrides || {}
-      const grossSalesUSD = overrideData.grossSalesUSD || 0
-      
-      // Filtrar productos con grossSalesUSD inválido (0 o 10 USD)
-      if (grossSalesUSD === 0 || grossSalesUSD === 10) {
-        return null
-      }
-      
-      // Calcular grossProfitUSD (no está almacenado, se calcula)
-      const commercialDiscountUSD = overrideData.commercialDiscountUSD || 0
-      const salesRevenueUSD = grossSalesUSD - commercialDiscountUSD
-      
-      const totalCostOfSalesUSD =
-        (overrideData.productCostUSD || 0) +
-        (overrideData.kitCostUSD || 0) +
-        (overrideData.paymentFeeUSD || 0) +
-        (overrideData.bloodDrawSampleUSD || 0) +
-        (overrideData.sanitaryPermitsUSD || 0) +
-        (overrideData.externalCourierUSD || 0) +
-        (overrideData.internalCourierUSD || 0) +
-        (overrideData.physiciansFeesUSD || 0) +
-        (overrideData.salesCommissionUSD || 0)
-      
-      const grossProfitUSD = salesRevenueUSD - totalCostOfSalesUSD
-      
-      const grossSale = grossSalesUSD * product.cantidad_ventas
-      const grossProfit = grossProfitUSD * product.cantidad_ventas
-      const grossMarginPercent = grossSalesUSD > 0 
-        ? (grossProfitUSD / grossSalesUSD) * 100 
-        : 0
-      
-      return {
-        producto: product.producto,
-        product_id: productInfo?.id,
-        category: productInfo?.category || null,
-        tipo: productInfo?.tipo || null,
-        cantidad_ventas: product.cantidad_ventas,
-        monto_total: product.monto_total,
-        gross_sale: grossSale,
-        gross_profit: grossProfit,
-        gross_margin_percent: grossMarginPercent,
-        overrides: overrideData,
-      }
+  const dashboardProducts: DashboardProduct[] = []
+  
+  Array.from(productMap.values()).forEach((product: any) => {
+    const productInfo = products?.find(p => p.name === product.producto)
+    
+    // Si es todas las compañías, usar el primer override disponible
+    const countryCode = isAllCompanies 
+      ? null 
+      : (companyToCountry[company] || 'UY')
+    
+    const productOverride = isAllCompanies
+      ? overrides?.find(o => o.product_id === productInfo?.id)
+      : overrides?.find(o => o.product_id === productInfo?.id && o.country_code === countryCode)
+    
+    const overrideData = productOverride?.overrides || {}
+    const grossSalesUSD = overrideData.grossSalesUSD || 0
+    
+    // Filtrar productos con grossSalesUSD inválido (0 o 10 USD)
+    if (grossSalesUSD === 0 || grossSalesUSD === 10) {
+      return // Saltar este producto
+    }
+    
+    // Calcular grossProfitUSD (no está almacenado, se calcula)
+    const commercialDiscountUSD = overrideData.commercialDiscountUSD || 0
+    const salesRevenueUSD = grossSalesUSD - commercialDiscountUSD
+    
+    const totalCostOfSalesUSD =
+      (overrideData.productCostUSD || 0) +
+      (overrideData.kitCostUSD || 0) +
+      (overrideData.paymentFeeUSD || 0) +
+      (overrideData.bloodDrawSampleUSD || 0) +
+      (overrideData.sanitaryPermitsUSD || 0) +
+      (overrideData.externalCourierUSD || 0) +
+      (overrideData.internalCourierUSD || 0) +
+      (overrideData.physiciansFeesUSD || 0) +
+      (overrideData.salesCommissionUSD || 0)
+    
+    const grossProfitUSD = salesRevenueUSD - totalCostOfSalesUSD
+    
+    const grossSale = grossSalesUSD * product.cantidad_ventas
+    const grossProfit = grossProfitUSD * product.cantidad_ventas
+    const grossMarginPercent = grossSalesUSD > 0 
+      ? (grossProfitUSD / grossSalesUSD) * 100 
+      : 0
+    
+    dashboardProducts.push({
+      producto: product.producto,
+      product_id: productInfo?.id,
+      category: productInfo?.category || null,
+      tipo: productInfo?.tipo || null,
+      cantidad_ventas: product.cantidad_ventas,
+      monto_total: product.monto_total,
+      gross_sale: grossSale,
+      gross_profit: grossProfit,
+      gross_margin_percent: grossMarginPercent,
+      overrides: overrideData,
     })
-    .filter((p): p is DashboardProduct => p !== null)
+  })
+  
+  return dashboardProducts
 }
 
 /**
