@@ -81,8 +81,8 @@ export function CategoryDistribution({
               borderRadius: "8px",
               padding: "8px 12px",
             }}
-            formatter={(value: number) => [
-              value.toLocaleString("es-UY"),
+            formatter={(value: number | undefined) => [
+              (value || 0).toLocaleString("es-UY"),
               "Ventas",
             ]}
           />
