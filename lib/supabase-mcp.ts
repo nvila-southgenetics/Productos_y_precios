@@ -335,17 +335,73 @@ export async function getMonthlySales(
     'SouthGenetics LLC Venezuela': 'VE',
   }
 
-  // Si es "Todas las compañías", usar el país de la venta individual para los overrides
+  // Si es "Todas las compañías", agrupar por producto y crear desglose por compañía
   const isAllCompanies = normalizedCompany === "Todas las compañías"
-
-  // Combinar datos
+  
+  if (isAllCompanies) {
+    // Agrupar por producto
+    const groupedByProduct = sales.reduce((acc: any, sale: any) => {
+      const productKey = sale.producto
+      if (!acc[productKey]) {
+        acc[productKey] = {
+          producto: sale.producto,
+          mes: sale.mes,
+          año: sale.año,
+          periodo: sale.periodo,
+          compañia: "Todas las compañías", // Placeholder
+          cantidad_ventas: 0,
+          monto_total: 0,
+          precio_promedio: null,
+          companyBreakdown: []
+        }
+      }
+      
+      // Agregar al total
+      acc[productKey].cantidad_ventas += sale.cantidad_ventas
+      acc[productKey].monto_total = (acc[productKey].monto_total || 0) + (sale.monto_total || 0)
+      
+      // Agregar al desglose por compañía
+      const companyBreakdown = acc[productKey].companyBreakdown.find((cb: any) => cb.compañia === sale.compañia)
+      if (companyBreakdown) {
+        companyBreakdown.cantidad_ventas += sale.cantidad_ventas
+        companyBreakdown.monto_total = (companyBreakdown.monto_total || 0) + (sale.monto_total || 0)
+      } else {
+        acc[productKey].companyBreakdown.push({
+          compañia: sale.compañia,
+          cantidad_ventas: sale.cantidad_ventas,
+          monto_total: sale.monto_total || 0
+        })
+      }
+      
+      return acc
+    }, {})
+    
+    // Convertir a array y agregar información de productos
+    return Object.values(groupedByProduct).map((sale: any) => {
+      const product = products?.find(p => p.name === sale.producto)
+      // Buscar overrides de cualquier país (usar el primero disponible)
+      const productOverrides = overrides?.find(o => o.product_id === product?.id)
+      
+      // Recalcular precio promedio
+      if (sale.cantidad_ventas > 0 && sale.monto_total) {
+        sale.precio_promedio = sale.monto_total / sale.cantidad_ventas
+      }
+      
+      return {
+        ...sale,
+        product_id: product?.id,
+        category: product?.category || null,
+        tipo: product?.tipo || null,
+        overrides: productOverrides?.overrides,
+      } as MonthlySalesWithProduct
+    })
+  }
+  
+  // Si no es "Todas las compañías", comportamiento normal
   return sales.map((sale: any) => {
     const product = products?.find(p => p.name === sale.producto)
-    // Si es todas las compañías, buscar overrides basado en la compañía de la venta individual
     const saleCompany = sale.compañia || sale.company
-    const saleCountryCode = isAllCompanies 
-      ? (companyToCountry[saleCompany] || 'UY')
-      : (companyToCountry[company] || 'UY')
+    const saleCountryCode = companyToCountry[saleCompany] || 'UY'
     const productOverrides = overrides?.find(
       o => o.product_id === product?.id && o.country_code === saleCountryCode
     )

@@ -125,7 +125,7 @@ export function ProductSalesTable({ sales, isAllCompanies = false, isTotal = fal
                   </div>
                 </td>
                 <td className="px-3 py-2">
-                  {isAllCompanies && isTotal && sale.companyBreakdown && sale.companyBreakdown.length > 0 ? (
+                  {isAllCompanies && sale.companyBreakdown && sale.companyBreakdown.length > 0 ? (
                     <CompanyBreakdown breakdown={sale.companyBreakdown} />
                   ) : (
                     <span className="text-xs">{sale.compañia}</span>

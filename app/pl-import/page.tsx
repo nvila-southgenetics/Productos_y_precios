@@ -309,63 +309,63 @@ export default function PLImportPage() {
             return yearsToShow.map((year) => {
               const yearPeriods = periodsByYear[year]
               
-              // Calcular total anual para este año específico agregando las ventas de los períodos del año
+              // Calcular total anual para este año específico
               const isAllCompanies = selectedCompany === "Todas las compañías"
-              const yearTotalData = yearPeriods.reduce((acc, periodo) => {
-                const sales = monthlyData[periodo] || []
-                sales.forEach((sale) => {
-                  const existing = acc.find((item) => item.producto === sale.producto)
-                  if (existing) {
-                    existing.cantidad_ventas += sale.cantidad_ventas
-                    existing.monto_total = (existing.monto_total || 0) + (sale.monto_total || 0)
-                    // Recalcular precio promedio
-                    if (existing.cantidad_ventas > 0 && existing.monto_total) {
-                      existing.precio_promedio = existing.monto_total / existing.cantidad_ventas
-                    }
-                    
-                    // Si es "Todas las compañías", mantener el desglose por compañía
-                    if (isAllCompanies) {
-                      if (!existing.companyBreakdown) {
-                        existing.companyBreakdown = []
+              
+              // Si es "Todas las compañías", usar totalData de getAnnualTotal que ya tiene el desglose completo
+              // Si no, calcular desde los períodos mensuales
+              let finalTotalData: MonthlySalesWithProduct[]
+              
+              if (isAllCompanies && totalData.length > 0) {
+                finalTotalData = totalData
+              } else {
+                // Calcular total anual desde los períodos mensuales
+                finalTotalData = yearPeriods.reduce((acc, periodo) => {
+                  const sales = monthlyData[periodo] || []
+                  sales.forEach((sale) => {
+                    const existing = acc.find((item) => item.producto === sale.producto)
+                    if (existing) {
+                      existing.cantidad_ventas += sale.cantidad_ventas
+                      existing.monto_total = (existing.monto_total || 0) + (sale.monto_total || 0)
+                      // Recalcular precio promedio
+                      if (existing.cantidad_ventas > 0 && existing.monto_total) {
+                        existing.precio_promedio = existing.monto_total / existing.cantidad_ventas
                       }
-                      const companyBreakdown = existing.companyBreakdown.find((cb: any) => cb.compañia === sale.compañia)
-                      if (companyBreakdown) {
-                        companyBreakdown.cantidad_ventas += sale.cantidad_ventas
-                        companyBreakdown.monto_total = (companyBreakdown.monto_total || 0) + (sale.monto_total || 0)
-                      } else {
-                        existing.companyBreakdown.push({
-                          compañia: sale.compañia,
-                          cantidad_ventas: sale.cantidad_ventas,
-                          monto_total: sale.monto_total || 0
+                      
+                      // Si es "Todas las compañías" y el sale tiene companyBreakdown, combinarlo
+                      if (isAllCompanies && sale.companyBreakdown) {
+                        if (!existing.companyBreakdown) {
+                          existing.companyBreakdown = []
+                        }
+                        sale.companyBreakdown.forEach((cb: any) => {
+                          const existingBreakdown = existing.companyBreakdown!.find((eb: any) => eb.compañia === cb.compañia)
+                          if (existingBreakdown) {
+                            existingBreakdown.cantidad_ventas += cb.cantidad_ventas
+                            existingBreakdown.monto_total = (existingBreakdown.monto_total || 0) + (cb.monto_total || 0)
+                          } else {
+                            existing.companyBreakdown!.push({ ...cb })
+                          }
                         })
                       }
+                    } else {
+                      const newItem: any = {
+                        ...sale,
+                        periodo: `Total ${year}`,
+                        mes: 0,
+                        año: parseInt(year),
+                      }
+                      
+                      // Si es "Todas las compañías" y tiene companyBreakdown, copiarlo
+                      if (isAllCompanies && sale.companyBreakdown) {
+                        newItem.companyBreakdown = sale.companyBreakdown.map((cb: any) => ({ ...cb }))
+                      }
+                      
+                      acc.push(newItem)
                     }
-                  } else {
-                    const newItem: any = {
-                      ...sale,
-                      periodo: `Total ${year}`,
-                      mes: 0,
-                      año: parseInt(year),
-                    }
-                    
-                    // Si es "Todas las compañías", agregar desglose por compañía
-                    if (isAllCompanies) {
-                      newItem.companyBreakdown = [{
-                        compañia: sale.compañia,
-                        cantidad_ventas: sale.cantidad_ventas,
-                        monto_total: sale.monto_total || 0
-                      }]
-                    }
-                    
-                    acc.push(newItem)
-                  }
-                })
-                return acc
-              }, [] as MonthlySalesWithProduct[])
-              
-              // Si es "Todas las compañías" y hay totalData de getAnnualTotal, usar ese en lugar del cálculo local
-              // porque getAnnualTotal ya tiene el desglose completo por compañía
-              const finalTotalData = isAllCompanies && totalData.length > 0 ? totalData : yearTotalData
+                  })
+                  return acc
+                }, [] as MonthlySalesWithProduct[])
+              }
               
               // Solo mostrar total si hay datos cargados
               const hasData = yearPeriods.some(p => (monthlyData[p] || []).length > 0) || (isAllCompanies && totalData.length > 0)
