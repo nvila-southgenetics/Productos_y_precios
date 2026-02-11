@@ -65,8 +65,8 @@ export function ComparisonFilters({
 
   const fetchProducts = async () => {
     try {
-      // Obtener productos únicos de budget y ventas
-      const [budgetData, salesData] = await Promise.all([
+      // Obtener productos únicos de budget y ventas (2025 y 2026)
+      const [budgetData, sales2025Data, sales2026Data] = await Promise.all([
         supabase
           .from('budget')
           .select('product_name')
@@ -75,12 +75,22 @@ export function ComparisonFilters({
           .from('ventas_mensuales_view')
           .select('producto')
           .eq('año', 2025),
+        supabase
+          .from('ventas_mensuales_view')
+          .select('producto')
+          .eq('año', 2026),
       ]);
 
       const budgetProducts = budgetData.data?.map((b: any) => b.product_name) || [];
-      const salesProducts = salesData.data?.map((s: any) => s.producto) || [];
+      const sales2025Products = sales2025Data.data?.map((s: any) => s.producto) || [];
+      const sales2026Products = sales2026Data.data?.map((s: any) => s.producto) || [];
       
-      const uniqueProducts = [...new Set([...budgetProducts, ...salesProducts])].sort();
+      // Manejar errores sin fallar
+      if (sales2026Data.error) {
+        console.warn('⚠️ Error al obtener productos de 2026:', sales2026Data.error);
+      }
+      
+      const uniqueProducts = [...new Set([...budgetProducts, ...sales2025Products, ...sales2026Products])].sort();
       setProducts(uniqueProducts);
     } catch (error) {
       console.error('Error fetching products:', error);

@@ -13,6 +13,7 @@ interface ComparisonSummaryProps {
 interface SummaryData {
   budget2026: number;
   real2025: number;
+  real2026: number;
   difference: number;
   growthPercent: number;
 }
@@ -135,6 +136,7 @@ export function ComparisonSummary({ month, country, product }: ComparisonSummary
   const [summary, setSummary] = useState<SummaryData>({
     budget2026: 0,
     real2025: 0,
+    real2026: 0,
     difference: 0,
     growthPercent: 0,
   });
@@ -165,24 +167,42 @@ export function ComparisonSummary({ month, country, product }: ComparisonSummary
       if (budgetError) throw budgetError;
 
       // 2. Fetch Real 2025 - SIN FILTROS PREVIOS (aplicar después)
-      let realQuery = supabase
+      let real2025Query = supabase
         .from('ventas_mensuales_view')
         .select('*')
         .eq('año', 2025);
 
-      const { data: realData, error: realError } = await realQuery;
-      if (realError) {
-        console.error('❌ Error fetching real data:', realError);
-        throw realError;
+      const { data: real2025Data, error: real2025Error } = await real2025Query;
+      if (real2025Error) {
+        console.error('❌ Error fetching real 2025 data:', real2025Error);
+        // No lanzar error, continuar con array vacío
       }
+
+      // 3. Fetch Real 2026 - SIN FILTROS PREVIOS (aplicar después)
+      let real2026Query = supabase
+        .from('ventas_mensuales_view')
+        .select('*')
+        .eq('año', 2026);
+
+      const { data: real2026Data, error: real2026Error } = await real2026Query;
+      if (real2026Error) {
+        console.error('❌ Error fetching real 2026 data:', real2026Error);
+        // No lanzar error, simplemente continuar sin datos de 2026
+      }
+
+      // No requerir datos de ventas para continuar, pueden ser 0 o null
+      const safeReal2025Data = real2025Data || [];
+      const safeReal2026Data = real2026Data || [];
 
       if (process.env.NODE_ENV === 'development') {
-        console.log('📊 Summary - Real Data:', realData?.length, 'registros');
+        console.log('📊 Summary - Real Data 2025:', safeReal2025Data?.length, 'registros');
+        console.log('📊 Summary - Real Data 2026:', safeReal2026Data?.length, 'registros');
       }
 
-      // 3. Calcular totales
+      // 4. Calcular totales
       let budget2026 = 0;
       let real2025 = 0;
+      let real2026 = 0;
 
       const isMonthFiltered = month !== 'all';
       const monthKey = isMonthFiltered ? MONTH_KEYS[parseInt(month) - 1] : null;
@@ -196,8 +216,8 @@ export function ComparisonSummary({ month, country, product }: ComparisonSummary
         }
       });
 
-      // Sumar Real - CON FILTROS APLICADOS MANUALMENTE
-      realData?.forEach((row: any) => {
+      // Sumar Real 2025 - CON FILTROS APLICADOS MANUALMENTE
+      safeReal2025Data?.forEach((row: any) => {
         const countryCodeFromCompany = extractCountryCodeFromCompany(row.compañia);
 
         // Aplicar filtros
@@ -211,13 +231,33 @@ export function ComparisonSummary({ month, country, product }: ComparisonSummary
           real2025 += cantidad;
           
           if (process.env.NODE_ENV === 'development' && cantidad > 0) {
-            console.log(`✅ Summary Match: ${row.producto} (${countryCodeFromCompany}) = ${cantidad}`);
+            console.log(`✅ Summary Match 2025: ${row.producto} (${countryCodeFromCompany}) = ${cantidad}`);
+          }
+        }
+      });
+
+      // Sumar Real 2026 - CON FILTROS APLICADOS MANUALMENTE
+      safeReal2026Data?.forEach((row: any) => {
+        const countryCodeFromCompany = extractCountryCodeFromCompany(row.compañia);
+
+        // Aplicar filtros
+        const matchesCountry = country === 'all' || countryCodeFromCompany === country;
+        const matchesProduct = product === 'all' || 
+                             productNamesMatch(product, row.producto);
+        const matchesMonth = !isMonthFiltered || row.mes === parseInt(month);
+
+        if (matchesCountry && matchesProduct && matchesMonth) {
+          const cantidad = parseInt(row.cantidad_ventas) || 0;
+          real2026 += cantidad;
+          
+          if (process.env.NODE_ENV === 'development' && cantidad > 0) {
+            console.log(`✅ Summary Match 2026: ${row.producto} (${countryCodeFromCompany}) = ${cantidad}`);
           }
         }
       });
 
       if (process.env.NODE_ENV === 'development') {
-        console.log('📊 Summary Totals:', { budget2026, real2025 });
+        console.log('📊 Summary Totals:', { budget2026, real2025, real2026 });
       }
 
       // 4. Calcular diferencia y crecimiento
@@ -227,6 +267,7 @@ export function ComparisonSummary({ month, country, product }: ComparisonSummary
       setSummary({
         budget2026,
         real2025,
+        real2026,
         difference,
         growthPercent,
       });
@@ -249,7 +290,7 @@ export function ComparisonSummary({ month, country, product }: ComparisonSummary
   const isDecline = summary.difference < 0;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
       {/* Budget 2026 */}
       <div className="bg-white p-4 rounded-lg border">
         <div className="flex items-center justify-between">
@@ -270,6 +311,19 @@ export function ComparisonSummary({ month, country, product }: ComparisonSummary
             <p className="text-sm text-muted-foreground">Real 2025</p>
             <p className="text-2xl font-bold mt-1 text-purple-600">
               {summary.real2025.toLocaleString('es-UY')}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">unidades vendidas</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Real 2026 */}
+      <div className="bg-white p-4 rounded-lg border">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">Real 2026</p>
+            <p className="text-2xl font-bold mt-1 text-emerald-600">
+              {summary.real2026.toLocaleString('es-UY')}
             </p>
             <p className="text-xs text-muted-foreground mt-1">unidades vendidas</p>
           </div>

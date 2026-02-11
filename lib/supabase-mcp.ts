@@ -22,6 +22,7 @@ export interface ProductCountryOverride {
   country_code: 'UY' | 'AR' | 'MX' | 'CL' | 'VE' | 'CO'
   overrides: {
     grossSalesUSD?: number
+    grossProfitUSD?: number
     commercialDiscountUSD?: number
     commercialDiscountPct?: number
     productCostUSD?: number
@@ -72,6 +73,19 @@ export interface MonthlySalesWithProduct extends MonthlySales {
     cantidad_ventas: number
     monto_total: number | null
   }>
+}
+
+export interface DashboardProduct {
+  producto: string
+  product_id?: string
+  category?: string | null
+  tipo?: string | null
+  cantidad_ventas: number
+  monto_total: number | null
+  gross_sale: number
+  gross_profit: number
+  gross_margin_percent: number
+  overrides?: ProductCountryOverride['overrides']
 }
 
 /** Venta de la tabla ventas (por fecha) */
@@ -577,4 +591,218 @@ export async function getAnnualTotal(
       overrides: productOverrides?.overrides,
     }
   }).sort((a: any, b: any) => b.cantidad_ventas - a.cantidad_ventas)
+}
+
+/**
+ * Función auxiliar para obtener productos con métricas calculadas
+ */
+async function getProductsWithMetrics(
+  company: string,
+  year?: string,
+  month?: string,
+  productName?: string
+): Promise<DashboardProduct[]> {
+  const normalizedCompany = company.trim()
+  const isAllCompanies = normalizedCompany === "Todas las compañías"
+  
+  let query = supabase
+    .from('ventas_mensuales_view')
+    .select('producto, compañia, cantidad_ventas, monto_total, mes, año, periodo')
+  
+  if (!isAllCompanies) {
+    query = query.eq('compañia', normalizedCompany)
+  }
+  
+  if (year && year !== "Todos") {
+    query = query.eq('año', parseInt(year))
+  }
+  
+  if (month && month !== "Todos") {
+    query = query.eq('mes', parseInt(month))
+  }
+  
+  if (productName && productName !== 'Todos') {
+    query = query.eq('producto', productName)
+  }
+  
+  const { data: sales, error } = await query
+  
+  if (error) throw error
+  if (!sales) return []
+  
+  // Agrupar por producto
+  const productMap = new Map<string, any>()
+  
+  sales.forEach((sale: any) => {
+    const key = sale.producto
+    if (!productMap.has(key)) {
+      productMap.set(key, {
+        producto: sale.producto,
+        cantidad_ventas: 0,
+        monto_total: 0,
+      })
+    }
+    const product = productMap.get(key)!
+    product.cantidad_ventas += sale.cantidad_ventas
+    product.monto_total = (product.monto_total || 0) + (sale.monto_total || 0)
+  })
+  
+  // Obtener productos y overrides
+  const { data: products } = await supabase
+    .from('products')
+    .select('id, name, category, tipo')
+  
+  const { data: overrides } = await supabase
+    .from('product_country_overrides')
+    .select('*')
+  
+  const companyToCountry: Record<string, 'UY' | 'AR' | 'MX' | 'CL' | 'VE' | 'CO'> = {
+    'SouthGenetics LLC': 'UY',
+    'SouthGenetics LLC Uruguay': 'UY',
+    'SouthGenetics LLC Argentina': 'AR',
+    'SouthGenetics LLC Arge': 'AR',
+    'SouthGenetics LLC Chile': 'CL',
+    'Southgenetics LLC Chile': 'CL',
+    'SouthGenetics LLC Colombia': 'CO',
+    'SouthGenetics LLC México': 'MX',
+    'SouthGenetics LLC Venezuela': 'VE',
+  }
+  
+  // Calcular métricas para cada producto
+  return Array.from(productMap.values())
+    .map((product: any) => {
+      const productInfo = products?.find(p => p.name === product.producto)
+      
+      // Si es todas las compañías, usar el primer override disponible
+      const countryCode = isAllCompanies 
+        ? null 
+        : (companyToCountry[company] || 'UY')
+      
+      const productOverride = isAllCompanies
+        ? overrides?.find(o => o.product_id === productInfo?.id)
+        : overrides?.find(o => o.product_id === productInfo?.id && o.country_code === countryCode)
+      
+      const overrideData = productOverride?.overrides || {}
+      const grossSalesUSD = overrideData.grossSalesUSD || 0
+      
+      // Filtrar productos con grossSalesUSD inválido (0 o 10 USD)
+      if (grossSalesUSD === 0 || grossSalesUSD === 10) {
+        return null
+      }
+      
+      // Calcular grossProfitUSD (no está almacenado, se calcula)
+      const commercialDiscountUSD = overrideData.commercialDiscountUSD || 0
+      const salesRevenueUSD = grossSalesUSD - commercialDiscountUSD
+      
+      const totalCostOfSalesUSD =
+        (overrideData.productCostUSD || 0) +
+        (overrideData.kitCostUSD || 0) +
+        (overrideData.paymentFeeUSD || 0) +
+        (overrideData.bloodDrawSampleUSD || 0) +
+        (overrideData.sanitaryPermitsUSD || 0) +
+        (overrideData.externalCourierUSD || 0) +
+        (overrideData.internalCourierUSD || 0) +
+        (overrideData.physiciansFeesUSD || 0) +
+        (overrideData.salesCommissionUSD || 0)
+      
+      const grossProfitUSD = salesRevenueUSD - totalCostOfSalesUSD
+      
+      const grossSale = grossSalesUSD * product.cantidad_ventas
+      const grossProfit = grossProfitUSD * product.cantidad_ventas
+      const grossMarginPercent = grossSalesUSD > 0 
+        ? (grossProfitUSD / grossSalesUSD) * 100 
+        : 0
+      
+      return {
+        producto: product.producto,
+        product_id: productInfo?.id,
+        category: productInfo?.category || null,
+        tipo: productInfo?.tipo || null,
+        cantidad_ventas: product.cantidad_ventas,
+        monto_total: product.monto_total,
+        gross_sale: grossSale,
+        gross_profit: grossProfit,
+        gross_margin_percent: grossMarginPercent,
+        overrides: overrideData,
+      }
+    })
+    .filter((p): p is DashboardProduct => p !== null)
+}
+
+/**
+ * Obtiene los productos más vendidos para el dashboard
+ */
+export async function getTopSellingProducts(
+  company: string,
+  year?: string,
+  month?: string,
+  productName?: string,
+  limit: number = 10
+): Promise<DashboardProduct[]> {
+  const products = await getProductsWithMetrics(company, year, month, productName)
+  
+  // Ordenar por cantidad de ventas y limitar
+  return products
+    .sort((a, b) => b.cantidad_ventas - a.cantidad_ventas)
+    .slice(0, limit)
+}
+
+/**
+ * Obtiene los productos con mayor margen de ganancia para el dashboard
+ */
+export async function getTopMarginProducts(
+  company: string,
+  year?: string,
+  month?: string,
+  productName?: string,
+  limit: number = 10
+): Promise<DashboardProduct[]> {
+  const products = await getProductsWithMetrics(company, year, month, productName)
+  
+  // Filtrar productos con margen válido (> 0) y ordenar por margen descendente
+  return products
+    .filter(p => p.gross_margin_percent > 0)
+    .sort((a, b) => b.gross_margin_percent - a.gross_margin_percent)
+    .slice(0, limit)
+}
+
+/**
+ * Obtiene los productos con menor margen de ganancia para el dashboard
+ */
+export async function getBottomMarginProducts(
+  company: string,
+  year?: string,
+  month?: string,
+  productName?: string,
+  limit: number = 10
+): Promise<DashboardProduct[]> {
+  const products = await getProductsWithMetrics(company, year, month, productName)
+  
+  // Filtrar productos con margen válido (> 0) y ordenar por margen ascendente
+  return products
+    .filter(p => p.gross_margin_percent > 0)
+    .sort((a, b) => a.gross_margin_percent - b.gross_margin_percent)
+    .slice(0, limit)
+}
+
+/**
+ * Obtiene los productos más caros (mayor grossSalesUSD) para el dashboard
+ */
+export async function getMostExpensiveProducts(
+  company: string,
+  year?: string,
+  month?: string,
+  productName?: string,
+  limit: number = 10
+): Promise<DashboardProduct[]> {
+  const products = await getProductsWithMetrics(company, year, month, productName)
+  
+  // Ordenar por grossSalesUSD (precio unitario) descendente
+  return products
+    .sort((a, b) => {
+      const priceA = a.overrides?.grossSalesUSD || 0
+      const priceB = b.overrides?.grossSalesUSD || 0
+      return priceB - priceA
+    })
+    .slice(0, limit)
 }

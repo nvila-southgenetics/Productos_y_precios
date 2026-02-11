@@ -18,10 +18,10 @@ export default function ComparacionPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">
-            Comparación: Budget 2026 vs Real 2025
+            Comparación: Budget 2026 vs Real 2025 vs Real 2026
           </h1>
           <p className="text-sm text-gray-600 mt-1">
-            Analiza las proyecciones contra el desempeño histórico real
+            Analiza las proyecciones contra el desempeño histórico y actual
           </p>
         </div>
         
@@ -47,7 +47,8 @@ export default function ComparacionPage() {
           <p className="font-medium">Comparación de períodos:</p>
           <p>
             <strong>Budget:</strong> Proyecciones para 2026 | 
-            <strong className="ml-2">Real:</strong> Ventas reales de 2025
+            <strong className="ml-2">Real 2025:</strong> Ventas reales de 2025 | 
+            <strong className="ml-2">Real 2026:</strong> Ventas reales de 2026
           </p>
         </div>
       </div>

@@ -12,6 +12,7 @@ interface ComparisonRow {
   product_id: string | null;
   budget2026: number;
   real2025: number;
+  real2026: number;
   difference: number;
   growthPercent: number;
 }
@@ -184,40 +185,57 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
       }
 
       // 2. Fetch Real 2025 - SIN FILTROS EN QUERY (aplicar después para mejor control)
-      let realQuery = supabase
+      let real2025Query = supabase
         .from('ventas_mensuales_view')
         .select('*')
         .eq('año', 2025);
 
-      const { data: realData, error: realError } = await realQuery;
-      if (realError) {
-        console.error('❌ Error fetching real data:', realError);
-        throw realError;
-      }
-      
-      if (!realData) {
-        console.warn('⚠️ No se obtuvieron datos de ventas');
-        setData([]);
-        setLoading(false);
-        return;
+      const { data: real2025Data, error: real2025Error } = await real2025Query;
+      if (real2025Error) {
+        console.error('❌ Error fetching real 2025 data:', real2025Error);
+        // No lanzar error, continuar con array vacío
       }
 
+      // 3. Fetch Real 2026 - SIN FILTROS EN QUERY (aplicar después para mejor control)
+      let real2026Query = supabase
+        .from('ventas_mensuales_view')
+        .select('*')
+        .eq('año', 2026);
+
+      const { data: real2026Data, error: real2026Error } = await real2026Query;
+      if (real2026Error) {
+        console.error('❌ Error fetching real 2026 data:', real2026Error);
+        // No lanzar error, simplemente continuar sin datos de 2026
+      }
+      
+      // No requerir datos de ventas para continuar, pueden ser 0 o null
+      const safeReal2025Data = real2025Data || [];
+      const safeReal2026Data = real2026Data || [];
+
       console.log('📊 Budget Data:', budgetData?.length, 'registros');
-      console.log('📈 Real Data (2025):', realData?.length, 'registros');
-      if (realData && realData.length > 0) {
-        console.log('🔍 Muestra de datos reales:', {
-          primerRegistro: realData[0],
-          compañías: [...new Set(realData.map((r: any) => r.compañia))].slice(0, 5),
-          productos: [...new Set(realData.map((r: any) => r.producto))].slice(0, 5),
+      console.log('📈 Real Data (2025):', safeReal2025Data?.length, 'registros');
+      console.log('📈 Real Data (2026):', safeReal2026Data?.length, 'registros');
+      if (safeReal2025Data && safeReal2025Data.length > 0) {
+        console.log('🔍 Muestra de datos reales 2025:', {
+          primerRegistro: safeReal2025Data[0],
+          compañías: [...new Set(safeReal2025Data.map((r: any) => r.compañia))].slice(0, 5),
+          productos: [...new Set(safeReal2025Data.map((r: any) => r.producto))].slice(0, 5),
+        });
+      }
+      if (safeReal2026Data && safeReal2026Data.length > 0) {
+        console.log('🔍 Muestra de datos reales 2026:', {
+          primerRegistro: safeReal2026Data[0],
+          compañías: [...new Set(safeReal2026Data.map((r: any) => r.compañia))].slice(0, 5),
+          productos: [...new Set(safeReal2026Data.map((r: any) => r.producto))].slice(0, 5),
         });
       }
 
-      // 3. Agrupar datos reales por producto y país
-      const realGrouped: Record<string, number> = {};
+      // 4. Agrupar datos reales 2025 por producto y país
+      const real2025Grouped: Record<string, number> = {};
       
       const isMonthFiltered = month !== 'all';
 
-      realData?.forEach((row: any) => {
+      safeReal2025Data?.forEach((row: any) => {
         // Extraer código de país de la compañía
         const countryCodeFromCompany = extractCountryCode(row.compañia);
         
@@ -235,20 +253,53 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
 
         if (matchesCountry && matchesProduct && matchesMonth) {
           const cantidad = parseInt(row.cantidad_ventas) || 0;
-          realGrouped[key] = (realGrouped[key] || 0) + cantidad;
+          real2025Grouped[key] = (real2025Grouped[key] || 0) + cantidad;
           
           if (cantidad > 0) {
-            console.log(`✅ Match: ${row.producto} (${countryCodeFromCompany}) = ${cantidad} (key: ${key}, total: ${realGrouped[key]})`);
+            console.log(`✅ Match 2025: ${row.producto} (${countryCodeFromCompany}) = ${cantidad} (key: ${key}, total: ${real2025Grouped[key]})`);
           }
         }
       });
 
-      console.log('📦 Datos agrupados:', Object.keys(realGrouped).length, 'grupos');
-      if (Object.keys(realGrouped).length > 0) {
-        console.log('🔍 Primeros 10 grupos con ventas:', Object.entries(realGrouped).slice(0, 10));
+      // 5. Agrupar datos reales 2026 por producto y país
+      const real2026Grouped: Record<string, number> = {};
+
+      safeReal2026Data?.forEach((row: any) => {
+        // Extraer código de país de la compañía
+        const countryCodeFromCompany = extractCountryCode(row.compañia);
+        
+        // Normalizar nombre de producto
+        const normalizedProduct = normalizeProductName(row.producto);
+        
+        // Crear key única usando el nombre normalizado
+        const key = `${countryCodeFromCompany}-${normalizedProduct}`;
+
+        // Aplicar filtros
+        const matchesCountry = country === 'all' || countryCodeFromCompany === country;
+        const matchesProduct = product === 'all' || 
+                             productNamesMatch(product, row.producto);
+        const matchesMonth = !isMonthFiltered || row.mes === parseInt(month);
+
+        if (matchesCountry && matchesProduct && matchesMonth) {
+          const cantidad = parseInt(row.cantidad_ventas) || 0;
+          real2026Grouped[key] = (real2026Grouped[key] || 0) + cantidad;
+          
+          if (cantidad > 0) {
+            console.log(`✅ Match 2026: ${row.producto} (${countryCodeFromCompany}) = ${cantidad} (key: ${key}, total: ${real2026Grouped[key]})`);
+          }
+        }
+      });
+
+      console.log('📦 Datos agrupados 2025:', Object.keys(real2025Grouped).length, 'grupos');
+      console.log('📦 Datos agrupados 2026:', Object.keys(real2026Grouped).length, 'grupos');
+      if (Object.keys(real2025Grouped).length > 0) {
+        console.log('🔍 Primeros 10 grupos con ventas 2025:', Object.entries(real2025Grouped).slice(0, 10));
+      }
+      if (Object.keys(real2026Grouped).length > 0) {
+        console.log('🔍 Primeros 10 grupos con ventas 2026:', Object.entries(real2026Grouped).slice(0, 10));
       }
 
-      // 4. Combinar datos de budget con reales
+      // 6. Combinar datos de budget con reales
       const monthKey = isMonthFiltered ? MONTH_KEYS[parseInt(month) - 1] : null;
 
       // Verificar que hay datos de budget
@@ -267,22 +318,32 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
           ? (budgetRow[monthKey] || 0)
           : (budgetRow.total_units || 0);
 
-        // Buscar en realGrouped usando match flexible
-        // Buscar todas las keys del mismo país y hacer match flexible con el nombre del producto
-        const matchingKeys = Object.keys(realGrouped).filter(k => {
+        // Buscar en real2025Grouped usando match flexible
+        const matchingKeys2025 = Object.keys(real2025Grouped).filter(k => {
           const [countryCode, normalizedProductFromKey] = k.split('-');
           
-          // Primero verificar que el país coincida
           if (countryCode !== budgetRow.country_code) return false;
           
-          // Luego hacer match flexible del nombre del producto
-          // Necesitamos comparar el nombre normalizado de budget con el nombre normalizado de la key
           const normalizedBudgetName = normalizeProductName(budgetRow.product_name);
           
-          // Match exacto
           if (normalizedBudgetName === normalizedProductFromKey) return true;
           
-          // Match parcial: si uno contiene al otro
+          if (normalizedBudgetName.length >= 5 && normalizedProductFromKey.includes(normalizedBudgetName)) return true;
+          if (normalizedProductFromKey.length >= 5 && normalizedBudgetName.includes(normalizedProductFromKey)) return true;
+          
+          return false;
+        });
+        
+        // Buscar en real2026Grouped usando match flexible
+        const matchingKeys2026 = Object.keys(real2026Grouped).filter(k => {
+          const [countryCode, normalizedProductFromKey] = k.split('-');
+          
+          if (countryCode !== budgetRow.country_code) return false;
+          
+          const normalizedBudgetName = normalizeProductName(budgetRow.product_name);
+          
+          if (normalizedBudgetName === normalizedProductFromKey) return true;
+          
           if (normalizedBudgetName.length >= 5 && normalizedProductFromKey.includes(normalizedBudgetName)) return true;
           if (normalizedProductFromKey.length >= 5 && normalizedBudgetName.includes(normalizedProductFromKey)) return true;
           
@@ -290,34 +351,41 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
         });
         
         // Sumar todas las ventas que coincidan
-        let real = matchingKeys.reduce((sum, k) => sum + (realGrouped[k] || 0), 0);
+        let real2025 = matchingKeys2025.reduce((sum, k) => sum + (real2025Grouped[k] || 0), 0);
+        let real2026 = matchingKeys2026.reduce((sum, k) => sum + (real2026Grouped[k] || 0), 0);
         
-        if (real > 0 && matchingKeys.length > 0) {
-          console.log(`🔍 Match encontrado para "${budgetRow.product_name}" (${budgetRow.country_code}):`, {
-            matchingKeys,
-            real,
+        if (real2025 > 0 && matchingKeys2025.length > 0) {
+          console.log(`🔍 Match 2025 encontrado para "${budgetRow.product_name}" (${budgetRow.country_code}):`, {
+            matchingKeys: matchingKeys2025,
+            real: real2025,
             normalizedBudget: normalizeProductName(budgetRow.product_name),
-          });
-        } else if (budgetRow.total_units > 0 && Object.keys(realGrouped).length > 0) {
-          console.log(`⚠️ No se encontró match para "${budgetRow.product_name}" (${budgetRow.country_code})`, {
-            normalizedBudget: normalizeProductName(budgetRow.product_name),
-            keysDisponibles: Object.keys(realGrouped).filter(k => k.startsWith(`${budgetRow.country_code}-`)).slice(0, 5),
           });
         }
         
-        const difference = budget - real;
-        const growthPercent = real > 0 ? (difference / real) * 100 : 0;
+        if (real2026 > 0 && matchingKeys2026.length > 0) {
+          console.log(`🔍 Match 2026 encontrado para "${budgetRow.product_name}" (${budgetRow.country_code}):`, {
+            matchingKeys: matchingKeys2026,
+            real: real2026,
+            normalizedBudget: normalizeProductName(budgetRow.product_name),
+          });
+        }
+        
+        const difference = budget - real2025;
+        const growthPercent = real2025 > 0 ? (difference / real2025) * 100 : 0;
 
         // Log para debugging
         if (process.env.NODE_ENV === 'development' && budget > 0) {
           const normalizedBudgetName = normalizeProductName(budgetRow.product_name);
           console.log(`📊 ${budgetRow.product_name} (${budgetRow.country_code}):`, {
             normalized: normalizedBudgetName,
-            matchingKeys,
+            matchingKeys2025,
+            matchingKeys2026,
             budget,
-            real,
+            real2025,
+            real2026,
             difference,
-            keysDisponibles: Object.keys(realGrouped).filter(k => k.startsWith(`${budgetRow.country_code}-`)),
+            keysDisponibles2025: Object.keys(real2025Grouped).filter(k => k.startsWith(`${budgetRow.country_code}-`)),
+            keysDisponibles2026: Object.keys(real2026Grouped).filter(k => k.startsWith(`${budgetRow.country_code}-`)),
           });
         }
 
@@ -327,7 +395,8 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
           product_name: budgetRow.product_name,
           product_id: budgetRow.product_id,
           budget2026: budget,
-          real2025: real,
+          real2025: real2025,
+          real2026: real2026,
           difference,
           growthPercent,
         };
@@ -381,6 +450,7 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
             <th className="text-left px-4 py-3 font-medium text-xs">Producto</th>
             <th className="text-right px-4 py-3 font-medium text-xs">Budget 2026</th>
             <th className="text-right px-4 py-3 font-medium text-xs">Real 2025</th>
+            <th className="text-right px-4 py-3 font-medium text-xs">Real 2026</th>
             <th 
               className="text-right px-4 py-3 font-medium text-xs cursor-pointer hover:bg-muted/70 transition-colors"
               onClick={() => handleSort('difference')}
@@ -430,6 +500,9 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-sm text-purple-600">
                   {row.real2025.toLocaleString('es-UY')}
+                </td>
+                <td className="px-4 py-3 text-right font-medium text-sm text-emerald-600">
+                  {row.real2026.toLocaleString('es-UY')}
                 </td>
                 <td className={`px-4 py-3 text-right font-medium text-sm ${
                   isGrowth ? 'text-green-600' : 
