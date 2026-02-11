@@ -1,0 +1,79 @@
+{
+  "fecha": "2026-02-11T14:09:37.321Z",
+  "total_productos_sin_link": 18,
+  "total_ventas_sin_link": 54,
+  "productos_sin_link": [
+    {
+      "nombre": "AFIRMA- Oncología",
+      "cantidad_ventas": 29
+    },
+    {
+      "nombre": "Ajuste ene - nov 25 Onco y otros test",
+      "cantidad_ventas": 2
+    },
+    {
+      "nombre": "Cgt Exome ",
+      "cantidad_ventas": 1
+    },
+    {
+      "nombre": "Genomind Professional PGx",
+      "cantidad_ventas": 1
+    },
+    {
+      "nombre": "MaterniT Genome",
+      "cantidad_ventas": 2
+    },
+    {
+      "nombre": "Multifocales",
+      "cantidad_ventas": 1
+    },
+    {
+      "nombre": "ONCOTYPE DX MAMA",
+      "cantidad_ventas": 2
+    },
+    {
+      "nombre": "Onco Test",
+      "cantidad_ventas": 1
+    },
+    {
+      "nombre": "Onco test - dic/25",
+      "cantidad_ventas": 1
+    },
+    {
+      "nombre": "Oncotype DX Colon",
+      "cantidad_ventas": 1
+    },
+    {
+      "nombre": "Oncotype Dx Mama",
+      "cantidad_ventas": 6
+    },
+    {
+      "nombre": "Otros test",
+      "cantidad_ventas": 1
+    },
+    {
+      "nombre": "Otros test diagnóstico",
+      "cantidad_ventas": 1
+    },
+    {
+      "nombre": "Vista de 172 genes",
+      "cantidad_ventas": 1
+    },
+    {
+      "nombre": "[ANU 1A] 01SANCOR-0005",
+      "cantidad_ventas": 1
+    },
+    {
+      "nombre": "[Oncotype Dx Mama] Oncotype Dx Mama",
+      "cantidad_ventas": 1
+    },
+    {
+      "nombre": "false",
+      "cantidad_ventas": 1
+    },
+    {
+      "nombre": "mirTHYpe preOp ",
+      "cantidad_ventas": 1
+    }
+  ]
+}

@@ -16,6 +16,7 @@ export default function ProductosPage() {
   const [selectedCategory, setSelectedCategory] = useState("")
   const [selectedTipo, setSelectedTipo] = useState("")
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   // Obtener categorías y tipos únicos
   const categories = useMemo(() => {
@@ -38,11 +39,16 @@ export default function ProductosPage() {
   useEffect(() => {
     async function loadProducts() {
       setIsLoading(true)
+      setError(null)
       try {
         const data = await getProductsWithOverrides(selectedCountry)
         setProducts(data)
+        if (data.length === 0) {
+          setError("No se encontraron productos. Verifica la conexión con la base de datos.")
+        }
       } catch (error) {
         console.error("Error loading products:", error)
+        setError(error instanceof Error ? error.message : "Error al cargar los productos")
       } finally {
         setIsLoading(false)
       }
@@ -91,16 +97,18 @@ export default function ProductosPage() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4">
+    <div className="container mx-auto py-8 px-4 max-w-7xl">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold">Productos</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent mb-2">
+            Productos
+          </h1>
+          <p className="text-slate-600 mt-1">
             Gestiona tus productos y configura precios por país
           </p>
         </div>
-        <Button>
+        <Button className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-blue">
           <Plus className="h-4 w-4 mr-2" />
           Nuevo Producto
         </Button>
@@ -108,7 +116,7 @@ export default function ProductosPage() {
 
       {/* Filtro por País */}
       <div className="mb-6">
-        <label className="text-sm font-medium mb-2 block">Vista por País</label>
+        <label className="text-sm font-semibold mb-3 block text-blue-900">Vista por País</label>
         <CountryPills
           selectedCountry={selectedCountry}
           onCountryChange={setSelectedCountry}
@@ -132,6 +140,11 @@ export default function ProductosPage() {
       {/* Tabla de Productos */}
       {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">Cargando productos...</div>
+      ) : error ? (
+        <div className="rounded-md border border-red-200 bg-red-50 p-4">
+          <p className="text-red-800 font-medium">Error al cargar productos</p>
+          <p className="text-red-600 text-sm mt-1">{error}</p>
+        </div>
       ) : (
         <ProductTable
           products={filteredProducts}

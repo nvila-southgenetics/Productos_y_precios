@@ -16,6 +16,7 @@ interface MonthDropdownProps {
   onExpand?: (periodo: string) => void
   isLoading?: boolean
   selectedCompany?: string
+  isAllCompanies?: boolean
 }
 
 const monthNames: Record<string, string> = {
@@ -48,7 +49,8 @@ export function MonthDropdown({
   isTotal = false, 
   onExpand,
   isLoading = false,
-  selectedCompany = ""
+  selectedCompany = "",
+  isAllCompanies = false
 }: MonthDropdownProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isChecked, setIsChecked] = useState(false)
@@ -56,22 +58,42 @@ export function MonthDropdown({
 
   const totalCantidad = sales.reduce((sum, sale) => sum + sale.cantidad_ventas, 0)
 
-  // Cargar datos solo cuando se expande y no hay datos
+  // Cargar datos automáticamente cuando se monta el componente si no hay datos
+  useEffect(() => {
+    // Guards: evitar cargas innecesarias
+    if (isTotal) return // El total se carga por separado
+    if (!onExpand) return
+    if (sales.length > 0) return // Ya tenemos datos
+    if (isLoading) return // Ya está cargando
+    
+    // Cargar datos automáticamente al montar o cuando sales se vacía
+    const timeoutId = setTimeout(() => {
+      if (onExpand) {
+        onExpand(periodo)
+      }
+    }, 100) // Pequeño delay para evitar múltiples llamadas
+    
+    return () => clearTimeout(timeoutId)
+  }, [periodo, isTotal, sales.length]) // Incluir sales.length para detectar cuando se limpian los datos
+
+  // Cargar datos cuando se expande (fallback)
   useEffect(() => {
     // Guards: evitar cargas innecesarias
     if (!isExpanded) return
     if (isTotal) return // El total se carga por separado
     if (!onExpand) return
     if (sales.length > 0) return // Ya tenemos datos
+    if (isLoading) return // Ya está cargando
     
     // Cargar datos solo si se cumplen todas las condiciones
-    // Usar setTimeout para evitar llamadas síncronas que causen loops
     const timeoutId = setTimeout(() => {
-      onExpand(periodo)
+      if (onExpand) {
+        onExpand(periodo)
+      }
     }, 0)
     
     return () => clearTimeout(timeoutId)
-  }, [isExpanded, periodo, isTotal, sales.length]) // Incluir sales.length pero con guard
+  }, [isExpanded])
 
   return (
     <div className="border rounded-lg overflow-hidden">
@@ -97,8 +119,11 @@ export function MonthDropdown({
           <span className="font-medium text-sm">
             {isTotal ? "Total" : formatPeriodo(periodo)}
           </span>
-          <span className="text-xs text-muted-foreground">
-            (Total: {totalCantidad})
+          <span className={cn(
+            "text-xs font-semibold px-2 py-0.5 rounded",
+            totalCantidad > 0 ? "text-blue-700 bg-blue-100" : "text-slate-500"
+          )}>
+            {isLoading ? "Cargando..." : `Total: ${totalCantidad}`}
           </span>
         </div>
         <Button
@@ -123,7 +148,11 @@ export function MonthDropdown({
               Cargando datos...
             </div>
           ) : (
-            <ProductSalesTable sales={sales} />
+            <ProductSalesTable 
+              sales={sales} 
+              isAllCompanies={isAllCompanies}
+              isTotal={isTotal}
+            />
           )}
         </div>
       )}

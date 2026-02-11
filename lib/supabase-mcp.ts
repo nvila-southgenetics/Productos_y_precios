@@ -67,6 +67,69 @@ export interface MonthlySalesWithProduct extends MonthlySales {
   category?: string | null
   tipo?: string | null
   overrides?: ProductCountryOverride['overrides']
+  companyBreakdown?: Array<{
+    compañia: string
+    cantidad_ventas: number
+    monto_total: number | null
+  }>
+}
+
+/** Venta de la tabla ventas (por fecha) */
+export interface VentaByDate {
+  id: string
+  fecha: string
+  test: string
+  amount: number
+  company: string
+}
+
+/**
+ * Obtiene todas las ventas de una fecha desde la tabla ventas
+ * @param fecha Formato YYYY-MM-DD
+ */
+export async function getSalesByDate(fecha: string): Promise<VentaByDate[]> {
+  const { data, error } = await supabase
+    .from('ventas')
+    .select('id, fecha, test, amount, company')
+    .eq('fecha', fecha)
+    .order('company', { ascending: true })
+    .order('test', { ascending: true })
+
+  if (error) throw error
+  if (!data) return []
+
+  return data.map((row: { id: string; fecha: string; test: string; amount: string | number; company: string }) => ({
+    id: row.id,
+    fecha: row.fecha,
+    test: row.test,
+    amount: typeof row.amount === 'string' ? parseFloat(row.amount) : row.amount,
+    company: row.company,
+  }))
+}
+
+/**
+ * Borra todas las ventas con fecha en un año específico
+ * @param year Año en formato YYYY (ej: "2026")
+ */
+export async function deleteSalesByYear(year: string): Promise<{ deleted: number; error: any }> {
+  const yearStart = `${year}-01-01`
+  const yearEnd = `${year}-12-31`
+  
+  const { data, error } = await supabase
+    .from('ventas')
+    .delete()
+    .gte('fecha', yearStart)
+    .lte('fecha', yearEnd)
+    .select()
+
+  if (error) {
+    console.error('Error borrando ventas:', error)
+    return { deleted: 0, error }
+  }
+
+  const deletedCount = data?.length || 0
+  console.log(`✅ Borradas ${deletedCount} ventas del año ${year}`)
+  return { deleted: deletedCount, error: null }
 }
 
 /**
@@ -220,8 +283,12 @@ export async function getMonthlySales(
   let query = supabase
     .from('ventas_mensuales_view')
     .select('*')
-    .eq('compañia', normalizedCompany) // ✅ Usar compañía normalizada
     .order('cantidad_ventas', { ascending: false })
+  
+  // Solo filtrar por compañía si no es "Todas las compañías"
+  if (normalizedCompany !== "Todas las compañías") {
+    query = query.eq('compañia', normalizedCompany) // ✅ Usar compañía normalizada
+  }
 
   // ✅ Filtro por período es OBLIGATORIO si se proporciona
   if (periodo) {
@@ -268,13 +335,19 @@ export async function getMonthlySales(
     'SouthGenetics LLC Venezuela': 'VE',
   }
 
-  const countryCode = companyToCountry[company] || 'UY'
+  // Si es "Todas las compañías", usar el país de la venta individual para los overrides
+  const isAllCompanies = normalizedCompany === "Todas las compañías"
 
   // Combinar datos
   return sales.map((sale: any) => {
     const product = products?.find(p => p.name === sale.producto)
+    // Si es todas las compañías, buscar overrides basado en la compañía de la venta individual
+    const saleCompany = sale.compañia || sale.company
+    const saleCountryCode = isAllCompanies 
+      ? (companyToCountry[saleCompany] || 'UY')
+      : (companyToCountry[company] || 'UY')
     const productOverrides = overrides?.find(
-      o => o.product_id === product?.id && o.country_code === countryCode
+      o => o.product_id === product?.id && o.country_code === saleCountryCode
     )
 
     return {
@@ -292,16 +365,34 @@ export async function getMonthlySales(
  * Ordenados de forma ascendente (enero primero)
  */
 export async function getAvailablePeriods(company: string): Promise<string[]> {
-  const { data, error } = await supabase
+  // Normalizar nombre de compañía (trim espacios)
+  const normalizedCompany = company.trim()
+  
+  let query = supabase
     .from('ventas_mensuales_view')
     .select('periodo')
-    .eq('compañia', company)
     .order('periodo', { ascending: true }) // ✅ Cambiado a true para orden ascendente
+  
+  // Solo filtrar por compañía si no es "Todas las compañías"
+  if (normalizedCompany !== "Todas las compañías") {
+    query = query.eq('compañia', normalizedCompany) // ✅ Usar compañía normalizada
+  }
+  
+  const { data, error } = await query
 
-  if (error) throw error
-  if (!data) return []
+  if (error) {
+    console.error('Error en getAvailablePeriods:', { error, company: normalizedCompany })
+    throw error
+  }
+  if (!data) {
+    console.warn(`⚠️ No se encontraron períodos para la compañía: ${normalizedCompany}`)
+    return []
+  }
 
   const uniquePeriods = Array.from(new Set(data.map(item => item.periodo)))
+  
+  // Debug: mostrar períodos encontrados
+  console.log(`📅 Períodos encontrados para ${normalizedCompany}:`, uniquePeriods)
   
   // Ordenar numéricamente para asegurar orden correcto (2025-01, 2025-02, etc.)
   return uniquePeriods.sort((a, b) => {
@@ -326,7 +417,11 @@ export async function getAnnualTotal(
   let query = supabase
     .from('ventas_mensuales_view')
     .select('producto, compañia, cantidad_ventas, monto_total')
-    .eq('compañia', normalizedCompany) // ✅ Usar compañía normalizada
+  
+  // Solo filtrar por compañía si no es "Todas las compañías"
+  if (normalizedCompany !== "Todas las compañías") {
+    query = query.eq('compañia', normalizedCompany) // ✅ Usar compañía normalizada
+  }
 
   if (productName && productName !== 'Todos') {
     query = query.eq('producto', productName)
@@ -343,14 +438,43 @@ export async function getAnnualTotal(
     if (existing) {
       existing.cantidad_ventas += sale.cantidad_ventas
       existing.monto_total = (existing.monto_total || 0) + (sale.monto_total || 0)
+      
+      // Si es "Todas las compañías", mantener el desglose por compañía
+      if (isAllCompanies) {
+        if (!existing.companyBreakdown) {
+          existing.companyBreakdown = []
+        }
+        const companyBreakdown = existing.companyBreakdown.find((cb: any) => cb.compañia === sale.compañia)
+        if (companyBreakdown) {
+          companyBreakdown.cantidad_ventas += sale.cantidad_ventas
+          companyBreakdown.monto_total = (companyBreakdown.monto_total || 0) + (sale.monto_total || 0)
+        } else {
+          existing.companyBreakdown.push({
+            compañia: sale.compañia,
+            cantidad_ventas: sale.cantidad_ventas,
+            monto_total: sale.monto_total || 0
+          })
+        }
+      }
     } else {
-      acc.push({
+      const newItem: any = {
         ...sale,
         mes: 0,
         año: 0,
         periodo: 'Total',
         precio_promedio: null,
-      } as MonthlySalesWithProduct)
+      }
+      
+      // Si es "Todas las compañías", agregar desglose por compañía
+      if (isAllCompanies) {
+        newItem.companyBreakdown = [{
+          compañia: sale.compañia,
+          cantidad_ventas: sale.cantidad_ventas,
+          monto_total: sale.monto_total || 0
+        }]
+      }
+      
+      acc.push(newItem as MonthlySalesWithProduct)
     }
     return acc
   }, [] as MonthlySalesWithProduct[])
@@ -377,14 +501,17 @@ export async function getAnnualTotal(
     'SouthGenetics LLC Venezuela': 'VE',
   }
 
-  const countryCode = companyToCountry[company] || 'UY'
+  // Si es "Todas las compañías", no aplicar overrides específicos por país
+  const isAllCompanies = normalizedCompany === "Todas las compañías"
+  const countryCode = isAllCompanies ? null : (companyToCountry[company] || 'UY')
 
   // Combinar datos
   return aggregated.map(sale => {
     const product = products?.find(p => p.name === sale.producto)
-    const productOverrides = overrides?.find(
-      o => o.product_id === product?.id && o.country_code === countryCode
-    )
+    // Si es todas las compañías, buscar overrides de cualquier país o usar el primero disponible
+    const productOverrides = isAllCompanies 
+      ? overrides?.find(o => o.product_id === product?.id) // Cualquier override del producto
+      : overrides?.find(o => o.product_id === product?.id && o.country_code === countryCode)
 
     return {
       ...sale,

@@ -48,7 +48,7 @@ export default function ProductDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto py-8 px-4">
+      <div className="container mx-auto py-8 px-4 max-w-7xl">
         <div className="text-center py-12 text-muted-foreground">
           Cargando producto...
         </div>
@@ -58,7 +58,7 @@ export default function ProductDetailPage() {
 
   if (error || !product) {
     return (
-      <div className="container mx-auto py-8 px-4">
+      <div className="container mx-auto py-8 px-4 max-w-7xl">
         <div className="text-center py-12">
           <h1 className="text-2xl font-bold mb-4">Producto no encontrado</h1>
           <p className="text-muted-foreground mb-6">{error || "El producto que buscas no existe"}</p>
@@ -71,7 +71,7 @@ export default function ProductDetailPage() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4">
+    <div className="container mx-auto py-8 px-4 max-w-7xl">
       {/* Breadcrumb y Header */}
       <div className="mb-6">
         <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">

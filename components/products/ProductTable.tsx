@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Eye, Edit, Trash2, ExternalLink } from "lucide-react"
+import { Eye, Edit, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { formatDate } from "@/lib/utils"
@@ -62,31 +62,24 @@ export function ProductTable({
     onDeleteProduct(product)
   }
 
-  const handleLinkClick = (e: React.MouseEvent, product: ProductWithOverrides) => {
-    e.stopPropagation()
-    const url = `${window.location.origin}/productos/${product.id}`
-    navigator.clipboard.writeText(url)
-    // TODO: Mostrar toast de éxito
-  }
-
   return (
-    <div className="rounded-md border overflow-x-auto">
+    <div className="rounded-lg border border-blue-200/50 overflow-x-auto shadow-sm bg-white">
       <table className="w-full">
         <thead>
-          <tr className="border-b bg-muted/50">
-            <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
+          <tr className="border-b border-blue-200 bg-gradient-to-r from-blue-50 to-blue-100/50">
+            <th className="h-12 px-4 text-left align-middle font-semibold text-blue-900">
               Producto
             </th>
-            <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
+            <th className="h-12 px-4 text-left align-middle font-semibold text-blue-900">
               SKU
             </th>
-            <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
+            <th className="h-12 px-4 text-left align-middle font-semibold text-blue-900">
               Descripción
             </th>
-            <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
+            <th className="h-12 px-4 text-left align-middle font-semibold text-blue-900">
               Fecha
             </th>
-            <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
+            <th className="h-12 px-4 text-left align-middle font-semibold text-blue-900">
               Acciones
             </th>
           </tr>
@@ -94,7 +87,7 @@ export function ProductTable({
         <tbody>
           {products.length === 0 ? (
             <tr>
-              <td colSpan={5} className="h-24 text-center text-muted-foreground">
+              <td colSpan={5} className="h-24 text-center text-slate-500">
                 No se encontraron productos
               </td>
             </tr>
@@ -102,23 +95,23 @@ export function ProductTable({
             products.map((product) => (
               <tr
                 key={product.id}
-                className="border-b transition-colors hover:bg-muted/50 cursor-pointer"
+                className="border-b border-blue-100/50 transition-colors hover:bg-blue-50/30 cursor-pointer"
                 onClick={() => handleProductClick(product)}
               >
                 <td className="p-4">
                   <div className="flex flex-col gap-2">
-                    <div className="font-medium hover:text-primary transition-colors">{product.name}</div>
+                    <div className="font-semibold text-slate-800 hover:text-blue-700 transition-colors">{product.name}</div>
                     <div className="flex gap-2 flex-wrap">
                       {product.category && (
                         <Badge
-                          className={`${categoryColors[product.category] || categoryColors["Otros"]} border`}
+                          className={`${categoryColors[product.category] || categoryColors["Otros"]} border shadow-sm`}
                         >
                           {product.category}
                         </Badge>
                       )}
                       {product.tipo && (
                         <Badge
-                          className={`${tipoColors[product.tipo] || "bg-gray-50 text-gray-700 border-gray-200"} border`}
+                          className={`${tipoColors[product.tipo] || "bg-gray-50 text-gray-700 border-gray-200"} border shadow-sm`}
                         >
                           {product.tipo}
                         </Badge>
@@ -127,31 +120,24 @@ export function ProductTable({
                   </div>
                 </td>
                 <td className="p-4">
-                  <span className="text-sm text-muted-foreground">{product.sku}</span>
+                  <span className="text-sm text-slate-600 font-mono">{product.sku}</span>
                 </td>
                 <td className="p-4">
-                  <span className="text-sm text-muted-foreground">
+                  <span className="text-sm text-slate-600">
                     {product.description || "Sin descripción"}
                   </span>
                 </td>
                 <td className="p-4">
-                  <span className="text-sm">{formatDate(product.created_at)}</span>
+                  <span className="text-sm text-slate-600">{formatDate(product.created_at)}</span>
                 </td>
                 <td className="p-4">
                   <div className="flex items-center gap-2">
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={(e) => handleLinkClick(e, product)}
-                      title="Copiar URL"
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
                       onClick={(e) => handleViewClick(e, product)}
                       title="Ver producto"
+                      className="hover:bg-blue-100 hover:text-blue-700"
                     >
                       <Eye className="h-4 w-4" />
                     </Button>
@@ -160,6 +146,7 @@ export function ProductTable({
                       size="icon"
                       onClick={(e) => handleEditClick(e, product)}
                       title="Editar producto"
+                      className="hover:bg-blue-100 hover:text-blue-700"
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -168,8 +155,9 @@ export function ProductTable({
                       size="icon"
                       onClick={(e) => handleDeleteClick(e, product)}
                       title="Eliminar producto"
+                      className="hover:bg-red-100 hover:text-red-700"
                     >
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </td>

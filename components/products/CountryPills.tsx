@@ -24,13 +24,13 @@ export function CountryPills({ selectedCountry, onCountryChange }: CountryPillsP
           key={country.code}
           onClick={() => onCountryChange(country.code)}
           className={cn(
-            "px-4 py-2 rounded-full text-sm font-medium transition-colors border",
+            "px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 border shadow-sm",
             selectedCountry === country.code
-              ? "bg-primary text-primary-foreground border-primary"
-              : "bg-background text-foreground border-input hover:bg-accent hover:text-accent-foreground"
+              ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white border-blue-700 shadow-blue"
+              : "bg-white text-slate-700 border-blue-200 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700"
           )}
         >
-          {country.code}
+          {country.name}
         </button>
       ))}
     </div>

@@ -21,6 +21,7 @@ export function CompanyFilter({
         onChange={(e) => onCompanyChange(e.target.value)}
         className="w-full"
       >
+        <option value="Todas las compañías">Todas las compañías</option>
         {companies.map((company) => (
           <option key={company} value={company}>
             {company}

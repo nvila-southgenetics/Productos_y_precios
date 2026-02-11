@@ -1,0 +1,168 @@
+{
+  "fecha": "2026-02-11T13:58:13.327Z",
+  "resumen": {
+    "total_productos_ventas": 39,
+    "matches_exactos": 38,
+    "productos_ambiguos": 0,
+    "productos_sin_match": 1,
+    "registros_actualizados": 0
+  },
+  "productos_ambiguos": [],
+  "productos_sin_match": [
+    "AFIRMA- Oncología"
+  ],
+  "matches_exactos": [
+    {
+      "test_name": "[Oncotype Dx Mama] ONCOTYPE DX MAMA",
+      "product_id": "ae9fed61-3248-4724-ac83-1225b45bc0a1"
+    },
+    {
+      "test_name": "[Genomind Professional PGx] Genomind Profesional PGx",
+      "product_id": "d945d8dd-c0b1-4f40-b44a-d693a3de5faa"
+    },
+    {
+      "test_name": "Unity Básico",
+      "product_id": "a6e31566-433b-4d8d-ab73-9468cbe1b228"
+    },
+    {
+      "test_name": "[mirTHYpe FULL] Mir-THYpe(R) ",
+      "product_id": "f601a075-c5b4-4926-bfd1-1a30cc9dd279"
+    },
+    {
+      "test_name": "MATERNIT 21 + SCA + ESS",
+      "product_id": "893ac9cb-f8eb-4afd-b8df-8450f7cce934"
+    },
+    {
+      "test_name": "[Genomic Prostate Score (GPS)] ONCOTYPE DX GPS (Próstata)",
+      "product_id": "61c149ee-89cb-4d8a-b55b-273281cf6b6f"
+    },
+    {
+      "test_name": "NIFTY BÁSICO\n",
+      "product_id": "368ce316-8cdb-4ef3-9ceb-5e582fae3d6c"
+    },
+    {
+      "test_name": "PANEL CA HEREDITARIO EXTENDIDO",
+      "product_id": "f30789d0-abe8-4b04-b54e-922309542c7d"
+    },
+    {
+      "test_name": "Unity Complete",
+      "product_id": "f2259709-7e39-4091-ae02-5330ed3d2333"
+    },
+    {
+      "test_name": "[SelectMDX] SELECTMDX",
+      "product_id": "fa57457f-6445-46d6-9ca1-cd2ba9c3a381"
+    },
+    {
+      "test_name": "MATERNIT GENOME",
+      "product_id": "fcea7bc1-3a21-4e69-b72b-f5950b920855"
+    },
+    {
+      "test_name": "IMMUNOCAP ISAC",
+      "product_id": "872db25e-0442-4fe1-bd10-2c9918883012"
+    },
+    {
+      "test_name": "Invitae Canceres Hereditarios Comunes",
+      "product_id": "0dcbb0ac-aeab-4493-906d-a154d64fb023"
+    },
+    {
+      "test_name": "Exome proband only",
+      "product_id": "be2754fb-7a61-4099-9b8c-466a3d6d9f74"
+    },
+    {
+      "test_name": "PATERNIDAD PRE",
+      "product_id": "1b03e2a6-c23c-47fc-b758-36492e241fc6"
+    },
+    {
+      "test_name": "Paternidad Post Natal ",
+      "product_id": "efd1b42c-e2ba-4677-8a25-bf040a4fe9a3"
+    },
+    {
+      "test_name": "NIFTY PRO",
+      "product_id": "5ab65ddf-0e30-41c3-80b2-01be8d11fc57"
+    },
+    {
+      "test_name": "Panel Invitae CA Prostata",
+      "product_id": "f477a3c7-b480-431f-9ea9-11dcdbcc081d"
+    },
+    {
+      "test_name": "Mayo Clinic ONCOLOGY",
+      "product_id": "b38976c5-7569-4ff7-bc3b-03f1bdb7a264"
+    },
+    {
+      "test_name": "Sentis Discovery CTDNA\n",
+      "product_id": "4d61c7ec-e36e-40fd-9224-cd3731155298"
+    },
+    {
+      "test_name": "[Cxbladder] Cxbadder",
+      "product_id": "0e6a6730-cad1-4353-9fef-b74937b20b72"
+    },
+    {
+      "test_name": "ErComplete",
+      "product_id": "975be9ef-9531-420f-a7f4-5429841ee162"
+    },
+    {
+      "test_name": "[Unity BPS] Unity BPS",
+      "product_id": "ed909c82-b6df-4ebf-91a0-99c8197093ca"
+    },
+    {
+      "test_name": "Sentis Discovery Tissue",
+      "product_id": "b547b53d-9b1f-409c-a256-2fe2ffb7174a"
+    },
+    {
+      "test_name": "[mirTHYpe preOp] mirTHYpe preOp ",
+      "product_id": "2dbf94c2-5131-48c7-9426-2b6fb56d97f6"
+    },
+    {
+      "test_name": "4KSCORE",
+      "product_id": "384bb0a6-93bd-4006-a209-60b361478bf6"
+    },
+    {
+      "test_name": "MATERNIT 21 + SCA",
+      "product_id": "0813adbd-b38c-45c5-b19d-c0924cc74192"
+    },
+    {
+      "test_name": "Panel CaM Ginecológico",
+      "product_id": "72e7e33b-10bb-46a3-ade9-58ed802c852a"
+    },
+    {
+      "test_name": "Metabolic Newborn Screening Confirmation Panel",
+      "product_id": "7c81d1cd-a2be-49d9-b2a2-3f59817669b8"
+    },
+    {
+      "test_name": "Confirm MDx",
+      "product_id": "af134741-554b-4eac-972c-7760ea83525d"
+    },
+    {
+      "test_name": "Cgt Exome ",
+      "product_id": "03d82cfb-540f-43a7-bc38-c9df134bfbfe"
+    },
+    {
+      "test_name": "SENTIS™ Colorectal Cancer Panel (Tissue, 23 genes)",
+      "product_id": "4569c0cd-fc2b-4109-b357-dccb8834bb0d"
+    },
+    {
+      "test_name": "PANEL GENETICO INVITAE",
+      "product_id": "1cd84067-76b6-41e8-873b-a1a6bec7a4bf"
+    },
+    {
+      "test_name": "XPression Atlas\n",
+      "product_id": "d9fafd87-65e5-4053-bbb5-807d285e005d"
+    },
+    {
+      "test_name": "Vista Carrier 1200",
+      "product_id": "1d37c3b6-8c82-454b-8636-03dcb20450d2"
+    },
+    {
+      "test_name": "Vista Targeted Carrier",
+      "product_id": "b074072c-da3b-4c1a-8c77-7a070e185026"
+    },
+    {
+      "test_name": "[CellSearch CTC] CellSearch CTC",
+      "product_id": "b353a438-2f38-4ea1-9081-fe441a5a5c47"
+    },
+    {
+      "test_name": "Paternidad Prenatal DDC",
+      "product_id": "bfb9d7b3-e2a0-4458-ba60-93e8877b0b4a"
+    }
+  ]
+}

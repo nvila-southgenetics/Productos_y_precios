@@ -4,10 +4,13 @@ import Link from "next/link"
 import { AlertTriangle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { formatCurrency } from "@/lib/utils"
+import { CompanyBreakdown } from "./CompanyBreakdown"
 import type { MonthlySalesWithProduct } from "@/lib/supabase-mcp"
 
 interface ProductSalesTableProps {
   sales: MonthlySalesWithProduct[]
+  isAllCompanies?: boolean
+  isTotal?: boolean
 }
 
 const categoryColors: Record<string, string> = {
@@ -58,7 +61,7 @@ function calculateGrossProfit(overrides: MonthlySalesWithProduct['overrides'], c
   return grossProfitUSD * cantidad
 }
 
-export function ProductSalesTable({ sales }: ProductSalesTableProps) {
+export function ProductSalesTable({ sales, isAllCompanies = false, isTotal = false }: ProductSalesTableProps) {
   if (sales.length === 0) {
     return (
       <div className="text-center py-6 text-muted-foreground text-sm">
@@ -122,7 +125,11 @@ export function ProductSalesTable({ sales }: ProductSalesTableProps) {
                   </div>
                 </td>
                 <td className="px-3 py-2">
-                  <span className="text-xs">{sale.compañia}</span>
+                  {isAllCompanies && isTotal && sale.companyBreakdown && sale.companyBreakdown.length > 0 ? (
+                    <CompanyBreakdown breakdown={sale.companyBreakdown} />
+                  ) : (
+                    <span className="text-xs">{sale.compañia}</span>
+                  )}
                 </td>
                 <td className="px-3 py-2 text-right">
                   <span className="font-medium text-sm">{sale.cantidad_ventas.toLocaleString('es-UY')}</span>
