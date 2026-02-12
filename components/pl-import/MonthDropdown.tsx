@@ -96,10 +96,10 @@ export function MonthDropdown({
   }, [isExpanded])
 
   return (
-    <div className="border rounded-lg overflow-hidden">
+    <div className="border border-white/20 rounded-lg overflow-hidden bg-white/10 backdrop-blur-sm">
       {/* Header del Dropdown */}
       <div
-        className="flex items-center justify-between px-4 py-2.5 bg-muted/50 hover:bg-muted/70 transition-colors cursor-pointer"
+        className="flex items-center justify-between px-4 py-2.5 bg-white/10 hover:bg-white/15 transition-colors cursor-pointer border-b border-white/10"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center gap-2">
@@ -112,16 +112,16 @@ export function MonthDropdown({
             onClick={(e) => e.stopPropagation()}
           />
           {isExpanded ? (
-            <ChevronDown className="h-4 w-4" />
+            <ChevronDown className="h-4 w-4 text-white" />
           ) : (
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-4 w-4 text-white" />
           )}
-          <span className="font-medium text-sm">
+          <span className="font-medium text-sm text-white">
             {isTotal ? "Total" : formatPeriodo(periodo)}
           </span>
           <span className={cn(
             "text-xs font-semibold px-2 py-0.5 rounded",
-            totalCantidad > 0 ? "text-blue-700 bg-blue-100" : "text-slate-500"
+            totalCantidad > 0 ? "text-blue-200 bg-blue-500/20" : "text-white/50"
           )}>
             {isLoading ? "Cargando..." : `Total: ${totalCantidad}`}
           </span>
@@ -129,7 +129,7 @@ export function MonthDropdown({
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 px-2 text-xs"
+          className="h-7 px-2 text-xs text-white/70 hover:text-white hover:bg-white/10"
           onClick={(e) => {
             e.stopPropagation()
             setShowPLModal(true)
@@ -142,9 +142,9 @@ export function MonthDropdown({
 
       {/* Contenido del Dropdown */}
       {isExpanded && (
-        <div className="p-3 bg-background">
+        <div className="p-3 bg-white/5">
           {isLoading ? (
-            <div className="text-center py-6 text-muted-foreground text-sm">
+            <div className="text-center py-6 text-white/60 text-sm">
               Cargando datos...
             </div>
           ) : (

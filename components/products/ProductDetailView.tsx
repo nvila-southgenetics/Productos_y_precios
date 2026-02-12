@@ -25,25 +25,25 @@ const countries = [
 ]
 
 const categoryColors: Record<string, string> = {
-  "Ginecología": "bg-pink-100 text-pink-700 border-pink-300",
-  "Oncología": "bg-red-100 text-red-700 border-red-300",
-  "Urología": "bg-blue-100 text-blue-700 border-blue-300",
-  "Endocrinología": "bg-purple-100 text-purple-700 border-purple-300",
-  "Prenatales": "bg-green-100 text-green-700 border-green-300",
-  "Anualidades": "bg-yellow-100 text-yellow-700 border-yellow-300",
-  "Carrier": "bg-blue-100 text-blue-700 border-blue-300",
-  "Nutrición": "bg-green-100 text-green-700 border-green-300",
-  "Otros": "bg-gray-100 text-gray-700 border-gray-300",
+  "Ginecología": "bg-pink-500/20 text-pink-200 border-pink-400/30",
+  "Oncología": "bg-red-500/20 text-red-200 border-red-400/30",
+  "Urología": "bg-blue-500/20 text-blue-200 border-blue-400/30",
+  "Endocrinología": "bg-purple-500/20 text-purple-200 border-purple-400/30",
+  "Prenatales": "bg-emerald-500/20 text-emerald-200 border-emerald-400/30",
+  "Anualidades": "bg-yellow-500/20 text-yellow-200 border-yellow-400/30",
+  "Carrier": "bg-blue-500/20 text-blue-200 border-blue-400/30",
+  "Nutrición": "bg-emerald-500/20 text-emerald-200 border-emerald-400/30",
+  "Otros": "bg-gray-500/20 text-gray-200 border-gray-400/30",
 }
 
 const tipoColors: Record<string, string> = {
-  "Sangre": "bg-red-100 text-red-700 border-red-300",
-  "Corte de Tejido": "bg-blue-100 text-blue-700 border-blue-300",
-  "Punción": "bg-purple-100 text-purple-700 border-purple-300",
-  "Biopsia endometrial": "bg-pink-100 text-pink-700 border-pink-300",
-  "Hisopado bucal": "bg-green-100 text-green-700 border-green-300",
-  "Sangre y corte tejido": "bg-orange-100 text-orange-700 border-orange-300",
-  "Orina": "bg-cyan-100 text-cyan-700 border-cyan-300",
+  "Sangre": "bg-red-500/20 text-red-200 border-red-400/30",
+  "Corte de Tejido": "bg-blue-500/20 text-blue-200 border-blue-400/30",
+  "Punción": "bg-purple-500/20 text-purple-200 border-purple-400/30",
+  "Biopsia endometrial": "bg-pink-500/20 text-pink-200 border-pink-400/30",
+  "Hisopado bucal": "bg-emerald-500/20 text-emerald-200 border-emerald-400/30",
+  "Sangre y corte tejido": "bg-orange-500/20 text-orange-200 border-orange-400/30",
+  "Orina": "bg-cyan-500/20 text-cyan-200 border-cyan-400/30",
 }
 
 interface CostRow {
@@ -407,55 +407,55 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
 
     return (
       <div key={countryCode} className="flex-shrink-0 w-[min(100%,320px)] min-w-[280px]">
-        <div className="mb-3 pb-2 border-b border-blue-200">
-          <h3 className="text-lg font-bold text-blue-900">{countryName}</h3>
+        <div className="mb-3 pb-2 border-b border-white/20">
+          <h3 className="text-lg font-bold text-white">{countryName}</h3>
         </div>
-        <div className="rounded-lg border border-blue-200/50 overflow-hidden shadow-sm bg-white">
+        <div className="rounded-lg border border-white/20 overflow-hidden shadow-sm bg-white/10 backdrop-blur-sm">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-blue-200 bg-gradient-to-r from-blue-50 to-blue-100/50">
-                <th className="h-12 px-3 text-left align-middle font-semibold text-blue-900 text-sm">Concepto</th>
-                <th className="h-12 px-3 text-right align-middle font-semibold text-blue-900 text-sm">USD</th>
-                <th className="h-12 px-3 text-right align-middle font-semibold text-blue-900 text-sm">%</th>
+              <tr className="border-b border-white/20 bg-white/10">
+                <th className="h-12 px-3 text-left align-middle font-semibold text-white text-sm">Concepto</th>
+                <th className="h-12 px-3 text-right align-middle font-semibold text-white text-sm">USD</th>
+                <th className="h-12 px-3 text-right align-middle font-semibold text-white text-sm">%</th>
               </tr>
             </thead>
             <tbody>
               {/* Gross Sales */}
-              <tr className="border-b border-blue-100/50">
+              <tr className="border-b border-white/10">
                 <td className="p-3">
-                  <span className="font-medium text-slate-700 text-sm">Gross Sales</span>
+                  <span className="font-medium text-white/90 text-sm">Gross Sales</span>
                 </td>
-                <td className="p-3 text-right font-semibold text-blue-700 text-sm">
+                <td className="p-3 text-right font-semibold text-blue-300 text-sm">
                   {formatCurrency(countryGrossSales)}
                 </td>
-                <td className="p-3 text-right font-medium text-slate-600 text-sm">100.00%</td>
+                <td className="p-3 text-right font-medium text-white/70 text-sm">100.00%</td>
               </tr>
 
               {/* Commercial Discount */}
-              <tr className="border-b border-blue-100/50">
+              <tr className="border-b border-white/10">
                 <td className="p-3">
-                  <span className="text-slate-700 text-sm">Commercial Discount</span>
+                  <span className="text-white/90 text-sm">Commercial Discount</span>
                 </td>
-                <td className="p-3 text-right font-medium text-slate-700 text-sm">
+                <td className="p-3 text-right font-medium text-white/90 text-sm">
                   {formatCurrency(countryCommercialDiscount)}
                 </td>
-                <td className="p-3 text-right text-slate-600 text-sm">
+                <td className="p-3 text-right text-white/70 text-sm">
                   {formatPercentage(countryGrossSales > 0 ? countryCommercialDiscount / countryGrossSales : 0)}
                 </td>
               </tr>
 
               {/* Sales Revenue */}
-              <tr className="border-b bg-muted/30">
-                <td className="p-3 font-medium text-sm">Sales Revenue</td>
-                <td className="p-3 text-right font-medium text-sm">{formatCurrency(countrySalesRevenue)}</td>
-                <td className="p-3 text-right font-medium text-sm">
+              <tr className="border-b border-white/10 bg-white/5">
+                <td className="p-3 font-medium text-sm text-white/90">Sales Revenue</td>
+                <td className="p-3 text-right font-medium text-sm text-white">{formatCurrency(countrySalesRevenue)}</td>
+                <td className="p-3 text-right font-medium text-sm text-white/70">
                   {formatPercentage(countryGrossSales > 0 ? countrySalesRevenue / countryGrossSales : 0)}
                 </td>
               </tr>
 
               {/* Cost of Sales Header */}
-              <tr className="border-b bg-muted/50">
-                <td className="p-3 font-semibold text-sm" colSpan={3}>
+              <tr className="border-b border-white/10 bg-white/5">
+                <td className="p-3 font-semibold text-sm text-white" colSpan={3}>
                   --- Cost of Sales ---
                 </td>
               </tr>
@@ -465,12 +465,12 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
                 const isChecked = row.getChecked(countryOverrides)
                 if (!isChecked) return null
                 return (
-                  <tr key={row.concept} className="border-b border-blue-100/50">
-                    <td className="p-3 text-slate-700 text-sm">{row.concept}</td>
-                    <td className="p-3 text-right font-medium text-slate-700 text-sm">
+                  <tr key={row.concept} className="border-b border-white/10">
+                    <td className="p-3 text-white/90 text-sm">{row.concept}</td>
+                    <td className="p-3 text-right font-medium text-white/90 text-sm">
                       {formatCurrency(row.getValue(countryOverrides))}
                     </td>
-                    <td className="p-3 text-right text-slate-600 text-sm">
+                    <td className="p-3 text-right text-white/70 text-sm">
                       {formatPercentage(row.getPct(countryOverrides, countryGrossSales) / 100)}
                     </td>
                   </tr>
@@ -478,21 +478,21 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
               })}
 
               {/* Total Cost of Sales */}
-              <tr className="border-t-2 border-blue-200 bg-gradient-to-r from-blue-50/50 to-transparent">
-                <td className="p-3 font-semibold text-blue-900 text-sm">Total Cost of Sales</td>
-                <td className="p-3 text-right font-semibold text-blue-900 text-sm">{formatCurrency(countryTotalCostOfSales)}</td>
-                <td className="p-3 text-right font-semibold text-blue-900 text-sm">
+              <tr className="border-t-2 border-white/20 bg-white/5">
+                <td className="p-3 font-semibold text-white text-sm">Total Cost of Sales</td>
+                <td className="p-3 text-right font-semibold text-white text-sm">{formatCurrency(countryTotalCostOfSales)}</td>
+                <td className="p-3 text-right font-semibold text-white text-sm">
                   {formatPercentage(countryGrossSales > 0 ? countryTotalCostOfSales / countryGrossSales : 0)}
                 </td>
               </tr>
 
               {/* Gross Profit */}
-              <tr className="border-t-2 border-blue-300 bg-gradient-to-r from-blue-50 to-blue-100/50">
-                <td className="p-3 font-bold text-blue-900 text-sm">Gross Profit</td>
-                <td className="p-3 text-right font-bold text-blue-900 text-sm">
+              <tr className="border-t-2 border-white/30 bg-white/10">
+                <td className="p-3 font-bold text-white text-sm">Gross Profit</td>
+                <td className="p-3 text-right font-bold text-emerald-300 text-sm">
                   {formatCurrency(countryGrossProfit)}
                 </td>
-                <td className="p-3 text-right font-bold text-blue-900 text-sm">
+                <td className="p-3 text-right font-bold text-white text-sm">
                   {formatPercentage(countryGrossSales > 0 ? countryGrossProfit / countryGrossSales : 0)}
                 </td>
               </tr>
@@ -504,7 +504,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
   }
 
   return (
-    <div className="container mx-auto max-w-7xl px-4">
+    <div className="px-4">
       <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
       {/* Columna Izquierda - 70% */}
       <div className="lg:col-span-7 space-y-4">
@@ -513,12 +513,17 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
           {!isComparing ? (
             <>
               <Tabs value={selectedCountry} onValueChange={setSelectedCountry}>
-                <TabsList className="bg-blue-50/50 border border-blue-200/50">
+                <TabsList className="bg-white/10 border border-white/20 p-1">
                   {countries.map((country) => (
                     <TabsTrigger 
                       key={country.code} 
                       value={country.code}
-                      className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-blue-700 data-[state=active]:text-white data-[state=active]:shadow-blue"
+                      className={cn(
+                        "rounded-sm px-3 py-1.5 text-sm font-medium transition-all",
+                        selectedCountry === country.code
+                          ? "bg-white/20 text-white shadow-sm"
+                          : "text-white/70 hover:bg-white/10 hover:text-white"
+                      )}
                     >
                       {country.name}
                     </TabsTrigger>
@@ -529,7 +534,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
                 <Button 
                   variant="outline" 
                   onClick={handleCompareCountries}
-                  className="border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"
+                  className="bg-white/10 border-white/20 text-white hover:bg-white/20"
                 >
                   <GitCompare className="h-4 w-4 mr-2" />
                   Comparar Países
@@ -537,7 +542,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
                 <Button 
                   variant="outline" 
                   onClick={handleReset}
-                  className="border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"
+                  className="bg-white/10 border-white/20 text-white hover:bg-white/20"
                 >
                   Reiniciar Parámetros
                 </Button>
@@ -546,16 +551,16 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
           ) : (
             <div className="space-y-4 w-full">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-blue-900">Comparación de Países</h3>
+                <h3 className="text-lg font-semibold text-white">Comparación de Países</h3>
                 <Button 
                   variant="outline" 
                   onClick={handleStopComparison}
-                  className="border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"
+                  className="bg-white/10 border-white/20 text-white hover:bg-white/20"
                 >
                   Salir de Comparación
                 </Button>
               </div>
-              <p className="text-sm text-slate-600">Selecciona países para ver los costos lado a lado:</p>
+              <p className="text-sm text-white/70">Selecciona países para ver los costos lado a lado:</p>
               <div className="flex flex-wrap gap-2">
                 {countries.map((country) => {
                   const selected = selectedCountriesToCompare.includes(country.code)
@@ -567,8 +572,8 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
                       className={cn(
                         "px-4 py-2 rounded-lg text-sm font-medium border transition-all",
                         selected
-                          ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white border-blue-600 shadow-blue"
-                          : "border-blue-200 text-slate-600 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700"
+                          ? "bg-white/20 text-white border-white/30"
+                          : "border-white/20 text-white/70 hover:bg-white/10 hover:border-white/30 hover:text-white"
                       )}
                     >
                       {country.name}
@@ -582,8 +587,8 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
 
         {/* Encabezado */}
         {!isComparing && (
-          <div className="mb-4 pb-4 border-b border-blue-100">
-            <h2 className="text-2xl font-bold mb-3 bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">
+          <div className="mb-4 pb-4 border-b border-white/20">
+            <h2 className="text-2xl font-bold mb-3 text-white">
               Cálculo de Costos
             </h2>
             <div className="flex gap-2 flex-wrap">
@@ -608,8 +613,8 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
         {/* Vista de Comparación o Vista Normal */}
         {isComparing ? (
           <div className="space-y-4">
-            <div className="mb-4 pb-4 border-b border-blue-100">
-              <h2 className="text-2xl font-bold mb-3 bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">
+            <div className="mb-4 pb-4 border-b border-white/20">
+              <h2 className="text-2xl font-bold mb-3 text-white">
                 Comparación de Costos
               </h2>
               <div className="flex gap-2 flex-wrap">
@@ -622,7 +627,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
                 )}
                 {product.tipo && (
                   <Badge
-                    className={`${tipoColors[product.tipo] || "bg-gray-100 text-gray-700 border-gray-300"} border shadow-sm`}
+                    className={`${tipoColors[product.tipo] || "bg-gray-500/20 text-gray-200 border-gray-400/30"} border shadow-sm`}
                   >
                     {product.tipo}
                   </Badge>
@@ -630,7 +635,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
               </div>
             </div>
             {selectedCountriesToCompare.length === 0 ? (
-              <div className="rounded-lg border border-blue-200/50 bg-blue-50/30 p-8 text-center text-slate-600">
+              <div className="rounded-lg border border-white/20 bg-white/10 backdrop-blur-sm p-8 text-center text-white/70">
                 Selecciona uno o más países arriba para ver la comparación de costos.
               </div>
             ) : (
@@ -648,23 +653,23 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
         ) : (
           <>
             {/* Tabla de Costos */}
-        <div className="rounded-lg border border-blue-200/50 overflow-hidden shadow-sm bg-white">
+        <div className="rounded-lg border border-white/20 overflow-hidden shadow-sm bg-white/10 backdrop-blur-sm">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-blue-200 bg-gradient-to-r from-blue-50 to-blue-100/50">
-                <th className="h-12 px-4 text-left align-middle font-semibold text-blue-900">Concepto</th>
-                <th className="h-12 px-4 text-right align-middle font-semibold text-blue-900">USD</th>
-                <th className="h-12 px-4 text-right align-middle font-semibold text-blue-900">%</th>
-                <th className="h-12 px-4 text-left align-middle font-semibold text-blue-900">Cuenta</th>
+              <tr className="border-b border-white/20 bg-white/10">
+                <th className="h-12 px-4 text-left align-middle font-semibold text-white">Concepto</th>
+                <th className="h-12 px-4 text-right align-middle font-semibold text-white">USD</th>
+                <th className="h-12 px-4 text-right align-middle font-semibold text-white">%</th>
+                <th className="h-12 px-4 text-left align-middle font-semibold text-white">Cuenta</th>
               </tr>
             </thead>
             <tbody>
               {/* Gross Sales */}
-              <tr className="border-b border-blue-100/50 hover:bg-blue-50/30 transition-colors">
+              <tr className="border-b border-white/10 hover:bg-white/5 transition-colors">
                 <td className="p-4">
                   <div className="flex items-center gap-2">
                     <Checkbox checked={true} disabled />
-                    <span className="font-medium text-slate-700">Gross Sales (sin IVA)</span>
+                    <span className="font-medium text-white/90">Gross Sales (sin IVA)</span>
                   </div>
                 </td>
                 <td className="p-4 text-right">
@@ -684,30 +689,30 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
                         }
                       }}
                       autoFocus
-                      className="w-32 ml-auto border-blue-300 focus:border-blue-500 focus:ring-blue-500"
+                      className="w-32 ml-auto bg-white/10 border-white/20 text-white focus:border-white/40"
                     />
                   ) : (
                     <span
-                      className="cursor-pointer hover:bg-blue-50 px-3 py-1.5 rounded-md transition-all font-semibold text-blue-700 hover:text-blue-800 hover:shadow-sm"
+                      className="cursor-pointer hover:bg-white/10 px-3 py-1.5 rounded-md transition-all font-semibold text-blue-300 hover:text-blue-200 hover:shadow-sm"
                       onDoubleClick={() => handleDoubleClick(costRows[0])}
                     >
                       {formatCurrency(grossSales)}
                     </span>
                   )}
                 </td>
-                <td className="p-4 text-right font-medium text-slate-600">100.00%</td>
-                <td className="p-4 text-sm text-slate-500">4.1.1.6</td>
+                <td className="p-4 text-right font-medium text-white/70">100.00%</td>
+                <td className="p-4 text-sm text-white/60">4.1.1.6</td>
               </tr>
 
               {/* Commercial Discount */}
-              <tr className="border-b border-blue-100/50 hover:bg-blue-50/30 transition-colors">
+              <tr className="border-b border-white/10 hover:bg-white/5 transition-colors">
                 <td className="p-4">
                   <div className="flex items-center gap-2">
                     <Checkbox
                       checked={costRows[1].getChecked(overrides)}
                       onChange={(checked) => handleCheckboxChange(costRows[1], checked)}
                     />
-                    <span className="text-slate-700">Commercial Discount</span>
+                    <span className="text-white/90">Commercial Discount</span>
                   </div>
                 </td>
                 <td className="p-4 text-right">
@@ -727,36 +732,36 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
                         }
                       }}
                       autoFocus
-                      className="w-32 ml-auto"
+                      className="w-32 ml-auto bg-white/10 border-white/20 text-white focus:border-white/40"
                     />
                   ) : (
                     <span
-                      className="cursor-pointer hover:bg-blue-50 px-3 py-1.5 rounded-md transition-all font-medium text-slate-700 hover:text-blue-700 hover:shadow-sm"
+                      className="cursor-pointer hover:bg-white/10 px-3 py-1.5 rounded-md transition-all font-medium text-white/90 hover:text-white hover:shadow-sm"
                       onDoubleClick={() => handleDoubleClick(costRows[1])}
                     >
                       {formatCurrency(commercialDiscount)}
                     </span>
                   )}
                 </td>
-                <td className="p-4 text-right">
+                <td className="p-4 text-right text-white/70">
                   {formatPercentage(costRows[1].getPct(overrides, grossSales) / 100)}
                 </td>
-                <td className="p-4 text-sm text-muted-foreground">4.1.1.10</td>
+                <td className="p-4 text-sm text-white/60">4.1.1.10</td>
               </tr>
 
               {/* Sales Revenue (calculado) */}
-              <tr className="border-b bg-muted/30">
-                <td className="p-4 font-medium">Sales Revenue</td>
-                <td className="p-4 text-right font-medium">{formatCurrency(salesRevenue)}</td>
-                <td className="p-4 text-right font-medium">
+              <tr className="border-b border-white/10 bg-white/5">
+                <td className="p-4 font-medium text-white/90">Sales Revenue</td>
+                <td className="p-4 text-right font-medium text-white">{formatCurrency(salesRevenue)}</td>
+                <td className="p-4 text-right font-medium text-white/70">
                   {formatPercentage(grossSales > 0 ? salesRevenue / grossSales : 0)}
                 </td>
-                <td className="p-4 text-sm text-muted-foreground">-</td>
+                <td className="p-4 text-sm text-white/60">-</td>
               </tr>
 
               {/* Cost of Sales Header */}
-              <tr className="border-b bg-muted/50">
-                <td className="p-4 font-semibold" colSpan={4}>
+              <tr className="border-b border-white/10 bg-white/5">
+                <td className="p-4 font-semibold text-white" colSpan={4}>
                   --- Cost of Sales ---
                 </td>
               </tr>
@@ -765,14 +770,14 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
               {costRows.slice(2).map((row) => {
                 const isChecked = row.getChecked(overrides)
                 return (
-                  <tr key={row.concept} className="border-b">
+                  <tr key={row.concept} className="border-b border-white/10 hover:bg-white/5">
                     <td className="p-4">
                       <div className="flex items-center gap-2">
                         <Checkbox
                           checked={isChecked}
                           onChange={(checked) => handleCheckboxChange(row, checked)}
                         />
-                        <span>{row.concept}</span>
+                        <span className="text-white/90">{row.concept}</span>
                       </div>
                     </td>
                     <td className="p-4 text-right">
@@ -792,13 +797,13 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
                             }
                           }}
                           autoFocus
-                          className="w-32 ml-auto"
+                          className="w-32 ml-auto bg-white/10 border-white/20 text-white focus:border-white/40"
                         />
                       ) : (
                         <span
                           className={cn(
-                            "px-3 py-1.5 rounded-md transition-all font-medium text-slate-700",
-                            row.editable && "cursor-pointer hover:bg-blue-50 hover:text-blue-700 hover:shadow-sm"
+                            "px-3 py-1.5 rounded-md transition-all font-medium text-white/90",
+                            row.editable && "cursor-pointer hover:bg-white/10 hover:text-white hover:shadow-sm"
                           )}
                           onDoubleClick={() => row.editable && handleDoubleClick(row)}
                         >
@@ -806,34 +811,34 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
                         </span>
                       )}
                     </td>
-                    <td className="p-4 text-right">
+                    <td className="p-4 text-right text-white/70">
                       {formatPercentage(row.getPct(overrides, grossSales) / 100)}
                     </td>
-                    <td className="p-4 text-sm text-muted-foreground">{row.account}</td>
+                    <td className="p-4 text-sm text-white/60">{row.account}</td>
                   </tr>
                 )
               })}
 
               {/* Total Cost of Sales */}
-              <tr className="border-t-2 border-blue-200 bg-gradient-to-r from-blue-50/50 to-transparent">
-                <td className="p-4 font-semibold text-blue-900">Total Cost of Sales</td>
-                <td className="p-4 text-right font-semibold text-blue-900">{formatCurrency(totalCostOfSales)}</td>
-                <td className="p-4 text-right font-semibold text-blue-900">
+              <tr className="border-t-2 border-white/20 bg-white/5">
+                <td className="p-4 font-semibold text-white">Total Cost of Sales</td>
+                <td className="p-4 text-right font-semibold text-white">{formatCurrency(totalCostOfSales)}</td>
+                <td className="p-4 text-right font-semibold text-white">
                   {formatPercentage(grossSales > 0 ? totalCostOfSales / grossSales : 0)}
                 </td>
-                <td className="p-4 text-sm text-slate-500">-</td>
+                <td className="p-4 text-sm text-white/60">-</td>
               </tr>
 
               {/* Gross Profit */}
-              <tr className="border-t-2 border-blue-300 bg-gradient-to-r from-blue-50 to-blue-100/50">
-                <td className="p-4 font-bold text-blue-900">Gross Profit</td>
-                <td className="p-4 text-right font-bold text-blue-900">
+              <tr className="border-t-2 border-white/30 bg-white/10">
+                <td className="p-4 font-bold text-white">Gross Profit</td>
+                <td className="p-4 text-right font-bold text-emerald-300">
                   {formatCurrency(grossProfit)}
                 </td>
-                <td className="p-4 text-right font-bold text-blue-900">
+                <td className="p-4 text-right font-bold text-white">
                   {formatPercentage(grossSales > 0 ? grossProfit / grossSales : 0)}
                 </td>
-                <td className="p-4 text-sm text-slate-500">-</td>
+                <td className="p-4 text-sm text-white/60">-</td>
               </tr>
             </tbody>
           </table>
@@ -841,21 +846,21 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
 
             {/* Mensajes informativos */}
             <div className="text-sm space-y-3">
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50/50 border border-blue-200/50">
-                <Info className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-600" />
-                <p className="text-blue-900">
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-white/10 border border-white/20 backdrop-blur-sm">
+                <Info className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-300" />
+                <p className="text-white/90">
                   Haz doble clic en cualquier valor USD para editarlo. Los valores con % se calculan
                   automáticamente.
                 </p>
               </div>
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50/50 border border-blue-200/50">
-                <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-600" />
-                <p className="text-blue-900">Gross Sales es editable por país, cambio según el mercado local</p>
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-white/10 border border-white/20 backdrop-blur-sm">
+                <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0 text-yellow-300" />
+                <p className="text-white/90">Gross Sales es editable por país, cambio según el mercado local</p>
               </div>
             </div>
 
             {isSaving && (
-              <div className="text-sm text-muted-foreground">Guardando cambios...</div>
+              <div className="text-sm text-white/70">Guardando cambios...</div>
             )}
           </>
         )}
@@ -863,22 +868,22 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
 
       {/* Columna Derecha - 30% */}
       <div className="lg:col-span-3">
-        <div className="rounded-lg border border-blue-200/50 bg-white shadow-sm p-6 space-y-5 sticky top-4">
-          <div className="pb-4 border-b border-blue-100">
-            <h3 className="font-bold text-lg bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">
+        <div className="rounded-lg border border-white/20 bg-white/10 backdrop-blur-sm shadow-sm p-6 space-y-5 sticky top-4">
+          <div className="pb-4 border-b border-white/20">
+            <h3 className="font-bold text-lg text-white">
               Información del Producto
             </h3>
           </div>
           <div>
-            <label className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Nombre</label>
-            <p className="font-semibold mt-2 text-slate-800">{product.name}</p>
+            <label className="text-xs font-semibold text-white/70 uppercase tracking-wide">Nombre</label>
+            <p className="font-semibold mt-2 text-white">{product.name}</p>
           </div>
           <div>
-            <label className="text-xs font-semibold text-blue-700 uppercase tracking-wide">SKU</label>
-            <p className="font-medium mt-2 text-slate-600 font-mono">{product.sku}</p>
+            <label className="text-xs font-semibold text-white/70 uppercase tracking-wide">SKU</label>
+            <p className="font-medium mt-2 text-white/80 font-mono">{product.sku}</p>
           </div>
           <div>
-            <label className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Categoría</label>
+            <label className="text-xs font-semibold text-white/70 uppercase tracking-wide">Categoría</label>
             <div className="mt-2">
               {product.category && (
                 <Badge
@@ -890,11 +895,11 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
             </div>
           </div>
           <div>
-            <label className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Tipo</label>
+            <label className="text-xs font-semibold text-white/70 uppercase tracking-wide">Tipo</label>
             <div className="mt-2">
               {product.tipo && (
                 <Badge
-                  className={`${tipoColors[product.tipo] || "bg-gray-100 text-gray-700 border-gray-300"} border shadow-sm`}
+                  className={`${tipoColors[product.tipo] || "bg-gray-500/20 text-gray-200 border-gray-400/30"} border shadow-sm`}
                 >
                   {product.tipo}
                 </Badge>

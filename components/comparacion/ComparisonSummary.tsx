@@ -280,7 +280,7 @@ export function ComparisonSummary({ month, country, product }: ComparisonSummary
 
   if (loading) {
     return (
-      <div className="text-center py-8 text-muted-foreground text-sm">
+      <div className="text-center py-8 text-white/80 text-sm">
         Cargando resumen...
       </div>
     );
@@ -292,77 +292,77 @@ export function ComparisonSummary({ month, country, product }: ComparisonSummary
   return (
     <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
       {/* Budget 2026 */}
-      <div className="bg-white p-4 rounded-lg border">
+      <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg border border-white/20 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-muted-foreground">Budget 2026</p>
-            <p className="text-2xl font-bold mt-1 text-blue-600">
+            <p className="text-sm text-white/70">Budget 2026</p>
+            <p className="text-2xl font-bold mt-1 text-blue-300">
               {summary.budget2026.toLocaleString('es-UY')}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">unidades proyectadas</p>
+            <p className="text-xs text-white/60 mt-1">unidades proyectadas</p>
           </div>
         </div>
       </div>
 
       {/* Real 2025 */}
-      <div className="bg-white p-4 rounded-lg border">
+      <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg border border-white/20 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-muted-foreground">Real 2025</p>
-            <p className="text-2xl font-bold mt-1 text-purple-600">
+            <p className="text-sm text-white/70">Real 2025</p>
+            <p className="text-2xl font-bold mt-1 text-purple-300">
               {summary.real2025.toLocaleString('es-UY')}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">unidades vendidas</p>
+            <p className="text-xs text-white/60 mt-1">unidades vendidas</p>
           </div>
         </div>
       </div>
 
       {/* Real 2026 */}
-      <div className="bg-white p-4 rounded-lg border">
+      <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg border border-white/20 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-muted-foreground">Real 2026</p>
-            <p className="text-2xl font-bold mt-1 text-emerald-600">
+            <p className="text-sm text-white/70">Real 2026</p>
+            <p className="text-2xl font-bold mt-1 text-emerald-300">
               {summary.real2026.toLocaleString('es-UY')}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">unidades vendidas</p>
+            <p className="text-xs text-white/60 mt-1">unidades vendidas</p>
           </div>
         </div>
       </div>
 
       {/* Diferencia */}
-      <div className="bg-white p-4 rounded-lg border">
+      <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg border border-white/20 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-muted-foreground">Diferencia</p>
+            <p className="text-sm text-white/70">Diferencia</p>
             <p className={`text-2xl font-bold mt-1 ${
-              isGrowth ? 'text-green-600' : 
-              isDecline ? 'text-red-600' : 
-              'text-gray-600'
+              isGrowth ? 'text-emerald-300' : 
+              isDecline ? 'text-red-300' : 
+              'text-white/60'
             }`}>
               {isGrowth ? '+' : ''}{summary.difference.toLocaleString('es-UY')}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">unidades</p>
+            <p className="text-xs text-white/60 mt-1">unidades</p>
           </div>
-          {isGrowth && <TrendingUp className="w-8 h-8 text-green-500" />}
-          {isDecline && <TrendingDown className="w-8 h-8 text-red-500" />}
-          {!isGrowth && !isDecline && <Equal className="w-8 h-8 text-gray-400" />}
+          {isGrowth && <TrendingUp className="w-8 h-8 text-emerald-300" />}
+          {isDecline && <TrendingDown className="w-8 h-8 text-red-300" />}
+          {!isGrowth && !isDecline && <Equal className="w-8 h-8 text-white/40" />}
         </div>
       </div>
 
       {/* Crecimiento % */}
-      <div className="bg-white p-4 rounded-lg border">
+      <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg border border-white/20 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-muted-foreground">Crecimiento</p>
+            <p className="text-sm text-white/70">Crecimiento</p>
             <p className={`text-2xl font-bold mt-1 ${
-              isGrowth ? 'text-green-600' : 
-              isDecline ? 'text-red-600' : 
-              'text-gray-600'
+              isGrowth ? 'text-emerald-300' : 
+              isDecline ? 'text-red-300' : 
+              'text-white/60'
             }`}>
               {isGrowth ? '+' : ''}{summary.growthPercent.toFixed(1)}%
             </p>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-xs text-white/60 mt-1">
               {isGrowth ? 'crecimiento proyectado' : 
                isDecline ? 'decrecimiento proyectado' : 
                'sin cambio'}

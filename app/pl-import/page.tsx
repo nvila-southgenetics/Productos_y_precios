@@ -135,7 +135,11 @@ export default function PLImportPage() {
 
   // Cargar datos de todos los períodos automáticamente cuando cambian los períodos o el producto
   useEffect(() => {
-    if (periods.length === 0 || !selectedCompany) return
+    if (periods.length === 0 || !selectedCompany) {
+      return () => {
+        // Cleanup cuando no hay períodos o compañía
+      }
+    }
     
     // Cargar datos de cada período automáticamente
     periods.forEach((periodo, index) => {
@@ -144,7 +148,8 @@ export default function PLImportPage() {
         loadPeriodData(periodo)
       }, index * 50)
     })
-  }, [periods, selectedProduct, loadPeriodData])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periods, selectedProduct])
 
   // Cargar total anual cuando cambian los filtros
   useEffect(() => {
@@ -169,94 +174,98 @@ export default function PLImportPage() {
 
   // Cargar ventas al seleccionar una fecha en el calendario
   useEffect(() => {
+    let cancelled = false
+    
     if (!selectedCalendarDate) {
       setSalesByDate([])
-      return
+    } else {
+      setLoadingSalesByDate(true)
+      getSalesByDate(selectedCalendarDate)
+        .then((data) => {
+          if (!cancelled) setSalesByDate(data)
+        })
+        .catch((err) => {
+          if (!cancelled) console.error("Error loading sales by date:", err)
+        })
+        .finally(() => {
+          if (!cancelled) setLoadingSalesByDate(false)
+        })
     }
-    let cancelled = false
-    setLoadingSalesByDate(true)
-    getSalesByDate(selectedCalendarDate)
-      .then((data) => {
-        if (!cancelled) setSalesByDate(data)
-      })
-      .catch((err) => {
-        if (!cancelled) console.error("Error loading sales by date:", err)
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingSalesByDate(false)
-      })
+    
     return () => {
       cancelled = true
     }
   }, [selectedCalendarDate])
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-7xl">
-      {/* Calendario: ventas por día */}
-      <div className="mb-8">
-        <div className="flex items-center gap-2 mb-2">
-          <CalendarDays className="h-5 w-5 text-blue-600" />
-          <h1 className="text-xl font-bold">Ventas por fecha</h1>
-        </div>
-        <p className="text-sm text-muted-foreground mb-3">
-          Selecciona un día para ver todas las ventas de esa fecha
-        </p>
-        <div className="flex flex-wrap items-start gap-6">
-          <SalesCalendar
-            selectedDate={selectedCalendarDate}
-            onSelectDate={setSelectedCalendarDate}
-          />
-          {selectedCalendarDate && (
-            <div className="flex-1 min-w-0 rounded-lg border border-blue-200/50 bg-white p-4 shadow-sm">
-              <h3 className="text-sm font-semibold text-blue-900 mb-3">
-                Ventas del {format(new Date(selectedCalendarDate + "T12:00:00"), "EEEE d 'de' MMMM yyyy", { locale: es })}
-              </h3>
-              {loadingSalesByDate ? (
-                <p className="text-sm text-slate-500">Cargando...</p>
-              ) : salesByDate.length === 0 ? (
-                <p className="text-sm text-slate-500">No hay ventas registradas para esta fecha.</p>
-              ) : (
-                <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
-                  <table className="w-full text-sm">
-                    <thead className="sticky top-0 bg-blue-50 border-b border-blue-200">
-                      <tr>
-                        <th className="text-left py-2 px-2 font-semibold text-blue-900">Compañía</th>
-                        <th className="text-left py-2 px-2 font-semibold text-blue-900">Producto</th>
-                        <th className="text-right py-2 px-2 font-semibold text-blue-900">Monto (USD)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {salesByDate.map((v) => (
-                        <tr key={v.id} className="border-b border-slate-100 hover:bg-blue-50/50">
-                          <td className="py-2 px-2 text-slate-700">{v.company}</td>
-                          <td className="py-2 px-2 text-slate-700">{v.test}</td>
-                          <td className="py-2 px-2 text-right font-medium text-slate-800">
-                            {typeof v.amount === "number" ? v.amount.toFixed(2) : v.amount}
-                          </td>
+    <div className="min-h-screen bg-gradient-to-r from-blue-900 via-blue-950 to-slate-900">
+      <div className="container mx-auto py-8 px-4 max-w-7xl">
+        {/* Calendario: ventas por día */}
+        <div className="mb-6 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <CalendarDays className="h-5 w-5 text-white" />
+            <h1 className="text-xl font-bold text-white">Ventas por fecha</h1>
+          </div>
+          <p className="text-sm text-white/70 mb-3">
+            Selecciona un día para ver todas las ventas de esa fecha
+          </p>
+          <div className="flex flex-wrap items-start gap-6">
+            <SalesCalendar
+              selectedDate={selectedCalendarDate}
+              onSelectDate={setSelectedCalendarDate}
+            />
+            {selectedCalendarDate && (
+              <div className="flex-1 min-w-0 rounded-lg border border-white/20 bg-white/10 backdrop-blur-sm p-4 shadow-sm">
+                <h3 className="text-sm font-semibold text-white mb-3">
+                  Ventas del {format(new Date(selectedCalendarDate + "T12:00:00"), "EEEE d 'de' MMMM yyyy", { locale: es })}
+                </h3>
+                {loadingSalesByDate ? (
+                  <p className="text-sm text-white/60">Cargando...</p>
+                ) : salesByDate.length === 0 ? (
+                  <p className="text-sm text-white/60">No hay ventas registradas para esta fecha.</p>
+                ) : (
+                  <div className="overflow-x-auto max-h-[320px] overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-white/10 border-b border-white/20">
+                        <tr>
+                          <th className="text-left py-2 px-2 font-semibold text-white">Compañía</th>
+                          <th className="text-left py-2 px-2 font-semibold text-white">Producto</th>
+                          <th className="text-right py-2 px-2 font-semibold text-white">Monto (USD)</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
+                      </thead>
+                      <tbody>
+                        {salesByDate.map((v) => (
+                          <tr key={v.id} className="border-b border-white/10 hover:bg-white/5">
+                            <td className="py-2 px-2 text-white/80">{v.company}</td>
+                            <td className="py-2 px-2 text-white/80">{v.test}</td>
+                            <td className="py-2 px-2 text-right font-medium text-white">
+                              {typeof v.amount === "number" ? v.amount.toFixed(2) : v.amount}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Header */}
-      <div className="mb-4">
-        <div className="flex items-center gap-2 mb-2">
-          <BarChart3 className="h-5 w-5" />
-          <h2 className="text-xl font-bold">Filtros de Visualización</h2>
+        {/* Header */}
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-2">
+            <BarChart3 className="h-5 w-5 text-white" />
+            <h2 className="text-xl font-bold text-white">Filtros de Visualización</h2>
+          </div>
+          <p className="text-sm text-white/80">
+            Selecciona una compañía para filtrar las ventas
+          </p>
         </div>
-        <p className="text-sm text-muted-foreground">
-          Selecciona una compañía para filtrar las ventas
-        </p>
-      </div>
 
-      {/* Filtros */}
-      <div className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Filtros */}
+        <div className="mb-6 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4 shadow-sm">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <CompanyFilter
           companies={companies}
           selectedCompany={selectedCompany}
@@ -267,22 +276,23 @@ export default function PLImportPage() {
           selectedProduct={selectedProduct}
           onProductChange={setSelectedProduct}
         />
-        <YearFilter
-          years={availableYears}
-          selectedYear={selectedYear}
-          onYearChange={setSelectedYear}
-        />
-      </div>
-
-      {/* Sección Principal */}
-      <div className="mb-4">
-        <div className="flex items-center gap-2 mb-2">
-          <Package className="h-4 w-4" />
-          <h2 className="text-lg font-semibold">Detalle de Productos Vendidos</h2>
+            <YearFilter
+              years={availableYears}
+              selectedYear={selectedYear}
+              onYearChange={setSelectedYear}
+            />
+          </div>
         </div>
-        <p className="text-sm text-muted-foreground mb-3">
-          Lista de productos vendidos con sus cantidades totales, agrupados por año
-        </p>
+
+        {/* Sección Principal */}
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-2">
+            <Package className="h-4 w-4 text-white" />
+            <h2 className="text-lg font-semibold text-white">Detalle de Productos Vendidos</h2>
+          </div>
+          <p className="text-sm text-white/70 mb-3">
+            Lista de productos vendidos con sus cantidades totales, agrupados por año
+          </p>
 
         {/* Agrupar períodos por año */}
         <div className="space-y-4">
@@ -388,10 +398,11 @@ export default function PLImportPage() {
 
           {/* Si no hay períodos, mostrar mensaje */}
           {periods.length === 0 && !isLoading && (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="text-center py-8 text-white/60">
               <p>No hay períodos disponibles para la compañía seleccionada.</p>
             </div>
           )}
+        </div>
         </div>
       </div>
     </div>

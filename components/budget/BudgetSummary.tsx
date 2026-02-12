@@ -221,60 +221,60 @@ export function BudgetSummary({ year, country, product, month }: BudgetSummaryPr
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {/* Total Unidades */}
-        <div className="bg-white p-4 rounded-lg border">
+        <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg border border-white/20">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-white/70">
                 {isMonthFiltered ? "Unidades del Mes" : "Total Unidades"}
               </p>
-              <p className="text-2xl font-bold mt-1">
+              <p className="text-2xl font-bold mt-1 text-white">
                 {summary.totalUnits.toLocaleString("es-UY")}
               </p>
             </div>
-            <Package className="w-8 h-8 text-blue-500" />
+            <Package className="w-8 h-8 text-blue-300" />
           </div>
         </div>
 
         {/* Total Gross Sale */}
-        <div className="bg-white p-4 rounded-lg border">
+        <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg border border-white/20">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-white/70">
                 {isMonthFiltered ? "Gross Sale del Mes" : "Total Gross Sale"}
               </p>
-              <p className="text-2xl font-bold mt-1 text-blue-600">
+              <p className="text-2xl font-bold mt-1 text-blue-300">
                 {formatCurrency(summary.totalGrossSale)}
               </p>
             </div>
-            <DollarSign className="w-8 h-8 text-blue-500" />
+            <DollarSign className="w-8 h-8 text-blue-300" />
           </div>
         </div>
 
         {/* Total Gross Profit */}
-        <div className="bg-white p-4 rounded-lg border">
+        <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg border border-white/20">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-white/70">
                 {isMonthFiltered ? "Gross Profit del Mes" : "Total Gross Profit"}
               </p>
-              <p className="text-2xl font-bold mt-1 text-green-600">
+              <p className="text-2xl font-bold mt-1 text-emerald-300">
                 {formatCurrency(summary.totalGrossProfit)}
               </p>
             </div>
-            <TrendingUp className="w-8 h-8 text-green-500" />
+            <TrendingUp className="w-8 h-8 text-emerald-300" />
           </div>
         </div>
 
         {/* Margen Promedio */}
-        <div className="bg-white p-4 rounded-lg border">
+        <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg border border-white/20">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">Margen Promedio</p>
-              <p className="text-2xl font-bold mt-1 text-purple-600">
+              <p className="text-sm text-white/70">Margen Promedio</p>
+              <p className="text-2xl font-bold mt-1 text-purple-300">
                 {summary.avgGrossMargin.toFixed(1)}%
               </p>
             </div>
-            <TrendingUp className="w-8 h-8 text-purple-500" />
+            <TrendingUp className="w-8 h-8 text-purple-300" />
           </div>
         </div>
       </div>

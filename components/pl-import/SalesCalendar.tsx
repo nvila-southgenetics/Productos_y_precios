@@ -48,35 +48,35 @@ export function SalesCalendar({ selectedDate, onSelectDate }: SalesCalendarProps
     : null
 
   return (
-    <div className="rounded-lg border border-blue-200/50 bg-white p-4 shadow-sm">
+    <div className="rounded-lg border border-white/20 bg-white/10 backdrop-blur-sm p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between">
         <Button
           type="button"
           variant="outline"
           size="icon"
-          className="h-8 w-8 border-blue-200 text-blue-700 hover:bg-blue-50"
+          className="h-8 w-8 border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white"
           onClick={() => setViewDate((d) => subMonths(d, 1))}
         >
-          <ChevronLeft className="h-4 w-4" />
+          <ChevronLeft className="h-4 w-4 text-white" />
         </Button>
-        <span className="text-sm font-semibold text-blue-900">
+        <span className="text-sm font-semibold text-white">
           {format(viewDate, "MMMM yyyy", { locale: es })}
         </span>
         <Button
           type="button"
           variant="outline"
           size="icon"
-          className="h-8 w-8 border-blue-200 text-blue-700 hover:bg-blue-50"
+          className="h-8 w-8 border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white"
           onClick={() => setViewDate((d) => addMonths(d, 1))}
         >
-          <ChevronRight className="h-4 w-4" />
+          <ChevronRight className="h-4 w-4 text-white" />
         </Button>
       </div>
       <div className="grid grid-cols-7 gap-1 text-center">
         {WEEKDAYS.map((day) => (
           <div
             key={day}
-            className="text-xs font-medium uppercase text-slate-500"
+            className="text-xs font-medium uppercase text-white/60"
           >
             {day}
           </div>
@@ -93,10 +93,10 @@ export function SalesCalendar({ selectedDate, onSelectDate }: SalesCalendarProps
               onClick={() => onSelectDate(dateStr)}
               className={cn(
                 "h-9 w-9 rounded-md text-sm transition-colors",
-                !inMonth && "text-slate-300",
-                inMonth && "text-slate-700 hover:bg-blue-100",
+                !inMonth && "text-white/30",
+                inMonth && "text-white/80 hover:bg-white/10",
                 isSelected &&
-                  "bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800"
+                  "bg-white/20 text-white hover:bg-white/30 border border-white/30"
               )}
             >
               {format(day, "d")}

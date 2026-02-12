@@ -98,56 +98,54 @@ export function ComparisonFilters({
   };
 
   return (
-    <div className="bg-white p-4 rounded-lg border">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Filtro de Mes */}
-        <div>
-          <label className="text-sm font-medium mb-2 block">Mes</label>
-          <Select
-            value={selectedMonth}
-            onChange={(e) => onMonthChange(e.target.value)}
-            className="w-full"
-          >
-            {MONTHS.map((month) => (
-              <option key={month.value} value={month.value}>
-                {month.label}
-              </option>
-            ))}
-          </Select>
-        </div>
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Filtro de Mes */}
+      <div className="flex flex-col gap-2">
+        <label className="text-sm font-medium text-white/90">Mes</label>
+        <Select
+          value={selectedMonth}
+          onChange={(e) => onMonthChange(e.target.value)}
+          className="w-full bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-white/30"
+        >
+          {MONTHS.map((month) => (
+            <option key={month.value} value={month.value} className="bg-blue-900 text-white">
+              {month.label}
+            </option>
+          ))}
+        </Select>
+      </div>
 
-        {/* Filtro de País */}
-        <div>
-          <label className="text-sm font-medium mb-2 block">País</label>
-          <Select
-            value={selectedCountry}
-            onChange={(e) => onCountryChange(e.target.value)}
-            className="w-full"
-          >
-            {COUNTRIES.map((country) => (
-              <option key={country.value} value={country.value}>
-                {country.label}
-              </option>
-            ))}
-          </Select>
-        </div>
+      {/* Filtro de País */}
+      <div className="flex flex-col gap-2">
+        <label className="text-sm font-medium text-white/90">País</label>
+        <Select
+          value={selectedCountry}
+          onChange={(e) => onCountryChange(e.target.value)}
+          className="w-full bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-white/30"
+        >
+          {COUNTRIES.map((country) => (
+            <option key={country.value} value={country.value} className="bg-blue-900 text-white">
+              {country.label}
+            </option>
+          ))}
+        </Select>
+      </div>
 
-        {/* Filtro de Producto */}
-        <div>
-          <label className="text-sm font-medium mb-2 block">Producto</label>
-          <Select
-            value={selectedProduct}
-            onChange={(e) => onProductChange(e.target.value)}
-            className="w-full"
-          >
-            <option value="all">Todos los productos</option>
-            {products.map((product) => (
-              <option key={product} value={product}>
-                {product}
-              </option>
-            ))}
-          </Select>
-        </div>
+      {/* Filtro de Producto */}
+      <div className="flex flex-col gap-2">
+        <label className="text-sm font-medium text-white/90">Producto</label>
+        <Select
+          value={selectedProduct}
+          onChange={(e) => onProductChange(e.target.value)}
+          className="w-full bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-white/30"
+        >
+          <option value="all" className="bg-blue-900 text-white">Todos los productos</option>
+          {products.map((product) => (
+            <option key={product} value={product} className="bg-blue-900 text-white">
+              {product}
+            </option>
+          ))}
+        </Select>
       </div>
     </div>
   );

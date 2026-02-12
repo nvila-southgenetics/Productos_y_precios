@@ -37,7 +37,7 @@
     @apply border-border;
   }
   body {
-    @apply bg-gradient-to-br from-blue-50 via-white to-blue-50/50 text-foreground;
+    @apply bg-gradient-to-r from-blue-900 via-blue-950 to-slate-900 text-white min-h-screen;
     background-attachment: fixed;
   }
 }

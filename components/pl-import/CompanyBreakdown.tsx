@@ -23,7 +23,7 @@ export function CompanyBreakdown({ breakdown }: CompanyBreakdownProps) {
     <div className="relative">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 hover:underline"
+        className="flex items-center gap-1 text-xs text-white hover:text-white/80 hover:underline"
       >
         {isExpanded ? (
           <ChevronUp className="h-3 w-3" />

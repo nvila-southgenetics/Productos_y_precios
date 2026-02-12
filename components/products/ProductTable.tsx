@@ -16,23 +16,23 @@ interface ProductTableProps {
 }
 
 const categoryColors: Record<string, string> = {
-  "Ginecología": "bg-pink-100 text-pink-800 border-pink-200",
-  "Oncología": "bg-red-100 text-red-800 border-red-200",
-  "Urología": "bg-blue-100 text-blue-800 border-blue-200",
-  "Endocrinología": "bg-purple-100 text-purple-800 border-purple-200",
-  "Prenatales": "bg-green-100 text-green-800 border-green-200",
-  "Anualidades": "bg-yellow-100 text-yellow-800 border-yellow-200",
-  "Otros": "bg-gray-100 text-gray-800 border-gray-200",
+  "Ginecología": "bg-pink-500/20 text-pink-200 border-pink-400/30",
+  "Oncología": "bg-red-500/20 text-red-200 border-red-400/30",
+  "Urología": "bg-blue-500/20 text-blue-200 border-blue-400/30",
+  "Endocrinología": "bg-purple-500/20 text-purple-200 border-purple-400/30",
+  "Prenatales": "bg-emerald-500/20 text-emerald-200 border-emerald-400/30",
+  "Anualidades": "bg-yellow-500/20 text-yellow-200 border-yellow-400/30",
+  "Otros": "bg-gray-500/20 text-gray-200 border-gray-400/30",
 }
 
 const tipoColors: Record<string, string> = {
-  "Sangre": "bg-red-50 text-red-700 border-red-200",
-  "Corte de Tejido": "bg-blue-50 text-blue-700 border-blue-200",
-  "Punción": "bg-purple-50 text-purple-700 border-purple-200",
-  "Biopsia endometrial": "bg-pink-50 text-pink-700 border-pink-200",
-  "Hisopado bucal": "bg-green-50 text-green-700 border-green-200",
-  "Sangre y corte tejido": "bg-orange-50 text-orange-700 border-orange-200",
-  "Orina": "bg-cyan-50 text-cyan-700 border-cyan-200",
+  "Sangre": "bg-red-500/20 text-red-200 border-red-400/30",
+  "Corte de Tejido": "bg-blue-500/20 text-blue-200 border-blue-400/30",
+  "Punción": "bg-purple-500/20 text-purple-200 border-purple-400/30",
+  "Biopsia endometrial": "bg-pink-500/20 text-pink-200 border-pink-400/30",
+  "Hisopado bucal": "bg-emerald-500/20 text-emerald-200 border-emerald-400/30",
+  "Sangre y corte tejido": "bg-orange-500/20 text-orange-200 border-orange-400/30",
+  "Orina": "bg-cyan-500/20 text-cyan-200 border-cyan-400/30",
 }
 
 export function ProductTable({
@@ -63,23 +63,23 @@ export function ProductTable({
   }
 
   return (
-    <div className="rounded-lg border border-blue-200/50 overflow-x-auto shadow-sm bg-white">
+    <div className="rounded-lg border border-white/20 overflow-x-auto shadow-sm bg-white/10 backdrop-blur-sm">
       <table className="w-full">
         <thead>
-          <tr className="border-b border-blue-200 bg-gradient-to-r from-blue-50 to-blue-100/50">
-            <th className="h-12 px-4 text-left align-middle font-semibold text-blue-900">
+          <tr className="border-b border-white/20 bg-white/10">
+            <th className="h-12 px-4 text-left align-middle font-semibold text-white">
               Producto
             </th>
-            <th className="h-12 px-4 text-left align-middle font-semibold text-blue-900">
+            <th className="h-12 px-4 text-left align-middle font-semibold text-white">
               SKU
             </th>
-            <th className="h-12 px-4 text-left align-middle font-semibold text-blue-900">
+            <th className="h-12 px-4 text-left align-middle font-semibold text-white">
               Descripción
             </th>
-            <th className="h-12 px-4 text-left align-middle font-semibold text-blue-900">
+            <th className="h-12 px-4 text-left align-middle font-semibold text-white">
               Fecha
             </th>
-            <th className="h-12 px-4 text-left align-middle font-semibold text-blue-900">
+            <th className="h-12 px-4 text-left align-middle font-semibold text-white">
               Acciones
             </th>
           </tr>
@@ -87,7 +87,7 @@ export function ProductTable({
         <tbody>
           {products.length === 0 ? (
             <tr>
-              <td colSpan={5} className="h-24 text-center text-slate-500">
+              <td colSpan={5} className="h-24 text-center text-white/60">
                 No se encontraron productos
               </td>
             </tr>
@@ -95,12 +95,12 @@ export function ProductTable({
             products.map((product) => (
               <tr
                 key={product.id}
-                className="border-b border-blue-100/50 transition-colors hover:bg-blue-50/30 cursor-pointer"
+                className="border-b border-white/10 transition-colors hover:bg-white/5 cursor-pointer"
                 onClick={() => handleProductClick(product)}
               >
                 <td className="p-4">
                   <div className="flex flex-col gap-2">
-                    <div className="font-semibold text-slate-800 hover:text-blue-700 transition-colors">{product.name}</div>
+                    <div className="font-semibold text-white hover:text-blue-300 transition-colors">{product.name}</div>
                     <div className="flex gap-2 flex-wrap">
                       {product.category && (
                         <Badge
@@ -111,7 +111,7 @@ export function ProductTable({
                       )}
                       {product.tipo && (
                         <Badge
-                          className={`${tipoColors[product.tipo] || "bg-gray-50 text-gray-700 border-gray-200"} border shadow-sm`}
+                          className={`${tipoColors[product.tipo] || "bg-gray-500/20 text-gray-200 border-gray-400/30"} border shadow-sm`}
                         >
                           {product.tipo}
                         </Badge>
@@ -120,15 +120,15 @@ export function ProductTable({
                   </div>
                 </td>
                 <td className="p-4">
-                  <span className="text-sm text-slate-600 font-mono">{product.sku}</span>
+                  <span className="text-sm text-white/70 font-mono">{product.sku}</span>
                 </td>
                 <td className="p-4">
-                  <span className="text-sm text-slate-600">
+                  <span className="text-sm text-white/70">
                     {product.description || "Sin descripción"}
                   </span>
                 </td>
                 <td className="p-4">
-                  <span className="text-sm text-slate-600">{formatDate(product.created_at)}</span>
+                  <span className="text-sm text-white/70">{formatDate(product.created_at)}</span>
                 </td>
                 <td className="p-4">
                   <div className="flex items-center gap-2">
@@ -137,7 +137,7 @@ export function ProductTable({
                       size="icon"
                       onClick={(e) => handleViewClick(e, product)}
                       title="Ver producto"
-                      className="hover:bg-blue-100 hover:text-blue-700"
+                      className="hover:bg-white/20 hover:text-white text-white/70"
                     >
                       <Eye className="h-4 w-4" />
                     </Button>
@@ -146,7 +146,7 @@ export function ProductTable({
                       size="icon"
                       onClick={(e) => handleEditClick(e, product)}
                       title="Editar producto"
-                      className="hover:bg-blue-100 hover:text-blue-700"
+                      className="hover:bg-white/20 hover:text-white text-white/70"
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -155,7 +155,7 @@ export function ProductTable({
                       size="icon"
                       onClick={(e) => handleDeleteClick(e, product)}
                       title="Eliminar producto"
-                      className="hover:bg-red-100 hover:text-red-700"
+                      className="hover:bg-red-500/20 hover:text-red-200 text-white/70"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>

@@ -435,24 +435,24 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
 
   if (loading) {
     return (
-      <div className="text-center py-12 text-muted-foreground text-sm">
+      <div className="text-center py-12 text-white/80 text-sm">
         Cargando comparación...
       </div>
     );
   }
 
   return (
-    <div className="border rounded-lg overflow-hidden bg-white">
+    <div className="border border-white/20 rounded-lg overflow-hidden bg-white/10 backdrop-blur-sm shadow-sm">
       <table className="w-full text-sm">
-        <thead className="bg-muted/50 border-b">
+        <thead className="bg-white/10 border-b border-white/20">
           <tr>
-            <th className="text-left px-4 py-3 font-medium text-xs">País</th>
-            <th className="text-left px-4 py-3 font-medium text-xs">Producto</th>
-            <th className="text-right px-4 py-3 font-medium text-xs">Budget 2026</th>
-            <th className="text-right px-4 py-3 font-medium text-xs">Real 2025</th>
-            <th className="text-right px-4 py-3 font-medium text-xs">Real 2026</th>
+            <th className="text-left px-4 py-3 font-medium text-xs text-white">País</th>
+            <th className="text-left px-4 py-3 font-medium text-xs text-white">Producto</th>
+            <th className="text-right px-4 py-3 font-medium text-xs text-white">Budget 2026</th>
+            <th className="text-right px-4 py-3 font-medium text-xs text-white">Real 2025</th>
+            <th className="text-right px-4 py-3 font-medium text-xs text-white">Real 2026</th>
             <th 
-              className="text-right px-4 py-3 font-medium text-xs cursor-pointer hover:bg-muted/70 transition-colors"
+              className="text-right px-4 py-3 font-medium text-xs text-white cursor-pointer hover:bg-white/10 transition-colors"
               onClick={() => handleSort('difference')}
             >
               <div className="flex items-center justify-end gap-1">
@@ -463,7 +463,7 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
               </div>
             </th>
             <th 
-              className="text-right px-4 py-3 font-medium text-xs cursor-pointer hover:bg-muted/70 transition-colors"
+              className="text-right px-4 py-3 font-medium text-xs text-white cursor-pointer hover:bg-white/10 transition-colors"
               onClick={() => handleSort('growthPercent')}
             >
               <div className="flex items-center justify-end gap-1">
@@ -475,39 +475,39 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y">
+        <tbody className="divide-y divide-white/10">
           {data.map((row, idx) => {
             const isGrowth = row.difference > 0;
             const isDecline = row.difference < 0;
 
             return (
-              <tr key={idx} className="hover:bg-muted/50 transition-colors">
-                <td className="px-4 py-3 text-sm">{row.country}</td>
+              <tr key={idx} className="hover:bg-white/5 transition-colors">
+                <td className="px-4 py-3 text-sm text-white/90">{row.country}</td>
                 <td className="px-4 py-3">
                   {row.product_id ? (
                     <Link
                       href={`/productos/${row.product_id}`}
-                      className="text-primary hover:underline text-sm font-medium"
+                      className="text-blue-300 hover:text-blue-200 hover:underline text-sm font-medium"
                     >
                       {row.product_name}
                     </Link>
                   ) : (
-                    <span className="text-muted-foreground text-sm">{row.product_name}</span>
+                    <span className="text-white/70 text-sm">{row.product_name}</span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-right font-medium text-sm text-blue-600">
+                <td className="px-4 py-3 text-right font-medium text-sm text-blue-300">
                   {row.budget2026.toLocaleString('es-UY')}
                 </td>
-                <td className="px-4 py-3 text-right font-medium text-sm text-purple-600">
+                <td className="px-4 py-3 text-right font-medium text-sm text-purple-300">
                   {row.real2025.toLocaleString('es-UY')}
                 </td>
-                <td className="px-4 py-3 text-right font-medium text-sm text-emerald-600">
+                <td className="px-4 py-3 text-right font-medium text-sm text-emerald-300">
                   {row.real2026.toLocaleString('es-UY')}
                 </td>
                 <td className={`px-4 py-3 text-right font-medium text-sm ${
-                  isGrowth ? 'text-green-600' : 
-                  isDecline ? 'text-red-600' : 
-                  'text-gray-600'
+                  isGrowth ? 'text-emerald-300' : 
+                  isDecline ? 'text-red-300' : 
+                  'text-white/60'
                 }`}>
                   <div className="flex items-center justify-end gap-1">
                     {isGrowth && <ArrowUp className="w-4 h-4" />}
@@ -517,9 +517,9 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
                   </div>
                 </td>
                 <td className={`px-4 py-3 text-right font-medium text-sm ${
-                  isGrowth ? 'text-green-600' : 
-                  isDecline ? 'text-red-600' : 
-                  'text-gray-600'
+                  isGrowth ? 'text-emerald-300' : 
+                  isDecline ? 'text-red-300' : 
+                  'text-white/60'
                 }`}>
                   {isGrowth ? '+' : ''}{row.growthPercent.toFixed(1)}%
                 </td>
@@ -530,7 +530,7 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
       </table>
 
       {data.length === 0 && (
-        <div className="text-center py-8 text-muted-foreground text-sm">
+        <div className="text-center py-8 text-white/60 text-sm">
           No hay datos para comparar con los filtros seleccionados
         </div>
       )}

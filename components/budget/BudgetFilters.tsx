@@ -61,27 +61,27 @@ export function BudgetFilters({
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
       <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium">Año</label>
+        <label className="text-sm font-medium text-white/90">Año</label>
         <Select
           value={selectedYear.toString()}
           onChange={(e) => onYearChange(parseInt(e.target.value))}
-          className="w-full"
+          className="w-full bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-white/30"
         >
-          <option value="2025">2025</option>
-          <option value="2026">2026</option>
-          <option value="2027">2027</option>
+          <option value="2025" className="bg-blue-900 text-white">2025</option>
+          <option value="2026" className="bg-blue-900 text-white">2026</option>
+          <option value="2027" className="bg-blue-900 text-white">2027</option>
         </Select>
       </div>
 
       <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium">Mes</label>
+        <label className="text-sm font-medium text-white/90">Mes</label>
         <Select
           value={selectedMonth}
           onChange={(e) => onMonthChange(e.target.value)}
-          className="w-full"
+          className="w-full bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-white/30"
         >
           {MONTHS.map((month) => (
-            <option key={month.value} value={month.value}>
+            <option key={month.value} value={month.value} className="bg-blue-900 text-white">
               {month.label}
             </option>
           ))}
@@ -89,14 +89,14 @@ export function BudgetFilters({
       </div>
 
       <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium">País</label>
+        <label className="text-sm font-medium text-white/90">País</label>
         <Select
           value={selectedCountry}
           onChange={(e) => onCountryChange(e.target.value)}
-          className="w-full"
+          className="w-full bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-white/30"
         >
           {countries.map((country) => (
-            <option key={country.code} value={country.code}>
+            <option key={country.code} value={country.code} className="bg-blue-900 text-white">
               {country.name}
             </option>
           ))}
@@ -104,15 +104,15 @@ export function BudgetFilters({
       </div>
 
       <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium">Producto</label>
+        <label className="text-sm font-medium text-white/90">Producto</label>
         <Select
           value={selectedProduct}
           onChange={(e) => onProductChange(e.target.value)}
-          className="w-full"
+          className="w-full bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-white/30"
         >
-          <option value="all">Todos los productos</option>
+          <option value="all" className="bg-blue-900 text-white">Todos los productos</option>
           {products.map((product) => (
-            <option key={product} value={product}>
+            <option key={product} value={product} className="bg-blue-900 text-white">
               {product}
             </option>
           ))}

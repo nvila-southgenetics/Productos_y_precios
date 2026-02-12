@@ -36,22 +36,22 @@ export function YearSection({
   }, 0)
 
   return (
-    <div className="border rounded-lg overflow-hidden mb-4">
+    <div className="border border-white/20 rounded-lg overflow-hidden mb-4 bg-white/10 backdrop-blur-sm">
       {/* Header del Año */}
       <div
-        className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 transition-colors cursor-pointer border-b"
+        className="flex items-center justify-between px-4 py-3 bg-white/10 hover:bg-white/15 transition-colors cursor-pointer border-b border-white/20"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center gap-2">
           {isExpanded ? (
-            <ChevronDown className="h-5 w-5 text-blue-700" />
+            <ChevronDown className="h-5 w-5 text-white" />
           ) : (
-            <ChevronRight className="h-5 w-5 text-blue-700" />
+            <ChevronRight className="h-5 w-5 text-white" />
           )}
-          <span className="font-bold text-lg text-blue-900">{year}</span>
+          <span className="font-bold text-lg text-white">{year}</span>
           <span className={cn(
             "text-xs font-semibold px-2 py-1 rounded",
-            yearTotal > 0 ? "text-blue-700 bg-blue-100" : "text-slate-500 bg-slate-100"
+            yearTotal > 0 ? "text-blue-200 bg-blue-500/20" : "text-white/50 bg-white/10"
           )}>
             {yearTotal > 0 ? `Total: ${yearTotal} ventas` : "Sin ventas"}
           </span>
@@ -60,7 +60,7 @@ export function YearSection({
 
       {/* Contenido del Año */}
       {isExpanded && (
-        <div className="p-3 bg-background space-y-2">
+        <div className="p-3 bg-white/5 space-y-2">
           {periods.map((periodo) => {
             const sales = monthlyData[periodo] || []
             const isLoading = loadingPeriods.has(periodo)

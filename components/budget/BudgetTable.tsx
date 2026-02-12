@@ -104,10 +104,11 @@ function formatMargin(margin: number): string {
 }
 
 function getMarginColor(margin: number): string {
-  if (margin >= 50) return "text-green-600"
-  if (margin >= 30) return "text-yellow-600"
-  if (margin > 0) return "text-orange-600"
-  return "text-gray-400"
+  if (margin >= 50) return "text-emerald-300"
+  if (margin >= 30) return "text-blue-300"
+  if (margin >= 20) return "text-yellow-300"
+  if (margin >= 10) return "text-orange-300"
+  return "text-red-300"
 }
 
 export function BudgetTable({ year, country, product, month }: BudgetTableProps) {
@@ -278,7 +279,7 @@ export function BudgetTable({ year, country, product, month }: BudgetTableProps)
 
   if (loading) {
     return (
-      <div className="text-center py-12 text-muted-foreground text-sm">
+      <div className="text-center py-12 text-white/80 text-sm">
         Cargando datos...
       </div>
     )
@@ -286,7 +287,7 @@ export function BudgetTable({ year, country, product, month }: BudgetTableProps)
 
   if (data.length === 0) {
     return (
-      <div className="text-center py-12 text-muted-foreground text-sm">
+      <div className="text-center py-12 text-white/60 text-sm">
         No hay datos de presupuesto para los filtros seleccionados
       </div>
     )
@@ -297,33 +298,33 @@ export function BudgetTable({ year, country, product, month }: BudgetTableProps)
   const monthName = isMonthFiltered ? MONTH_NAMES[parseInt(month) - 1] : ""
 
   return (
-    <div className="border rounded-lg overflow-hidden">
+    <div className="border border-white/20 rounded-lg overflow-hidden bg-white/10 backdrop-blur-sm shadow-sm">
       {/* Indicador de mes filtrado */}
       {isMonthFiltered && (
-        <div className="bg-blue-50 px-4 py-2 border-b">
-          <p className="text-sm text-blue-700">
+        <div className="bg-white/10 px-4 py-2 border-b border-white/20">
+          <p className="text-sm text-white/90">
             📅 Mostrando proyecciones para <strong>{monthName} {year}</strong>
           </p>
         </div>
       )}
 
       <table className="w-full text-sm">
-        <thead className="bg-muted/50 border-b">
+        <thead className="bg-white/10 border-b border-white/20">
           <tr>
-            <th className="text-left px-3 py-2 font-medium text-xs">País</th>
-            <th className="text-left px-3 py-2 font-medium text-xs">Producto</th>
-            <th className="text-right px-3 py-2 font-medium text-xs">
+            <th className="text-left px-3 py-2 font-medium text-xs text-white">País</th>
+            <th className="text-left px-3 py-2 font-medium text-xs text-white">Producto</th>
+            <th className="text-right px-3 py-2 font-medium text-xs text-white">
               {isMonthFiltered ? `Unidades (${monthName})` : "Total Unidades"}
             </th>
-            <th className="text-right px-3 py-2 font-medium text-xs">Gross Sale</th>
-            <th className="text-right px-3 py-2 font-medium text-xs">Gross Profit</th>
-            <th className="text-right px-3 py-2 font-medium text-xs">Margen</th>
+            <th className="text-right px-3 py-2 font-medium text-xs text-white">Gross Sale</th>
+            <th className="text-right px-3 py-2 font-medium text-xs text-white">Gross Profit</th>
+            <th className="text-right px-3 py-2 font-medium text-xs text-white">Margen</th>
             {!isMonthFiltered && (
-              <th className="text-center px-3 py-2 font-medium text-xs">Detalle</th>
+              <th className="text-center px-3 py-2 font-medium text-xs text-white">Detalle</th>
             )}
           </tr>
         </thead>
-        <tbody className="divide-y">
+        <tbody className="divide-y divide-white/10">
           {data.map((row) => {
             // Calcular margen según si hay filtro de mes o no
             const grossSale = isMonthFiltered
@@ -339,29 +340,29 @@ export function BudgetTable({ year, country, product, month }: BudgetTableProps)
 
             return (
               <>
-                <tr key={row.id} className="hover:bg-muted/50 transition-colors">
-                  <td className="px-3 py-2 text-sm">{row.country}</td>
+                <tr key={row.id} className="hover:bg-white/5 transition-colors">
+                  <td className="px-3 py-2 text-sm text-white/90">{row.country}</td>
                   <td className="px-3 py-2">
                     {row.product_id ? (
                       <Link
                         href={`/productos/${row.product_id}`}
-                        className="text-primary hover:underline text-sm font-medium"
+                        className="text-blue-300 hover:text-blue-200 hover:underline text-sm font-medium"
                       >
                         {row.product_name}
                       </Link>
                     ) : (
-                      <span className="text-muted-foreground text-sm">{row.product_name}</span>
+                      <span className="text-white/70 text-sm">{row.product_name}</span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-right font-medium text-sm">
+                  <td className="px-3 py-2 text-right font-medium text-sm text-white">
                     {isMonthFiltered
                       ? (row.monthly_units || 0).toLocaleString("es-UY")
                       : row.total_units.toLocaleString("es-UY")}
                   </td>
-                  <td className="px-3 py-2 text-right text-blue-600 font-medium text-sm">
+                  <td className="px-3 py-2 text-right text-blue-300 font-medium text-sm">
                     {formatCurrency(grossSale)}
                   </td>
-                  <td className="px-3 py-2 text-right text-green-600 font-medium text-sm">
+                  <td className="px-3 py-2 text-right text-emerald-300 font-medium text-sm">
                     {formatCurrency(grossProfit)}
                   </td>
                   <td className="px-3 py-2 text-right font-medium text-sm">
@@ -372,7 +373,7 @@ export function BudgetTable({ year, country, product, month }: BudgetTableProps)
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-6 w-6 p-0"
+                        className="h-6 w-6 p-0 text-white/70 hover:text-white hover:bg-white/10"
                         onClick={() => toggleRow(row.id)}
                       >
                         {expandedRows.has(row.id) ? (
@@ -388,9 +389,9 @@ export function BudgetTable({ year, country, product, month }: BudgetTableProps)
               {/* Fila expandida con detalle mensual - SOLO si no hay filtro de mes */}
               {!isMonthFiltered && expandedRows.has(row.id) && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-3 bg-muted/30">
+                  <td colSpan={7} className="px-3 py-3 bg-white/5">
                     <div className="space-y-2">
-                      <h4 className="text-xs font-semibold text-muted-foreground">
+                      <h4 className="text-xs font-semibold text-white/70">
                         Proyección Mensual {year}
                       </h4>
                       <div className="grid grid-cols-12 gap-1">
@@ -401,10 +402,10 @@ export function BudgetTable({ year, country, product, month }: BudgetTableProps)
                           return (
                             <div
                               key={month}
-                              className="text-center p-2 bg-background rounded border"
+                              className="text-center p-2 bg-white/10 rounded border border-white/20"
                             >
-                              <div className="text-xs text-muted-foreground">{month}</div>
-                              <div className="text-sm font-semibold">{units}</div>
+                              <div className="text-xs text-white/60">{month}</div>
+                              <div className="text-sm font-semibold text-white">{units}</div>
                             </div>
                           )
                         })}
