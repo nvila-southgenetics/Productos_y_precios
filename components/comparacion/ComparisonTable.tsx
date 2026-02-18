@@ -1,9 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { ArrowUp, ArrowDown, Minus } from 'lucide-react';
+import { ArrowUp, ArrowDown, Minus, ChevronDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+interface BudgetMonthItem {
+  label: string;
+  value: number;
+}
 
 interface ComparisonRow {
   country: string;
@@ -11,21 +17,29 @@ interface ComparisonRow {
   product_name: string;
   product_id: string | null;
   budget2026: number;
-  real2025: number;
+  budgetByMonth?: BudgetMonthItem[];
   real2026: number;
-  difference: number;
-  growthPercent: number;
+  real2025: number;
+  deltaBudgetVsReal2026: number;
+  deltaBudgetVsReal2026Pct: number;
+  deltaReal2026VsReal2025: number;
+  deltaReal2026VsReal2025Pct: number;
 }
 
 interface ComparisonTableProps {
   month: string;
-  country: string;
+  countries: string[];
   product: string;
 }
 
 const MONTH_KEYS = [
   'jan', 'feb', 'mar', 'apr', 'may', 'jun',
   'jul', 'aug', 'sep', 'oct', 'nov', 'dec'
+];
+
+const MONTH_LABELS = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
 ];
 
 // Mapeo de compañías a códigos de país
@@ -144,15 +158,29 @@ const productNamesMatch = (name1: string, name2: string): boolean => {
   return false;
 };
 
-export function ComparisonTable({ month, country, product }: ComparisonTableProps) {
+export function ComparisonTable({ month, countries, product }: ComparisonTableProps) {
   const [data, setData] = useState<ComparisonRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sortBy, setSortBy] = useState<'difference' | 'growthPercent'>('difference');
+  const [sortBy, setSortBy] = useState<'deltaBudgetVsReal2026' | 'deltaReal2026VsReal2025'>('deltaBudgetVsReal2026');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [openBudgetDropdownIdx, setOpenBudgetDropdownIdx] = useState<number | null>(null);
+  const budgetDropdownRef = useRef<HTMLDivElement>(null);
+
+  const isAllMonths = month === 'all';
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (budgetDropdownRef.current && !budgetDropdownRef.current.contains(e.target as Node)) {
+        setOpenBudgetDropdownIdx(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     fetchComparisonData();
-  }, [month, country, product]);
+  }, [month, countries, product]);
 
   const fetchComparisonData = async () => {
     setLoading(true);
@@ -163,8 +191,8 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
         .select('*')
         .eq('year', 2026);
 
-      if (country !== 'all') {
-        budgetQuery = budgetQuery.eq('country_code', country);
+      if (countries.length > 0) {
+        budgetQuery = budgetQuery.in('country_code', countries);
       }
 
       if (product !== 'all') {
@@ -246,7 +274,7 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
         const key = `${countryCodeFromCompany}-${normalizedProduct}`;
 
         // Aplicar filtros
-        const matchesCountry = country === 'all' || countryCodeFromCompany === country;
+        const matchesCountry = countries.length === 0 || countries.includes(countryCodeFromCompany);
         const matchesProduct = product === 'all' || 
                              productNamesMatch(product, row.producto);
         const matchesMonth = !isMonthFiltered || row.mes === parseInt(month);
@@ -275,7 +303,7 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
         const key = `${countryCodeFromCompany}-${normalizedProduct}`;
 
         // Aplicar filtros
-        const matchesCountry = country === 'all' || countryCodeFromCompany === country;
+        const matchesCountry = countries.length === 0 || countries.includes(countryCodeFromCompany);
         const matchesProduct = product === 'all' || 
                              productNamesMatch(product, row.producto);
         const matchesMonth = !isMonthFiltered || row.mes === parseInt(month);
@@ -370,24 +398,17 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
           });
         }
         
-        const difference = budget - real2025;
-        const growthPercent = real2025 > 0 ? (difference / real2025) * 100 : 0;
+        const deltaBudgetVsReal2026 = budget - real2026;
+        const deltaBudgetVsReal2026Pct = real2026 > 0 ? (deltaBudgetVsReal2026 / real2026) * 100 : (budget > 0 ? 100 : 0);
+        const deltaReal2026VsReal2025 = real2026 - real2025;
+        const deltaReal2026VsReal2025Pct = real2025 > 0 ? (deltaReal2026VsReal2025 / real2025) * 100 : (real2026 > 0 ? 100 : 0);
 
-        // Log para debugging
-        if (process.env.NODE_ENV === 'development' && budget > 0) {
-          const normalizedBudgetName = normalizeProductName(budgetRow.product_name);
-          console.log(`📊 ${budgetRow.product_name} (${budgetRow.country_code}):`, {
-            normalized: normalizedBudgetName,
-            matchingKeys2025,
-            matchingKeys2026,
-            budget,
-            real2025,
-            real2026,
-            difference,
-            keysDisponibles2025: Object.keys(real2025Grouped).filter(k => k.startsWith(`${budgetRow.country_code}-`)),
-            keysDisponibles2026: Object.keys(real2026Grouped).filter(k => k.startsWith(`${budgetRow.country_code}-`)),
-          });
-        }
+        const budgetByMonth: BudgetMonthItem[] | undefined = !isMonthFiltered
+          ? MONTH_KEYS.map((key, i) => ({
+              label: MONTH_LABELS[i],
+              value: Number(budgetRow[key]) || 0,
+            }))
+          : undefined;
 
         return {
           country: budgetRow.country,
@@ -395,15 +416,18 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
           product_name: budgetRow.product_name,
           product_id: budgetRow.product_id,
           budget2026: budget,
-          real2025: real2025,
+          budgetByMonth,
           real2026: real2026,
-          difference,
-          growthPercent,
+          real2025: real2025,
+          deltaBudgetVsReal2026,
+          deltaBudgetVsReal2026Pct,
+          deltaReal2026VsReal2025,
+          deltaReal2026VsReal2025Pct,
         };
       }) || [];
 
-      // 5. Ordenar
-      const sorted = comparisonData.sort((a, b) => {
+      // 5. Ordenar por delta seleccionado
+      const sorted = [...comparisonData].sort((a, b) => {
         const aVal = a[sortBy];
         const bVal = b[sortBy];
         return sortOrder === 'desc' ? bVal - aVal : aVal - bVal;
@@ -424,7 +448,7 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
     }
   };
 
-  const handleSort = (column: 'difference' | 'growthPercent') => {
+  const handleSort = (column: 'deltaBudgetVsReal2026' | 'deltaReal2026VsReal2025') => {
     if (sortBy === column) {
       setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc');
     } else {
@@ -449,26 +473,28 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
             <th className="text-left px-4 py-3 font-medium text-xs text-white">País</th>
             <th className="text-left px-4 py-3 font-medium text-xs text-white">Producto</th>
             <th className="text-right px-4 py-3 font-medium text-xs text-white">Budget 2026</th>
-            <th className="text-right px-4 py-3 font-medium text-xs text-white">Real 2025</th>
             <th className="text-right px-4 py-3 font-medium text-xs text-white">Real 2026</th>
+            <th className="text-right px-4 py-3 font-medium text-xs text-white">Real 2025</th>
+            <th className="text-right px-4 py-3 font-medium text-xs text-white">Δ Budget vs Real 2026</th>
             <th 
               className="text-right px-4 py-3 font-medium text-xs text-white cursor-pointer hover:bg-white/10 transition-colors"
-              onClick={() => handleSort('difference')}
+              onClick={() => handleSort('deltaBudgetVsReal2026')}
             >
               <div className="flex items-center justify-end gap-1">
-                Diferencia
-                {sortBy === 'difference' && (
+                Δ Budget vs R26 %
+                {sortBy === 'deltaBudgetVsReal2026' && (
                   sortOrder === 'desc' ? <ArrowDown className="w-4 h-4" /> : <ArrowUp className="w-4 h-4" />
                 )}
               </div>
             </th>
+            <th className="text-right px-4 py-3 font-medium text-xs text-white">Δ Real 2026 vs Real 2025</th>
             <th 
               className="text-right px-4 py-3 font-medium text-xs text-white cursor-pointer hover:bg-white/10 transition-colors"
-              onClick={() => handleSort('growthPercent')}
+              onClick={() => handleSort('deltaReal2026VsReal2025')}
             >
               <div className="flex items-center justify-end gap-1">
-                Crecimiento %
-                {sortBy === 'growthPercent' && (
+                Δ R26 vs R25 %
+                {sortBy === 'deltaReal2026VsReal2025' && (
                   sortOrder === 'desc' ? <ArrowDown className="w-4 h-4" /> : <ArrowUp className="w-4 h-4" />
                 )}
               </div>
@@ -477,8 +503,10 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
         </thead>
         <tbody className="divide-y divide-white/10">
           {data.map((row, idx) => {
-            const isGrowth = row.difference > 0;
-            const isDecline = row.difference < 0;
+            const isDeltaBudgetUp = row.deltaBudgetVsReal2026 > 0;
+            const isDeltaBudgetDown = row.deltaBudgetVsReal2026 < 0;
+            const isDeltaR26Up = row.deltaReal2026VsReal2025 > 0;
+            const isDeltaR26Down = row.deltaReal2026VsReal2025 < 0;
 
             return (
               <tr key={idx} className="hover:bg-white/5 transition-colors">
@@ -496,32 +524,74 @@ export function ComparisonTable({ month, country, product }: ComparisonTableProp
                   )}
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-sm text-blue-300">
-                  {row.budget2026.toLocaleString('es-UY')}
-                </td>
-                <td className="px-4 py-3 text-right font-medium text-sm text-purple-300">
-                  {row.real2025.toLocaleString('es-UY')}
+                  {isAllMonths && row.budgetByMonth ? (
+                    <div className="relative inline-block text-right">
+                      <button
+                        type="button"
+                        onClick={() => setOpenBudgetDropdownIdx(openBudgetDropdownIdx === idx ? null : idx)}
+                        className="flex items-center justify-end gap-1 w-full font-medium text-blue-300 hover:text-blue-200 focus:outline-none"
+                      >
+                        {row.budget2026.toLocaleString('es-UY')}
+                        <ChevronDown className={cn("h-4 w-4 transition-transform", openBudgetDropdownIdx === idx && "rotate-180")} />
+                      </button>
+                      {openBudgetDropdownIdx === idx && (
+                        <div
+                          ref={budgetDropdownRef}
+                          className="absolute z-50 right-0 mt-1 min-w-[180px] rounded-md border border-white/20 bg-blue-950/95 backdrop-blur-sm py-2 shadow-lg"
+                        >
+                          <div className="px-3 py-1.5 text-xs font-semibold text-white/70 border-b border-white/10">
+                            Budget 2026 por mes
+                          </div>
+                          <div className="max-h-56 overflow-y-auto">
+                            {row.budgetByMonth.map((item, i) => (
+                              <div key={i} className="flex justify-between items-center px-3 py-1.5 text-sm text-white/90">
+                                <span>{item.label}</span>
+                                <span className="font-medium tabular-nums">{item.value.toLocaleString('es-UY')}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    row.budget2026.toLocaleString('es-UY')
+                  )}
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-sm text-emerald-300">
                   {row.real2026.toLocaleString('es-UY')}
                 </td>
+                <td className="px-4 py-3 text-right font-medium text-sm text-purple-300">
+                  {row.real2025.toLocaleString('es-UY')}
+                </td>
+                <td className="px-4 py-3 text-right font-medium text-sm text-white/90">
+                  {row.deltaBudgetVsReal2026 >= 0 ? '+' : ''}{row.deltaBudgetVsReal2026.toLocaleString('es-UY')}
+                </td>
                 <td className={`px-4 py-3 text-right font-medium text-sm ${
-                  isGrowth ? 'text-emerald-300' : 
-                  isDecline ? 'text-red-300' : 
+                  isDeltaBudgetUp ? 'text-emerald-300' : 
+                  isDeltaBudgetDown ? 'text-red-300' : 
                   'text-white/60'
                 }`}>
                   <div className="flex items-center justify-end gap-1">
-                    {isGrowth && <ArrowUp className="w-4 h-4" />}
-                    {isDecline && <ArrowDown className="w-4 h-4" />}
-                    {!isGrowth && !isDecline && <Minus className="w-4 h-4" />}
-                    {isGrowth ? '+' : ''}{row.difference.toLocaleString('es-UY')}
+                    {isDeltaBudgetUp && <ArrowUp className="w-4 h-4" />}
+                    {isDeltaBudgetDown && <ArrowDown className="w-4 h-4" />}
+                    {row.deltaBudgetVsReal2026 === 0 && <Minus className="w-4 h-4" />}
+                    {row.deltaBudgetVsReal2026Pct >= 0 ? '+' : ''}{row.deltaBudgetVsReal2026Pct.toFixed(1)}%
                   </div>
                 </td>
+                <td className="px-4 py-3 text-right font-medium text-sm text-white/90">
+                  {row.deltaReal2026VsReal2025 >= 0 ? '+' : ''}{row.deltaReal2026VsReal2025.toLocaleString('es-UY')}
+                </td>
                 <td className={`px-4 py-3 text-right font-medium text-sm ${
-                  isGrowth ? 'text-emerald-300' : 
-                  isDecline ? 'text-red-300' : 
+                  isDeltaR26Up ? 'text-emerald-300' : 
+                  isDeltaR26Down ? 'text-red-300' : 
                   'text-white/60'
                 }`}>
-                  {isGrowth ? '+' : ''}{row.growthPercent.toFixed(1)}%
+                  <div className="flex items-center justify-end gap-1">
+                    {isDeltaR26Up && <ArrowUp className="w-4 h-4" />}
+                    {isDeltaR26Down && <ArrowDown className="w-4 h-4" />}
+                    {row.deltaReal2026VsReal2025 === 0 && <Minus className="w-4 h-4" />}
+                    {row.deltaReal2026VsReal2025Pct >= 0 ? '+' : ''}{row.deltaReal2026VsReal2025Pct.toFixed(1)}%
+                  </div>
                 </td>
               </tr>
             );

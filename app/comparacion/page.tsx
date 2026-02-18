@@ -9,7 +9,7 @@ import { ComparisonTable } from '@/components/comparacion/ComparisonTable';
 
 export default function ComparacionPage() {
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
-  const [selectedCountry, setSelectedCountry] = useState<string>('all');
+  const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<string>('all');
 
   return (
@@ -19,10 +19,10 @@ export default function ComparacionPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-white">
-              Comparación: Budget 2026 vs Real 2025 vs Real 2026
+              Comparación: Budget 2026 - Real 2026 - Real 2025
             </h1>
             <p className="text-sm text-white/80 mt-1">
-              Analiza las proyecciones contra el desempeño histórico y actual
+              Proyecciones y deltas de crecimiento (Budget vs Real 2026, Real 2026 vs Real 2025). Datos reales desde ventas mensuales.
             </p>
           </div>
           
@@ -48,9 +48,9 @@ export default function ComparacionPage() {
           <div className="text-sm text-white/90">
             <p className="font-medium">Comparación de períodos:</p>
             <p>
-              <strong>Budget:</strong> Proyecciones para 2026 | 
-              <strong className="ml-2">Real 2025:</strong> Ventas reales de 2025 | 
-              <strong className="ml-2">Real 2026:</strong> Ventas reales de 2026
+              <strong>Budget 2026:</strong> Proyecciones | 
+              <strong className="ml-2">Real 2026:</strong> Ventas reales 2026 | 
+              <strong className="ml-2">Real 2025:</strong> Ventas reales 2025. Deltas: Budget vs Real 2026 y Real 2026 vs Real 2025 (cantidad y %).
             </p>
           </div>
         </div>
@@ -58,24 +58,24 @@ export default function ComparacionPage() {
       {/* Filtros */}
       <ComparisonFilters
         selectedMonth={selectedMonth}
-        selectedCountry={selectedCountry}
+        selectedCountries={selectedCountries}
         selectedProduct={selectedProduct}
         onMonthChange={setSelectedMonth}
-        onCountryChange={setSelectedCountry}
+        onCountriesChange={setSelectedCountries}
         onProductChange={setSelectedProduct}
       />
 
       {/* Resumen comparativo */}
       <ComparisonSummary
         month={selectedMonth}
-        country={selectedCountry}
+        countries={selectedCountries}
         product={selectedProduct}
       />
 
       {/* Tabla comparativa */}
       <ComparisonTable
         month={selectedMonth}
-        country={selectedCountry}
+        countries={selectedCountries}
         product={selectedProduct}
       />
       </div>
