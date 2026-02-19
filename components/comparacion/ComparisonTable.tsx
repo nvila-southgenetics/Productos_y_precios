@@ -42,6 +42,25 @@ const MONTH_LABELS = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
 ];
 
+const COUNTRIES = [
+  { value: 'CL', label: 'Chile' },
+  { value: 'UY', label: 'Uruguay' },
+  { value: 'AR', label: 'Argentina' },
+  { value: 'MX', label: 'México' },
+  { value: 'CO', label: 'Colombia' },
+  { value: 'VE', label: 'Venezuela' },
+  { value: 'DO', label: 'República Dominicana' },
+  { value: 'EC', label: 'Ecuador' },
+  { value: 'PY', label: 'Paraguay' },
+  { value: 'JM', label: 'Jamaica' },
+  { value: 'BO', label: 'Bolivia' },
+  { value: 'TT', label: 'Trinidad y Tobago' },
+  { value: 'BS', label: 'Bahamas' },
+  { value: 'BB', label: 'Barbados' },
+  { value: 'BM', label: 'Bermuda' },
+  { value: 'KY', label: 'Cayman Islands' },
+];
+
 // Mapeo de compañías a códigos de país
 const companyToCountry: Record<string, string> = {
   'SouthGenetics LLC': 'UY',
@@ -398,8 +417,11 @@ export function ComparisonTable({ month, countries, product }: ComparisonTablePr
           });
         }
         
-        const deltaBudgetVsReal2026 = budget - real2026;
-        const deltaBudgetVsReal2026Pct = real2026 > 0 ? (deltaBudgetVsReal2026 / real2026) * 100 : (budget > 0 ? 100 : 0);
+        // Delta: Real 2026 vs Budget (invertido)
+        const deltaBudgetVsReal2026 = real2026 - budget;
+        const deltaBudgetVsReal2026Pct = budget > 0 
+          ? (deltaBudgetVsReal2026 / budget) * 100 
+          : (real2026 > 0 ? 100 : (budget === 0 && real2026 === 0 ? 0 : 0));
         const deltaReal2026VsReal2025 = real2026 - real2025;
         const deltaReal2026VsReal2025Pct = real2025 > 0 ? (deltaReal2026VsReal2025 / real2025) * 100 : (real2026 > 0 ? 100 : 0);
 
@@ -426,8 +448,95 @@ export function ComparisonTable({ month, countries, product }: ComparisonTablePr
         };
       }) || [];
 
-      // 5. Ordenar por delta seleccionado
-      const sorted = [...comparisonData].sort((a, b) => {
+      // 6. Agregar filas para productos/países con ventas reales que NO están en budget
+      const budgetKeys = new Set(
+        comparisonData.map((row) => `${row.country_code}-${normalizeProductName(row.product_name)}`)
+      );
+
+      // Obtener todos los productos únicos de ventas reales
+      const allRealKeys = new Set([
+        ...Object.keys(real2025Grouped),
+        ...Object.keys(real2026Grouped),
+      ]);
+
+      // Obtener nombres de países desde ventas para mostrar en la tabla
+      const countryNamesMap: Record<string, string> = {};
+      [...safeReal2025Data, ...safeReal2026Data].forEach((row: any) => {
+        const countryCode = extractCountryCode(row.compañia);
+        if (!countryNamesMap[countryCode] && row.compañia) {
+          // Intentar obtener nombre del país desde el código
+          const countryName = COUNTRIES.find((c) => c.value === countryCode)?.label || countryCode;
+          countryNamesMap[countryCode] = countryName;
+        }
+      });
+
+      // Agregar filas para productos/países que tienen ventas pero no están en budget
+      allRealKeys.forEach((key) => {
+        if (!budgetKeys.has(key)) {
+          const [countryCode, normalizedProduct] = key.split('-');
+          
+          // Verificar filtros de país
+          if (countries.length > 0 && !countries.includes(countryCode)) {
+            return;
+          }
+
+          const real2025 = real2025Grouped[key] || 0;
+          const real2026 = real2026Grouped[key] || 0;
+
+          // Solo agregar si hay ventas reales (aunque budget sea 0)
+          if (real2025 > 0 || real2026 > 0) {
+            // Buscar el nombre original del producto desde ventas
+            let productName = normalizedProduct;
+            const matchingSale = [...safeReal2025Data, ...safeReal2026Data].find(
+              (s: any) =>
+                extractCountryCode(s.compañia) === countryCode &&
+                normalizeProductName(s.producto) === normalizedProduct
+            );
+            if (matchingSale) {
+              productName = matchingSale.producto;
+            }
+
+            // Verificar filtro de producto
+            if (product !== 'all' && !productNamesMatch(product, productName)) {
+              return;
+            }
+
+            // Buscar product_id si existe
+            let productId: string | null = null;
+            if (matchingSale && (matchingSale as any).product_id) {
+              productId = (matchingSale as any).product_id;
+            }
+
+            const deltaBudgetVsReal2026 = real2026 - 0; // budget = 0
+            const deltaBudgetVsReal2026Pct = 0 > 0 ? (deltaBudgetVsReal2026 / 0) * 100 : (real2026 > 0 ? 100 : 0);
+            const deltaReal2026VsReal2025 = real2026 - real2025;
+            const deltaReal2026VsReal2025Pct = real2025 > 0 ? (deltaReal2026VsReal2025 / real2025) * 100 : (real2026 > 0 ? 100 : 0);
+
+            comparisonData.push({
+              country: countryNamesMap[countryCode] || countryCode,
+              country_code: countryCode,
+              product_name: productName,
+              product_id: productId,
+              budget2026: 0,
+              budgetByMonth: undefined,
+              real2026: real2026,
+              real2025: real2025,
+              deltaBudgetVsReal2026,
+              deltaBudgetVsReal2026Pct,
+              deltaReal2026VsReal2025,
+              deltaReal2026VsReal2025Pct,
+            });
+          }
+        }
+      });
+
+      // 7. Filtrar filas donde budget=0 AND real2026=0 AND real2025=0
+      const filteredData = comparisonData.filter(
+        (row) => !(row.budget2026 === 0 && row.real2026 === 0 && row.real2025 === 0)
+      );
+
+      // 8. Ordenar por delta seleccionado
+      const sorted = [...filteredData].sort((a, b) => {
         const aVal = a[sortBy];
         const bVal = b[sortBy];
         return sortOrder === 'desc' ? bVal - aVal : aVal - bVal;
@@ -475,13 +584,13 @@ export function ComparisonTable({ month, countries, product }: ComparisonTablePr
             <th className="text-right px-4 py-3 font-medium text-xs text-white">Budget 2026</th>
             <th className="text-right px-4 py-3 font-medium text-xs text-white">Real 2026</th>
             <th className="text-right px-4 py-3 font-medium text-xs text-white">Real 2025</th>
-            <th className="text-right px-4 py-3 font-medium text-xs text-white">Δ Budget vs Real 2026</th>
+            <th className="text-right px-4 py-3 font-medium text-xs text-white">Δ Real 2026 vs Budget</th>
             <th 
               className="text-right px-4 py-3 font-medium text-xs text-white cursor-pointer hover:bg-white/10 transition-colors"
               onClick={() => handleSort('deltaBudgetVsReal2026')}
             >
               <div className="flex items-center justify-end gap-1">
-                Δ Budget vs R26 %
+                Δ R26 vs Budget %
                 {sortBy === 'deltaBudgetVsReal2026' && (
                   sortOrder === 'desc' ? <ArrowDown className="w-4 h-4" /> : <ArrowUp className="w-4 h-4" />
                 )}

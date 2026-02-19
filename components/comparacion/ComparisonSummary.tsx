@@ -220,11 +220,13 @@ export function ComparisonSummary({ month, countries, product }: ComparisonSumma
         }
       });
 
-      // Sumar Real 2025 - CON FILTROS APLICADOS MANUALMENTE
+      // Agrupar Real 2025 por producto y país (misma lógica que ComparisonTable)
+      const real2025Grouped: Record<string, number> = {};
       safeReal2025Data?.forEach((row: any) => {
         const countryCodeFromCompany = extractCountryCodeFromCompany(row.compañia);
+        const normalizedProduct = normalizeProductName(row.producto);
+        const key = `${countryCodeFromCompany}-${normalizedProduct}`;
 
-        // Aplicar filtros
         const matchesCountry = countries.length === 0 || countries.includes(countryCodeFromCompany);
         const matchesProduct = product === 'all' || 
                              productNamesMatch(product, row.producto);
@@ -232,19 +234,17 @@ export function ComparisonSummary({ month, countries, product }: ComparisonSumma
 
         if (matchesCountry && matchesProduct && matchesMonth) {
           const cantidad = parseInt(row.cantidad_ventas) || 0;
-          real2025 += cantidad;
-          
-          if (process.env.NODE_ENV === 'development' && cantidad > 0) {
-            console.log(`✅ Summary Match 2025: ${row.producto} (${countryCodeFromCompany}) = ${cantidad}`);
-          }
+          real2025Grouped[key] = (real2025Grouped[key] || 0) + cantidad;
         }
       });
 
-      // Sumar Real 2026 - CON FILTROS APLICADOS MANUALMENTE
+      // Agrupar Real 2026 por producto y país (misma lógica que ComparisonTable)
+      const real2026Grouped: Record<string, number> = {};
       safeReal2026Data?.forEach((row: any) => {
         const countryCodeFromCompany = extractCountryCodeFromCompany(row.compañia);
+        const normalizedProduct = normalizeProductName(row.producto);
+        const key = `${countryCodeFromCompany}-${normalizedProduct}`;
 
-        // Aplicar filtros
         const matchesCountry = countries.length === 0 || countries.includes(countryCodeFromCompany);
         const matchesProduct = product === 'all' || 
                              productNamesMatch(product, row.producto);
@@ -252,20 +252,23 @@ export function ComparisonSummary({ month, countries, product }: ComparisonSumma
 
         if (matchesCountry && matchesProduct && matchesMonth) {
           const cantidad = parseInt(row.cantidad_ventas) || 0;
-          real2026 += cantidad;
-          
-          if (process.env.NODE_ENV === 'development' && cantidad > 0) {
-            console.log(`✅ Summary Match 2026: ${row.producto} (${countryCodeFromCompany}) = ${cantidad}`);
-          }
+          real2026Grouped[key] = (real2026Grouped[key] || 0) + cantidad;
         }
       });
+
+      // Sumar los valores agrupados
+      real2025 = Object.values(real2025Grouped).reduce((sum, val) => sum + val, 0);
+      real2026 = Object.values(real2026Grouped).reduce((sum, val) => sum + val, 0);
 
       if (process.env.NODE_ENV === 'development') {
         console.log('📊 Summary Totals:', { budget2026, real2026, real2025 });
       }
 
-      const deltaBudgetVsReal2026 = budget2026 - real2026;
-      const deltaBudgetVsReal2026Pct = real2026 > 0 ? (deltaBudgetVsReal2026 / real2026) * 100 : (budget2026 > 0 ? 100 : 0);
+      // Delta: Real 2026 vs Budget (invertido)
+      const deltaBudgetVsReal2026 = real2026 - budget2026;
+      const deltaBudgetVsReal2026Pct = budget2026 > 0 
+        ? (deltaBudgetVsReal2026 / budget2026) * 100 
+        : (real2026 > 0 ? 100 : (budget2026 === 0 && real2026 === 0 ? 0 : 0));
       const deltaReal2026VsReal2025 = real2026 - real2025;
       const deltaReal2026VsReal2025Pct = real2025 > 0 ? (deltaReal2026VsReal2025 / real2025) * 100 : (real2026 > 0 ? 100 : 0);
 
@@ -339,11 +342,11 @@ export function ComparisonSummary({ month, countries, product }: ComparisonSumma
         </div>
       </div>
 
-      {/* Δ Budget vs Real 2026 - cantidad */}
+      {/* Δ Real 2026 vs Budget - cantidad */}
       <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg border border-white/20 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-white/70">Δ Budget vs Real 2026</p>
+            <p className="text-sm text-white/70">Δ Real 2026 vs Budget</p>
             <p className={`text-2xl font-bold mt-1 ${
               isDeltaBudgetUp ? 'text-emerald-300' : 
               isDeltaBudgetDown ? 'text-red-300' : 
@@ -359,11 +362,11 @@ export function ComparisonSummary({ month, countries, product }: ComparisonSumma
         </div>
       </div>
 
-      {/* Δ Budget vs Real 2026 - % */}
+      {/* Δ Real 2026 vs Budget - % */}
       <div className="bg-white/10 backdrop-blur-sm p-4 rounded-lg border border-white/20 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-white/70">Δ Budget vs Real 2026</p>
+            <p className="text-sm text-white/70">Δ Real 2026 vs Budget</p>
             <p className={`text-2xl font-bold mt-1 ${
               isDeltaBudgetUp ? 'text-emerald-300' : 
               isDeltaBudgetDown ? 'text-red-300' : 
