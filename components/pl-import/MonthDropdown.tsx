@@ -4,9 +4,9 @@ import { useState, useEffect } from "react"
 import { ChevronDown, ChevronRight, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { ProductSalesTable } from "./ProductSalesTable"
+import { ProductSalesTable, calculateGrossSale, calculateGrossProfit } from "./ProductSalesTable"
 import { MonthlyPLModal } from "./MonthlyPLModal"
-import { cn } from "@/lib/utils"
+import { cn, formatCurrency } from "@/lib/utils"
 import type { MonthlySalesWithProduct } from "@/lib/supabase-mcp"
 
 interface MonthDropdownProps {
@@ -56,7 +56,15 @@ export function MonthDropdown({
   const [isChecked, setIsChecked] = useState(false)
   const [showPLModal, setShowPLModal] = useState(false)
 
+  // Calcular totales
   const totalCantidad = sales.reduce((sum, sale) => sum + sale.cantidad_ventas, 0)
+  const totalGrossSale = sales.reduce((sum, sale) => {
+    return sum + calculateGrossSale(sale.overrides, sale.cantidad_ventas)
+  }, 0)
+  const totalGrossProfit = sales.reduce((sum, sale) => {
+    return sum + calculateGrossProfit(sale.overrides, sale.cantidad_ventas)
+  }, 0)
+  const totalGrossSaleOdoo = sales.reduce((sum, sale) => sum + (sale.monto_total || 0), 0)
 
   // Cargar datos automáticamente cuando se monta el componente si no hay datos
   useEffect(() => {
@@ -102,7 +110,7 @@ export function MonthDropdown({
         className="flex items-center justify-between px-4 py-2.5 bg-white/10 hover:bg-white/15 transition-colors cursor-pointer border-b border-white/10"
         onClick={() => setIsExpanded(!isExpanded)}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-1">
           <Checkbox
             checked={isChecked}
             onChange={(checked) => {
@@ -123,8 +131,22 @@ export function MonthDropdown({
             "text-xs font-semibold px-2 py-0.5 rounded",
             totalCantidad > 0 ? "text-blue-200 bg-blue-500/20" : "text-white/50"
           )}>
-            {isLoading ? "Cargando..." : `Total: ${totalCantidad}`}
+            {isLoading ? "Cargando..." : `${totalCantidad.toLocaleString('es-UY')} ventas`}
           </span>
+          {/* Totales en vista previa */}
+          {!isLoading && sales.length > 0 && (
+            <div className="flex items-center gap-3 ml-4 text-xs">
+              <span className="text-sky-300 font-medium">
+                GS: {formatCurrency(totalGrossSale)}
+              </span>
+              <span className="text-orange-300 font-medium">
+                GP: {formatCurrency(totalGrossProfit)}
+              </span>
+              <span className="text-emerald-300 font-medium">
+                Odoo: {formatCurrency(totalGrossSaleOdoo)}
+              </span>
+            </div>
+          )}
         </div>
         <Button
           variant="ghost"

@@ -40,23 +40,25 @@ const countries = [
 ]
 
 const categoryColors: Record<string, string> = {
-  "Ginecología": "bg-pink-100 text-pink-800 border-pink-200",
-  "Oncología": "bg-red-100 text-red-800 border-red-200",
-  "Urología": "bg-blue-100 text-blue-800 border-blue-200",
-  "Endocrinología": "bg-purple-100 text-purple-800 border-purple-200",
-  "Prenatales": "bg-green-100 text-green-800 border-green-200",
-  "Anualidades": "bg-yellow-100 text-yellow-800 border-yellow-200",
-  "Otros": "bg-gray-100 text-gray-800 border-gray-200",
+  "Ginecología": "bg-pink-200 text-pink-800 border-pink-300",
+  "Oncología": "bg-rose-200 text-rose-800 border-rose-300",
+  "Urología": "bg-sky-200 text-sky-800 border-sky-300",
+  "Endocrinología": "bg-violet-200 text-violet-800 border-violet-300",
+  "Prenatales": "bg-teal-200 text-teal-800 border-teal-300",
+  "Anualidades": "bg-amber-200 text-amber-800 border-amber-300",
+  "Carrier": "bg-indigo-200 text-indigo-800 border-indigo-300",
+  "Nutrición": "bg-lime-200 text-lime-800 border-lime-300",
+  "Otros": "bg-slate-200 text-slate-800 border-slate-300",
 }
 
 const tipoColors: Record<string, string> = {
-  "Sangre": "bg-red-50 text-red-700 border-red-200",
-  "Corte de Tejido": "bg-blue-50 text-blue-700 border-blue-200",
-  "Punción": "bg-purple-50 text-purple-700 border-purple-200",
-  "Biopsia endometrial": "bg-pink-50 text-pink-700 border-pink-200",
-  "Hisopado bucal": "bg-green-50 text-green-700 border-green-200",
-  "Sangre y corte tejido": "bg-orange-50 text-orange-700 border-orange-200",
-  "Orina": "bg-cyan-50 text-cyan-700 border-cyan-200",
+  "Sangre": "bg-red-200 text-red-800 border-red-300",
+  "Corte de Tejido": "bg-blue-200 text-blue-800 border-blue-300",
+  "Punción": "bg-purple-200 text-purple-800 border-purple-300",
+  "Biopsia endometrial": "bg-fuchsia-200 text-fuchsia-800 border-fuchsia-300",
+  "Hisopado bucal": "bg-emerald-200 text-emerald-800 border-emerald-300",
+  "Sangre y corte tejido": "bg-orange-200 text-orange-800 border-orange-300",
+  "Orina": "bg-cyan-200 text-cyan-800 border-cyan-300",
 }
 
 export function ProductDetailModal({

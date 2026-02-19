@@ -16,23 +16,25 @@ interface ProductTableProps {
 }
 
 const categoryColors: Record<string, string> = {
-  "Ginecología": "bg-pink-500/20 text-pink-200 border-pink-400/30",
-  "Oncología": "bg-red-500/20 text-red-200 border-red-400/30",
-  "Urología": "bg-blue-500/20 text-blue-200 border-blue-400/30",
-  "Endocrinología": "bg-purple-500/20 text-purple-200 border-purple-400/30",
-  "Prenatales": "bg-emerald-500/20 text-emerald-200 border-emerald-400/30",
-  "Anualidades": "bg-yellow-500/20 text-yellow-200 border-yellow-400/30",
-  "Otros": "bg-gray-500/20 text-gray-200 border-gray-400/30",
+  "Ginecología": "bg-pink-300/20 text-pink-200 border-pink-300/30",
+  "Oncología": "bg-rose-300/20 text-rose-200 border-rose-300/30",
+  "Urología": "bg-sky-300/20 text-sky-200 border-sky-300/30",
+  "Endocrinología": "bg-violet-300/20 text-violet-200 border-violet-300/30",
+  "Prenatales": "bg-teal-300/20 text-teal-200 border-teal-300/30",
+  "Anualidades": "bg-amber-300/20 text-amber-200 border-amber-300/30",
+  "Carrier": "bg-indigo-300/20 text-indigo-200 border-indigo-300/30",
+  "Nutrición": "bg-lime-300/20 text-lime-200 border-lime-300/30",
+  "Otros": "bg-slate-300/20 text-slate-200 border-slate-300/30",
 }
 
 const tipoColors: Record<string, string> = {
-  "Sangre": "bg-red-500/20 text-red-200 border-red-400/30",
-  "Corte de Tejido": "bg-blue-500/20 text-blue-200 border-blue-400/30",
-  "Punción": "bg-purple-500/20 text-purple-200 border-purple-400/30",
-  "Biopsia endometrial": "bg-pink-500/20 text-pink-200 border-pink-400/30",
-  "Hisopado bucal": "bg-emerald-500/20 text-emerald-200 border-emerald-400/30",
-  "Sangre y corte tejido": "bg-orange-500/20 text-orange-200 border-orange-400/30",
-  "Orina": "bg-cyan-500/20 text-cyan-200 border-cyan-400/30",
+  "Sangre": "bg-red-300/20 text-red-200 border-red-300/30",
+  "Corte de Tejido": "bg-blue-300/20 text-blue-200 border-blue-300/30",
+  "Punción": "bg-purple-300/20 text-purple-200 border-purple-300/30",
+  "Biopsia endometrial": "bg-fuchsia-300/20 text-fuchsia-200 border-fuchsia-300/30",
+  "Hisopado bucal": "bg-emerald-300/20 text-emerald-200 border-emerald-300/30",
+  "Sangre y corte tejido": "bg-orange-300/20 text-orange-200 border-orange-300/30",
+  "Orina": "bg-cyan-300/20 text-cyan-200 border-cyan-300/30",
 }
 
 export function ProductTable({

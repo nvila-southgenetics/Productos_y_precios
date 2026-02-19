@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
+import { useRouter, useParams } from "next/navigation"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -8,42 +9,42 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { formatCurrency, formatPercentage, cn } from "@/lib/utils"
 import type { ProductWithOverrides, ProductCountryOverride } from "@/lib/supabase-mcp"
-import { updateProductCountryOverride } from "@/lib/supabase-mcp"
-import { Info, AlertTriangle, GitCompare } from "lucide-react"
+import { updateProductCountryOverride, getProductsWithOverrides } from "@/lib/supabase-mcp"
+import { Info, AlertTriangle, GitCompare, ChevronDown, Search } from "lucide-react"
 
 interface ProductDetailViewProps {
   product: ProductWithOverrides
 }
 
 const countries = [
-  { code: "UY", name: "Uruguay" },
   { code: "AR", name: "Argentina" },
-  { code: "MX", name: "México" },
   { code: "CL", name: "Chile" },
-  { code: "VE", name: "Venezuela" },
   { code: "CO", name: "Colombia" },
+  { code: "MX", name: "México" },
+  { code: "UY", name: "Uruguay" },
+  { code: "VE", name: "Venezuela" },
 ]
 
 const categoryColors: Record<string, string> = {
-  "Ginecología": "bg-pink-500/20 text-pink-200 border-pink-400/30",
-  "Oncología": "bg-red-500/20 text-red-200 border-red-400/30",
-  "Urología": "bg-blue-500/20 text-blue-200 border-blue-400/30",
-  "Endocrinología": "bg-purple-500/20 text-purple-200 border-purple-400/30",
-  "Prenatales": "bg-emerald-500/20 text-emerald-200 border-emerald-400/30",
-  "Anualidades": "bg-yellow-500/20 text-yellow-200 border-yellow-400/30",
-  "Carrier": "bg-blue-500/20 text-blue-200 border-blue-400/30",
-  "Nutrición": "bg-emerald-500/20 text-emerald-200 border-emerald-400/30",
-  "Otros": "bg-gray-500/20 text-gray-200 border-gray-400/30",
+  "Ginecología": "bg-pink-300/20 text-pink-200 border-pink-300/30",
+  "Oncología": "bg-rose-300/20 text-rose-200 border-rose-300/30",
+  "Urología": "bg-sky-300/20 text-sky-200 border-sky-300/30",
+  "Endocrinología": "bg-violet-300/20 text-violet-200 border-violet-300/30",
+  "Prenatales": "bg-teal-300/20 text-teal-200 border-teal-300/30",
+  "Anualidades": "bg-amber-300/20 text-amber-200 border-amber-300/30",
+  "Carrier": "bg-indigo-300/20 text-indigo-200 border-indigo-300/30",
+  "Nutrición": "bg-lime-300/20 text-lime-200 border-lime-300/30",
+  "Otros": "bg-slate-300/20 text-slate-200 border-slate-300/30",
 }
 
 const tipoColors: Record<string, string> = {
-  "Sangre": "bg-red-500/20 text-red-200 border-red-400/30",
-  "Corte de Tejido": "bg-blue-500/20 text-blue-200 border-blue-400/30",
-  "Punción": "bg-purple-500/20 text-purple-200 border-purple-400/30",
-  "Biopsia endometrial": "bg-pink-500/20 text-pink-200 border-pink-400/30",
-  "Hisopado bucal": "bg-emerald-500/20 text-emerald-200 border-emerald-400/30",
-  "Sangre y corte tejido": "bg-orange-500/20 text-orange-200 border-orange-400/30",
-  "Orina": "bg-cyan-500/20 text-cyan-200 border-cyan-400/30",
+  "Sangre": "bg-red-300/20 text-red-200 border-red-300/30",
+  "Corte de Tejido": "bg-blue-300/20 text-blue-200 border-blue-300/30",
+  "Punción": "bg-purple-300/20 text-purple-200 border-purple-300/30",
+  "Biopsia endometrial": "bg-fuchsia-300/20 text-fuchsia-200 border-fuchsia-300/30",
+  "Hisopado bucal": "bg-emerald-300/20 text-emerald-200 border-emerald-300/30",
+  "Sangre y corte tejido": "bg-orange-300/20 text-orange-200 border-orange-300/30",
+  "Orina": "bg-cyan-300/20 text-cyan-200 border-cyan-300/30",
 }
 
 interface CostRow {
@@ -59,6 +60,10 @@ interface CostRow {
 }
 
 export function ProductDetailView({ product }: ProductDetailViewProps) {
+  const router = useRouter()
+  const params = useParams()
+  const currentProductId = params.productId as string
+  
   const [selectedCountry, setSelectedCountry] = useState("UY")
   const [overrides, setOverrides] = useState<ProductCountryOverride["overrides"]>({})
   const [editingField, setEditingField] = useState<string | null>(null)
@@ -67,6 +72,66 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
   const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null)
   const [isComparing, setIsComparing] = useState(false)
   const [selectedCountriesToCompare, setSelectedCountriesToCompare] = useState<string[]>([])
+  const [allProducts, setAllProducts] = useState<{ id: string; name: string }[]>([])
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false)
+  const [productSearchOpen, setProductSearchOpen] = useState(false)
+  const [productSearchQuery, setProductSearchQuery] = useState("")
+  const productSearchRef = useRef<HTMLDivElement>(null)
+
+  // Restaurar países seleccionados desde query params
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search)
+      const countriesParam = urlParams.get('countries')
+      if (countriesParam) {
+        const countries = countriesParam.split(',').filter(Boolean)
+        if (countries.length > 0) {
+          setSelectedCountriesToCompare(countries)
+          setIsComparing(true)
+        }
+      }
+    }
+  }, [])
+
+  // Cerrar dropdown al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (productSearchRef.current && !productSearchRef.current.contains(e.target as Node)) {
+        setProductSearchOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Cargar lista de productos cuando se entra en modo comparación
+  useEffect(() => {
+    if (isComparing) {
+      loadProducts()
+    }
+  }, [isComparing])
+
+  const loadProducts = async () => {
+    setIsLoadingProducts(true)
+    try {
+      const products = await getProductsWithOverrides()
+      setAllProducts(products.map(p => ({ id: p.id, name: p.name })).sort((a, b) => a.name.localeCompare(b.name)))
+    } catch (error) {
+      console.error("Error loading products:", error)
+    } finally {
+      setIsLoadingProducts(false)
+    }
+  }
+
+  const handleProductChange = (newProductId: string) => {
+    if (newProductId !== currentProductId) {
+      // Mantener países seleccionados en query params
+      const countriesParam = selectedCountriesToCompare.length > 0 
+        ? `?countries=${selectedCountriesToCompare.join(',')}`
+        : ''
+      router.push(`/productos/${newProductId}${countriesParam}`)
+    }
+  }
 
   // Cargar overrides del país seleccionado
   useEffect(() => {
@@ -505,9 +570,9 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
 
   return (
     <div className="px-4">
-      <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
-      {/* Columna Izquierda - 70% */}
-      <div className="lg:col-span-7 space-y-4">
+      <div className={`grid grid-cols-1 gap-6 ${isComparing ? 'lg:grid-cols-1' : 'lg:grid-cols-10'}`}>
+      {/* Columna Izquierda - 70% o 100% si está comparando */}
+      <div className={isComparing ? "space-y-4" : "lg:col-span-7 space-y-4"}>
         {/* Vista por País */}
         <div className="flex items-center justify-between mb-6">
           {!isComparing ? (
@@ -559,6 +624,74 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
                 >
                   Salir de Comparación
                 </Button>
+              </div>
+              {/* Selector de Producto con búsqueda */}
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-medium text-white/90 whitespace-nowrap">Producto:</label>
+                <div className="relative flex-1 max-w-md" ref={productSearchRef}>
+                  <button
+                    type="button"
+                    onClick={() => setProductSearchOpen(!productSearchOpen)}
+                    className={cn(
+                      "flex h-10 w-full items-center justify-between rounded-md border px-3 py-2 text-sm",
+                      "bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-2 focus:ring-white/30 focus:ring-offset-0 focus:ring-offset-transparent",
+                      "hover:bg-white/15"
+                    )}
+                    disabled={isLoadingProducts}
+                  >
+                    <span className="truncate">
+                      {product.name || (isLoadingProducts ? "Cargando..." : "Seleccionar producto")}
+                    </span>
+                    <ChevronDown className={cn("h-4 w-4 opacity-70 transition-transform", productSearchOpen && "rotate-180")} />
+                  </button>
+                  {productSearchOpen && !isLoadingProducts && (
+                    <div className="absolute z-50 mt-1 w-full rounded-md border border-white/20 bg-blue-950/95 backdrop-blur-sm py-2 shadow-lg max-h-64 overflow-hidden flex flex-col">
+                      <div className="px-3 pb-2 border-b border-white/10">
+                        <div className="relative">
+                          <Search className="absolute left-2 top-2.5 h-4 w-4 text-white/50" />
+                          <Input
+                            type="text"
+                            placeholder="Buscar producto..."
+                            value={productSearchQuery}
+                            onChange={(e) => setProductSearchQuery(e.target.value)}
+                            className="pl-8 bg-white/10 border-white/20 text-white placeholder:text-white/50 focus:border-white/30"
+                            autoFocus
+                          />
+                        </div>
+                      </div>
+                      <div className="overflow-y-auto max-h-48">
+                        {allProducts
+                          .filter((p) =>
+                            p.name.toLowerCase().includes(productSearchQuery.toLowerCase())
+                          )
+                          .map((p) => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => {
+                                handleProductChange(p.id)
+                                setProductSearchOpen(false)
+                                setProductSearchQuery("")
+                              }}
+                              className={cn(
+                                "flex w-full items-center px-3 py-2 text-sm text-white/90 hover:bg-white/10 transition-colors",
+                                p.id === currentProductId && "bg-white/10 font-medium"
+                              )}
+                            >
+                              {p.name}
+                            </button>
+                          ))}
+                        {allProducts.filter((p) =>
+                          p.name.toLowerCase().includes(productSearchQuery.toLowerCase())
+                        ).length === 0 && (
+                          <div className="px-3 py-2 text-sm text-white/60 text-center">
+                            No se encontraron productos
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
               <p className="text-sm text-white/70">Selecciona países para ver los costos lado a lado:</p>
               <div className="flex flex-wrap gap-2">
@@ -866,9 +999,10 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
         )}
       </div>
 
-      {/* Columna Derecha - 30% */}
-      <div className="lg:col-span-3">
-        <div className="rounded-lg border border-white/20 bg-white/10 backdrop-blur-sm shadow-sm p-6 space-y-5 sticky top-4">
+      {/* Columna Derecha - 30% (oculta cuando está comparando) */}
+      {!isComparing && (
+        <div className="lg:col-span-3">
+          <div className="rounded-lg border border-white/20 bg-white/10 backdrop-blur-sm shadow-sm p-6 space-y-5 sticky top-4">
           <div className="pb-4 border-b border-white/20">
             <h3 className="font-bold text-lg text-white">
               Información del Producto
@@ -907,7 +1041,8 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      )}
       </div>
     </div>
   )
