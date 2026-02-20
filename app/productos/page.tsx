@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -11,7 +11,7 @@ import { getProductsWithOverrides, deleteProductFromCountry, deleteProductFromAl
 
 const VALID_COUNTRIES = new Set(["UY", "AR", "MX", "CL", "VE", "CO"])
 
-export default function ProductosPage() {
+function ProductosContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [products, setProducts] = useState<ProductWithOverrides[]>([])
@@ -226,6 +226,18 @@ export default function ProductosPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function ProductosPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-r from-blue-900 via-blue-950 to-slate-900 flex items-center justify-center">
+        <p className="text-white/80">Cargando...</p>
+      </div>
+    }>
+      <ProductosContent />
+    </Suspense>
   )
 }
 
