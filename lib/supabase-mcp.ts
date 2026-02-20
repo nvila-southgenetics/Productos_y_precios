@@ -43,6 +43,7 @@ export interface ProductCountryOverride {
     physiciansFeesPct?: number
     salesCommissionUSD?: number
     salesCommissionPct?: number
+    reviewed?: boolean
   }
   created_at: string
   updated_at: string

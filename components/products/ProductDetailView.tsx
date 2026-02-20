@@ -77,6 +77,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
   const [productSearchOpen, setProductSearchOpen] = useState(false)
   const [productSearchQuery, setProductSearchQuery] = useState("")
   const productSearchRef = useRef<HTMLDivElement>(null)
+  const [reviewedStates, setReviewedStates] = useState<Record<string, boolean>>({})
 
   // Restaurar países seleccionados desde query params
   useEffect(() => {
@@ -140,6 +141,18 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
     )
     setOverrides(countryOverride?.overrides || {})
   }, [product, selectedCountry])
+
+  // Cargar estados de revisión desde los overrides
+  useEffect(() => {
+    const states: Record<string, boolean> = {}
+    countries.forEach((country) => {
+      const countryOverride = product.country_overrides?.find(
+        (o) => o.country_code === country.code
+      )
+      states[country.code] = countryOverride?.overrides?.reviewed || false
+    })
+    setReviewedStates(states)
+  }, [product])
 
   const grossSales = overrides.grossSalesUSD || 0
   const commercialDiscount = overrides.commercialDiscountUSD || 0
@@ -409,6 +422,40 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
     }
   }
 
+  const handleReviewToggle = async (countryCode: string, checked: boolean) => {
+    // Actualizar estado local inmediatamente para feedback visual
+    setReviewedStates(prev => ({ ...prev, [countryCode]: checked }))
+    
+    try {
+      const countryOverride = product.country_overrides?.find(
+        (o) => o.country_code === countryCode
+      )
+      
+      const currentOverrides = countryOverride?.overrides || {}
+      const updatedOverrides: ProductCountryOverride["overrides"] = {
+        ...currentOverrides,
+        reviewed: checked,
+      }
+
+      // Actualizar o crear override en la base de datos
+      await updateProductCountryOverride(
+        product.id,
+        countryCode as 'UY' | 'AR' | 'MX' | 'CL' | 'VE' | 'CO',
+        updatedOverrides
+      )
+
+      // Actualizar el estado local si es el país seleccionado
+      if (countryCode === selectedCountry) {
+        setOverrides(updatedOverrides)
+      }
+    } catch (error) {
+      console.error("Error al actualizar estado de revisión:", error)
+      // Revertir el estado local en caso de error
+      setReviewedStates(prev => ({ ...prev, [countryCode]: !checked }))
+      alert("Error al guardar el estado de revisión. Intenta de nuevo.")
+    }
+  }
+
   const handleReset = () => {
     const countryName = countries.find(c => c.code === selectedCountry)?.name || selectedCountry
     if (!confirm(`¿Estás seguro? Esto eliminará todos los valores personalizados para ${countryName}.`)) {
@@ -437,6 +484,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
       physiciansFeesPct: 0,
       salesCommissionUSD: 0,
       salesCommissionPct: 0,
+      reviewed: overrides.reviewed || false, // Mantener el estado de revisión
     }
 
     setOverrides(resetOverrides)
@@ -577,24 +625,56 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
         <div className="flex items-center justify-between mb-6">
           {!isComparing ? (
             <>
-              <Tabs value={selectedCountry} onValueChange={setSelectedCountry}>
-                <TabsList className="bg-white/10 border border-white/20 p-1">
-                  {countries.map((country) => (
-                    <TabsTrigger 
-                      key={country.code} 
-                      value={country.code}
-                      className={cn(
-                        "rounded-sm px-3 py-1.5 text-sm font-medium transition-all",
-                        selectedCountry === country.code
-                          ? "bg-white/20 text-white shadow-sm"
-                          : "text-white/70 hover:bg-white/10 hover:text-white"
-                      )}
-                    >
-                      {country.name}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </Tabs>
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-4">
+                  <Tabs value={selectedCountry} onValueChange={setSelectedCountry}>
+                    <TabsList className="bg-white/10 border border-white/20 p-1">
+                      {countries.map((country) => (
+                        <TabsTrigger 
+                          key={country.code}
+                          value={country.code}
+                          className={cn(
+                            "rounded-sm px-3 py-1.5 text-sm font-medium transition-all",
+                            selectedCountry === country.code
+                              ? "bg-white/20 text-white shadow-sm"
+                              : "text-white/70 hover:bg-white/10 hover:text-white"
+                          )}
+                        >
+                          {country.name}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                  </Tabs>
+                </div>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <span className="text-xs text-white/60 font-medium">Marcar como revisado:</span>
+                  {countries.map((country) => {
+                    const isReviewed = reviewedStates[country.code] || false
+                    return (
+                      <div key={country.code} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`review-${country.code}`}
+                          checked={isReviewed}
+                          onCheckedChange={(checked) => handleReviewToggle(country.code, checked === true)}
+                          className="data-[state=checked]:bg-blue-500 data-[state=checked]:border-blue-500 border-white/30"
+                        />
+                        <label 
+                          htmlFor={`review-${country.code}`}
+                          className={cn(
+                            "text-sm cursor-pointer transition-colors",
+                            isReviewed 
+                              ? "text-blue-300 font-medium" 
+                              : "text-white/70 hover:text-white/90"
+                          )}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {country.name}
+                        </label>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
               <div className="flex gap-2">
                 <Button 
                   variant="outline" 
