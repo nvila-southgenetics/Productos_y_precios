@@ -655,7 +655,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
                         <Checkbox
                           id={`review-${country.code}`}
                           checked={isReviewed}
-                          onCheckedChange={(checked) => handleReviewToggle(country.code, checked === true)}
+                          onChange={(checked) => handleReviewToggle(country.code, checked)}
                           className="data-[state=checked]:bg-blue-500 data-[state=checked]:border-blue-500 border-white/30"
                         />
                         <label 
