@@ -172,8 +172,8 @@ export function MonthlySalesEvolutionChart({
               padding: "8px 12px",
             }}
             labelStyle={{ fontWeight: 600, color: "rgba(255,255,255,0.9)" }}
-            formatter={(value: number) => [
-              value.toLocaleString("es-UY", { minimumFractionDigits: 0, maximumFractionDigits: 0 }),
+            formatter={(value: number | undefined) => [
+              (value ?? 0).toLocaleString("es-UY", { minimumFractionDigits: 0, maximumFractionDigits: 0 }),
               "",
             ]}
             labelFormatter={(label) => `Mes: ${label}`}
