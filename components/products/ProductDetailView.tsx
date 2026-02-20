@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { formatCurrency, formatPercentage, cn } from "@/lib/utils"
 import type { ProductWithOverrides, ProductCountryOverride } from "@/lib/supabase-mcp"
-import { updateProductCountryOverride, getProductsWithOverrides } from "@/lib/supabase-mcp"
+import { updateProductCountryOverride, getProductsWithOverrides, CHANNELS } from "@/lib/supabase-mcp"
 import { Info, AlertTriangle, GitCompare, ChevronDown, Search } from "lucide-react"
 
 interface ProductDetailViewProps {
@@ -65,11 +65,11 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
   const currentProductId = params.productId as string
   
   const [selectedCountry, setSelectedCountry] = useState("UY")
+  const [selectedChannel, setSelectedChannel] = useState("Paciente")
   const [overrides, setOverrides] = useState<ProductCountryOverride["overrides"]>({})
   const [editingField, setEditingField] = useState<string | null>(null)
   const [editValue, setEditValue] = useState("")
   const [isSaving, setIsSaving] = useState(false)
-  const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null)
   const [isComparing, setIsComparing] = useState(false)
   const [selectedCountriesToCompare, setSelectedCountriesToCompare] = useState<string[]>([])
   const [allProducts, setAllProducts] = useState<{ id: string; name: string }[]>([])
@@ -78,6 +78,8 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
   const [productSearchQuery, setProductSearchQuery] = useState("")
   const productSearchRef = useRef<HTMLDivElement>(null)
   const [reviewedStates, setReviewedStates] = useState<Record<string, boolean>>({})
+  // Cache de overrides guardados por país+canal para que al cambiar de canal y volver se vea el valor actual
+  const [savedOverridesCache, setSavedOverridesCache] = useState<Record<string, ProductCountryOverride["overrides"]>>({})
 
   // Restaurar países seleccionados desde query params
   useEffect(() => {
@@ -134,29 +136,21 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
     }
   }
 
-  // Cargar overrides del país seleccionado
+  // Cargar overrides del país y canal seleccionados (usa caché si hay datos guardados en esta sesión)
   useEffect(() => {
+    const key = `${selectedCountry}-${selectedChannel}`
+    const fromCache = savedOverridesCache[key]
     const countryOverride = product.country_overrides?.find(
-      (o) => o.country_code === selectedCountry
+      (o) => o.country_code === selectedCountry && (o.channel || 'Paciente') === selectedChannel
     )
-    setOverrides(countryOverride?.overrides || {})
-  }, [product, selectedCountry])
+    const loadedOverrides = fromCache ?? countryOverride?.overrides ?? {}
+    setOverrides(loadedOverrides)
 
-  // Cargar estados de revisión desde los overrides
-  useEffect(() => {
-    const states: Record<string, boolean> = {}
-    countries.forEach((country) => {
-      const countryOverride = product.country_overrides?.find(
-        (o) => o.country_code === country.code
-      )
-      states[country.code] = countryOverride?.overrides?.reviewed || false
-    })
-    setReviewedStates(states)
-  }, [product])
-
-  const grossSales = overrides.grossSalesUSD || 0
-  const commercialDiscount = overrides.commercialDiscountUSD || 0
-  const salesRevenue = grossSales - commercialDiscount
+    setReviewedStates(prev => ({
+      ...prev,
+      [selectedCountry]: loadedOverrides.reviewed || false
+    }))
+  }, [product, selectedCountry, selectedChannel, savedOverridesCache])
 
   const costRows: CostRow[] = [
     {
@@ -362,9 +356,26 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
     },
   ]
 
+  // Vista previa en tiempo real: mientras se edita un campo, usar ese valor para totales y %
+  const displayOverrides = (() => {
+    if (!editingField) return overrides
+    const row = costRows.find((r) => r.concept === editingField)
+    if (!row) return overrides
+    const val = parseFloat(editValue) || 0
+    const gs =
+      editingField === "Gross Sales (sin IVA)"
+        ? val
+        : (overrides.grossSalesUSD || 0)
+    return row.setValue(overrides, val, gs)
+  })()
+
+  const grossSales = displayOverrides.grossSalesUSD || 0
+  const commercialDiscount = displayOverrides.commercialDiscountUSD || 0
+  const salesRevenue = grossSales - commercialDiscount
+
   const totalCostOfSales = costRows
-    .filter((row) => row.concept !== "Gross Sales (sin IVA)" && row.concept !== "Commercial Discount" && row.getChecked(overrides))
-    .reduce((sum, row) => sum + row.getValue(overrides), 0)
+    .filter((row) => row.concept !== "Gross Sales (sin IVA)" && row.concept !== "Commercial Discount" && row.getChecked(displayOverrides))
+    .reduce((sum, row) => sum + row.getValue(displayOverrides), 0)
 
   const grossProfit = salesRevenue - totalCostOfSales
 
@@ -388,21 +399,27 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
       return
     }
 
-    const newOverrides = row.setValue(overrides, value, grossSales)
+    // Preservar el campo reviewed al crear nuevos overrides
+    const currentReviewed = overrides.reviewed || false
+    const newOverrides = {
+      ...row.setValue(overrides, value, grossSales),
+      reviewed: currentReviewed,
+    }
     setOverrides(newOverrides)
     setEditingField(null)
     setEditValue("")
 
-    // Guardar con debounce
-    if (saveTimeout) clearTimeout(saveTimeout)
-    const timeout = setTimeout(() => {
-      saveOverrides(newOverrides)
-    }, 500)
-    setSaveTimeout(timeout)
+    // Guardar en el acto al terminar de editar (así al cambiar de canal no se pierden datos)
+    saveOverrides(newOverrides)
   }
 
   const handleCheckboxChange = (row: CostRow, checked: boolean) => {
-    const newOverrides = row.setChecked(overrides, checked)
+    // Preservar el campo reviewed al crear nuevos overrides
+    const currentReviewed = overrides.reviewed || false
+    const newOverrides = {
+      ...row.setChecked(overrides, checked),
+      reviewed: currentReviewed,
+    }
     setOverrides(newOverrides)
 
     // Guardar inmediatamente al cambiar checkbox
@@ -412,8 +429,27 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
   const saveOverrides = async (newOverrides: ProductCountryOverride["overrides"]) => {
     setIsSaving(true)
     try {
-      await updateProductCountryOverride(product.id, selectedCountry, newOverrides)
-      // TODO: Mostrar toast de éxito
+      const countryOverride = product.country_overrides?.find(
+        (o) => o.country_code === selectedCountry && (o.channel || 'Paciente') === selectedChannel
+      )
+      const currentReviewed = countryOverride?.overrides?.reviewed || false
+      
+      const overridesToSave: ProductCountryOverride["overrides"] = {
+        ...newOverrides,
+        reviewed: newOverrides.reviewed !== undefined ? newOverrides.reviewed : currentReviewed,
+      }
+      
+      await updateProductCountryOverride(product.id, selectedCountry, overridesToSave, selectedChannel)
+
+      // Guardar en caché para que al cambiar de canal y volver se vea el valor actual sin refrescar
+      const cacheKey = `${selectedCountry}-${selectedChannel}`
+      setSavedOverridesCache((prev) => ({ ...prev, [cacheKey]: overridesToSave }))
+
+      // Actualizar el estado local con los overrides guardados
+      setOverrides(overridesToSave)
+
+      // Recargar la página para obtener los datos más recientes
+      router.refresh()
     } catch (error) {
       console.error("Error saving overrides:", error)
       alert("Error al guardar los cambios. Intenta de nuevo.")
@@ -423,26 +459,28 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
   }
 
   const handleReviewToggle = async (countryCode: string, checked: boolean) => {
-    // Actualizar estado local inmediatamente para feedback visual
     setReviewedStates(prev => ({ ...prev, [countryCode]: checked }))
-    
+
     try {
+      const cacheKey = `${countryCode}-${selectedChannel}`
+      const fromCache = savedOverridesCache[cacheKey]
       const countryOverride = product.country_overrides?.find(
-        (o) => o.country_code === countryCode
+        (o) => o.country_code === countryCode && (o.channel || 'Paciente') === selectedChannel
       )
-      
-      const currentOverrides = countryOverride?.overrides || {}
+      const currentOverrides = fromCache ?? countryOverride?.overrides ?? {}
       const updatedOverrides: ProductCountryOverride["overrides"] = {
         ...currentOverrides,
         reviewed: checked,
       }
 
-      // Actualizar o crear override en la base de datos
       await updateProductCountryOverride(
         product.id,
         countryCode as 'UY' | 'AR' | 'MX' | 'CL' | 'VE' | 'CO',
-        updatedOverrides
+        updatedOverrides,
+        selectedChannel
       )
+
+      setSavedOverridesCache((prev) => ({ ...prev, [cacheKey]: updatedOverrides }))
 
       // Actualizar el estado local si es el país seleccionado
       if (countryCode === selectedCountry) {
@@ -458,7 +496,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
 
   const handleReset = () => {
     const countryName = countries.find(c => c.code === selectedCountry)?.name || selectedCountry
-    if (!confirm(`¿Estás seguro? Esto eliminará todos los valores personalizados para ${countryName}.`)) {
+    if (!confirm(`¿Estás seguro? Esto eliminará todos los valores personalizados (costos y descuentos) para ${countryName} en el canal "${selectedChannel}". Solo afecta a este país y este canal.`)) {
       return
     }
 
@@ -626,7 +664,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
           {!isComparing ? (
             <>
               <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 flex-wrap">
                   <Tabs value={selectedCountry} onValueChange={setSelectedCountry}>
                     <TabsList className="bg-white/10 border border-white/20 p-1">
                       {countries.map((country) => (
@@ -645,37 +683,50 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
                       ))}
                     </TabsList>
                   </Tabs>
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="channel-select" className="text-sm font-medium text-white/80 whitespace-nowrap">
+                      Canal:
+                    </label>
+                    <select
+                      id="channel-select"
+                      value={selectedChannel}
+                      onChange={(e) => setSelectedChannel(e.target.value)}
+                      className={cn(
+                        "rounded-md border px-3 py-1.5 text-sm bg-white/10 border-white/20 text-white",
+                        "focus:border-white/40 focus:ring-2 focus:ring-white/20 focus:outline-none",
+                        "hover:bg-white/15"
+                      )}
+                    >
+                      {CHANNELS.map((ch) => (
+                        <option key={ch} value={ch} className="bg-slate-800 text-white">
+                          {ch}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-                <div className="flex items-center gap-4 flex-wrap">
-                  <span className="text-xs text-white/60 font-medium">Marcar como revisado:</span>
-                  {countries.map((country) => {
-                    const isReviewed = reviewedStates[country.code] || false
-                    return (
-                      <div key={country.code} className="flex items-center gap-2">
-                        <Checkbox
-                          id={`review-${country.code}`}
-                          checked={isReviewed}
-                          onChange={(checked) => handleReviewToggle(country.code, checked)}
-                          className="data-[state=checked]:bg-blue-500 data-[state=checked]:border-blue-500 border-white/30"
-                        />
-                        <label 
-                          htmlFor={`review-${country.code}`}
-                          className={cn(
-                            "text-sm cursor-pointer transition-colors",
-                            isReviewed 
-                              ? "text-blue-300 font-medium" 
-                              : "text-white/70 hover:text-white/90"
-                          )}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {country.name}
-                        </label>
-                      </div>
-                    )
-                  })}
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="review-current-country"
+                    checked={reviewedStates[selectedCountry] ?? overrides?.reviewed ?? false}
+                    onChange={(checked) => handleReviewToggle(selectedCountry, checked)}
+                    className="data-[state=checked]:bg-blue-500 data-[state=checked]:border-blue-500 border-white/30"
+                  />
+                  <label
+                    htmlFor="review-current-country"
+                    className={cn(
+                      "text-sm cursor-pointer transition-colors",
+                      (reviewedStates[selectedCountry] ?? overrides?.reviewed)
+                        ? "text-blue-300 font-medium"
+                        : "text-white/70 hover:text-white/90"
+                    )}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Marcar como revisado ({countries.find(c => c.code === selectedCountry)?.name ?? selectedCountry})
+                  </label>
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button 
                   variant="outline" 
                   onClick={handleCompareCountries}
@@ -695,8 +746,29 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
             </>
           ) : (
             <div className="space-y-4 w-full">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <h3 className="text-lg font-semibold text-white">Comparación de Países</h3>
+                <div className="flex items-center gap-2">
+                  <label htmlFor="channel-select-compare" className="text-sm font-medium text-white/80 whitespace-nowrap">
+                    Canal:
+                  </label>
+                  <select
+                    id="channel-select-compare"
+                    value={selectedChannel}
+                    onChange={(e) => setSelectedChannel(e.target.value)}
+                    className={cn(
+                      "rounded-md border px-3 py-1.5 text-sm bg-white/10 border-white/20 text-white",
+                      "focus:border-white/40 focus:ring-2 focus:ring-white/20 focus:outline-none",
+                      "hover:bg-white/15"
+                    )}
+                  >
+                    {CHANNELS.map((ch) => (
+                      <option key={ch} value={ch} className="bg-slate-800 text-white">
+                        {ch}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <Button 
                   variant="outline" 
                   onClick={handleStopComparison}
@@ -855,7 +927,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
               <div className="flex flex-nowrap gap-4 overflow-x-auto pb-4 w-full">
                 {selectedCountriesToCompare.map((countryCode) => {
                   const countryOverride = product.country_overrides?.find(
-                    (o) => o.country_code === countryCode
+                    (o) => o.country_code === countryCode && (o.channel || 'Paciente') === selectedChannel
                   )
                   const countryOverrides = countryOverride?.overrides || {}
                   return renderCostTable(countryCode, countryOverrides)
@@ -957,7 +1029,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
                   )}
                 </td>
                 <td className="p-4 text-right text-white/70">
-                  {formatPercentage(costRows[1].getPct(overrides, grossSales) / 100)}
+                  {formatPercentage(costRows[1].getPct(displayOverrides, grossSales) / 100)}
                 </td>
                 <td className="p-4 text-sm text-white/60">4.1.1.10</td>
               </tr>
@@ -1020,12 +1092,12 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
                           )}
                           onDoubleClick={() => row.editable && handleDoubleClick(row)}
                         >
-                          {formatCurrency(row.getValue(overrides))}
+                          {formatCurrency(row.getValue(displayOverrides))}
                         </span>
                       )}
                     </td>
                     <td className="p-4 text-right text-white/70">
-                      {formatPercentage(row.getPct(overrides, grossSales) / 100)}
+                      {formatPercentage(row.getPct(displayOverrides, grossSales) / 100)}
                     </td>
                     <td className="p-4 text-sm text-white/60">{row.account}</td>
                   </tr>

@@ -1,14 +1,19 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ProductTable } from "@/components/products/ProductTable"
 import { ProductFilters } from "@/components/products/ProductFilters"
 import { CountryPills } from "@/components/products/CountryPills"
-import { getProductsWithOverrides, type ProductWithOverrides } from "@/lib/supabase-mcp"
+import { getProductsWithOverrides, deleteProductFromCountry, deleteProductFromAllCountries, getTotalSalesByProductIds, type ProductWithOverrides } from "@/lib/supabase-mcp"
+
+const VALID_COUNTRIES = new Set(["UY", "AR", "MX", "CL", "VE", "CO"])
 
 export default function ProductosPage() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
   const [products, setProducts] = useState<ProductWithOverrides[]>([])
   const [filteredProducts, setFilteredProducts] = useState<ProductWithOverrides[]>([])
   const [selectedCountry, setSelectedCountry] = useState("UY")
@@ -17,6 +22,34 @@ export default function ProductosPage() {
   const [selectedTipo, setSelectedTipo] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [salesCountByProductId, setSalesCountByProductId] = useState<Record<string, number>>({})
+
+  // Restaurar filtros desde la URL al cargar o al volver atrás
+  useEffect(() => {
+    const country = searchParams.get("country")
+    const q = searchParams.get("q")
+    const category = searchParams.get("category")
+    const tipo = searchParams.get("tipo")
+    if (country && VALID_COUNTRIES.has(country)) setSelectedCountry(country)
+    if (q !== null) setSearchQuery(q)
+    if (category !== null) setSelectedCategory(category)
+    if (tipo !== null) setSelectedTipo(tipo)
+  }, [searchParams])
+
+  // Mantener la URL en sync con los filtros para que al volver atrás se conserven
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (selectedCountry && selectedCountry !== "UY") params.set("country", selectedCountry)
+    if (searchQuery) params.set("q", searchQuery)
+    if (selectedCategory) params.set("category", selectedCategory)
+    if (selectedTipo) params.set("tipo", selectedTipo)
+    const query = params.toString()
+    const url = query ? `/productos?${query}` : "/productos"
+    const current = typeof window !== "undefined" ? window.location.pathname + (window.location.search || "") : ""
+    if (current !== url) {
+      router.replace(url, { scroll: false })
+    }
+  }, [selectedCountry, searchQuery, selectedCategory, selectedTipo, router])
 
   // Obtener categorías y tipos únicos
   const categories = useMemo(() => {
@@ -42,9 +75,18 @@ export default function ProductosPage() {
       setError(null)
       try {
         const data = await getProductsWithOverrides(selectedCountry)
-        setProducts(data)
-        if (data.length === 0) {
+        // Ordenar productos alfabéticamente por nombre
+        const sortedData = data.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }))
+        setProducts(sortedData)
+        if (sortedData.length === 0) {
           setError("No se encontraron productos. Verifica la conexión con la base de datos.")
+          setSalesCountByProductId({})
+        } else {
+          const counts = await getTotalSalesByProductIds(
+            sortedData.map(p => p.id),
+            selectedCountry
+          )
+          setSalesCountByProductId(counts)
         }
       } catch (error) {
         console.error("Error loading products:", error)
@@ -56,7 +98,7 @@ export default function ProductosPage() {
     loadProducts()
   }, [selectedCountry])
 
-  // Filtrar productos
+  // Filtrar y ordenar productos
   useEffect(() => {
     let filtered = [...products]
 
@@ -78,6 +120,9 @@ export default function ProductosPage() {
       filtered = filtered.filter((p) => p.tipo === selectedTipo)
     }
 
+    // Ordenar productos alfabéticamente por nombre
+    filtered.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }))
+
     setFilteredProducts(filtered)
   }, [products, searchQuery, selectedCategory, selectedTipo])
 
@@ -89,10 +134,32 @@ export default function ProductosPage() {
     // La navegación se maneja en ProductTable
   }
 
-  const handleDeleteProduct = (product: ProductWithOverrides) => {
-    if (confirm(`¿Estás seguro de que deseas eliminar "${product.name}"?`)) {
-      // TODO: Implementar eliminación
-      console.log("Eliminar producto:", product.id)
+  const handleDeleteProduct = async (product: ProductWithOverrides, deleteFromAllCountries: boolean) => {
+    try {
+      if (deleteFromAllCountries) {
+        await deleteProductFromAllCountries(product.id)
+      } else {
+        await deleteProductFromCountry(product.id, selectedCountry)
+      }
+      
+      // Recargar productos después de eliminar
+      const data = await getProductsWithOverrides(selectedCountry)
+      const sortedData = data.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }))
+      setProducts(sortedData)
+    } catch (error) {
+      console.error("Error deleting product:", error)
+      alert(`Error al eliminar el producto: ${error instanceof Error ? error.message : 'Error desconocido'}`)
+    }
+  }
+
+  const handleReviewToggle = async (productId: string, countryCode: string, checked: boolean) => {
+    // Recargar productos después de actualizar el estado de revisión
+    try {
+      const data = await getProductsWithOverrides(selectedCountry)
+      const sortedData = data.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }))
+      setProducts(sortedData)
+    } catch (error) {
+      console.error("Error reloading products after review toggle:", error)
     }
   }
 
@@ -149,9 +216,12 @@ export default function ProductosPage() {
         ) : (
           <ProductTable
             products={filteredProducts}
+            selectedCountry={selectedCountry}
+            salesCountByProductId={salesCountByProductId}
             onViewProduct={handleViewProduct}
             onEditProduct={handleEditProduct}
             onDeleteProduct={handleDeleteProduct}
+            onReviewToggle={handleReviewToggle}
           />
         )}
       </div>

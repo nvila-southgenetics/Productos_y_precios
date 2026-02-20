@@ -16,10 +16,15 @@ export interface Product {
   user_id: string
 }
 
+/** Canales de venta por país (orden alfabético en UI) */
+export const CHANNELS = ['Aseguradoras', 'Distribuidores', 'Gobierno', 'Instituciones SFL', 'Paciente'] as const
+export type Channel = typeof CHANNELS[number]
+
 export interface ProductCountryOverride {
   id: string
   product_id: string
   country_code: 'UY' | 'AR' | 'MX' | 'CL' | 'VE' | 'CO'
+  channel?: string
   overrides: {
     grossSalesUSD?: number
     grossProfitUSD?: number
@@ -176,10 +181,19 @@ export async function getProductsWithOverrides(countryCode?: string): Promise<Pr
   if (overridesError) throw overridesError
 
   // Combinar productos con sus overrides
-  return products.map(product => ({
+  const productsWithOverrides = products.map(product => ({
     ...product,
     country_overrides: overrides?.filter(o => o.product_id === product.id) || []
   }))
+
+  // Si se especifica un país, solo devolver productos que tengan overrides para ese país
+  if (countryCode) {
+    return productsWithOverrides.filter(product => 
+      product.country_overrides && product.country_overrides.length > 0
+    )
+  }
+
+  return productsWithOverrides
 }
 
 /**
@@ -209,45 +223,158 @@ export async function getProductById(productId: string): Promise<ProductWithOver
 }
 
 /**
- * Actualiza los overrides de un producto para un país específico
+ * Actualiza los overrides de un producto para un país y canal
  */
 export async function updateProductCountryOverride(
   productId: string,
   countryCode: string,
-  overrides: ProductCountryOverride['overrides']
+  overrides: ProductCountryOverride['overrides'],
+  channel: string = 'Paciente'
 ): Promise<void> {
-  // Verificar si existe un override
-  const { data: existing } = await supabase
+  const { data: existing, error: selectError } = await supabase
     .from('product_country_overrides')
-    .select('id')
+    .select('id, overrides')
     .eq('product_id', productId)
     .eq('country_code', countryCode)
-    .single()
+    .eq('channel', channel)
+    .maybeSingle()
+
+  if (selectError) {
+    console.error('Error checking existing override:', selectError)
+    throw selectError
+  }
 
   if (existing) {
-    // Actualizar existente
+    const existingOverrides = existing.overrides as ProductCountryOverride['overrides']
+    const preservedOverrides: ProductCountryOverride['overrides'] = {
+      ...overrides,
+      reviewed: overrides.reviewed !== undefined ? overrides.reviewed : (existingOverrides?.reviewed || false),
+    }
+
     const { error } = await supabase
       .from('product_country_overrides')
       .update({
-        overrides,
+        overrides: preservedOverrides,
         updated_at: new Date().toISOString()
       })
       .eq('product_id', productId)
       .eq('country_code', countryCode)
+      .eq('channel', channel)
 
-    if (error) throw error
+    if (error) {
+      console.error('Error updating override:', error)
+      throw error
+    }
   } else {
-    // Crear nuevo
     const { error } = await supabase
       .from('product_country_overrides')
       .insert({
         product_id: productId,
         country_code: countryCode,
+        channel,
         overrides
       })
 
-    if (error) throw error
+    if (error) {
+      console.error('Error creating override:', error)
+      throw error
+    }
   }
+}
+
+/**
+ * Elimina un producto de un país específico (elimina el override)
+ */
+export async function deleteProductFromCountry(
+  productId: string,
+  countryCode: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('product_country_overrides')
+    .delete()
+    .eq('product_id', productId)
+    .eq('country_code', countryCode)
+
+  if (error) {
+    console.error('Error deleting product from country:', error)
+    throw error
+  }
+}
+
+/**
+ * Elimina un producto de todos los países (elimina todos los overrides y el producto)
+ */
+export async function deleteProductFromAllCountries(productId: string): Promise<void> {
+  // Primero eliminar todos los overrides del producto
+  const { error: overridesError } = await supabase
+    .from('product_country_overrides')
+    .delete()
+    .eq('product_id', productId)
+
+  if (overridesError) {
+    console.error('Error deleting product overrides:', overridesError)
+    throw overridesError
+  }
+
+  // Luego eliminar el producto mismo
+  const { error: productError } = await supabase
+    .from('products')
+    .delete()
+    .eq('id', productId)
+
+  if (productError) {
+    console.error('Error deleting product:', productError)
+    throw productError
+  }
+}
+
+/** Mapeo compañía -> código de país (ventas están por compañía, no por país) */
+export const COMPANY_TO_COUNTRY: Record<string, 'UY' | 'AR' | 'MX' | 'CL' | 'VE' | 'CO'> = {
+  'SouthGenetics LLC': 'UY',
+  'SouthGenetics LLC Uruguay': 'UY',
+  'SouthGenetics LLC Argentina': 'AR',
+  'SouthGenetics LLC Arge': 'AR',
+  'SouthGenetics LLC Chile': 'CL',
+  'Southgenetics LLC Chile': 'CL',
+  'Southgenetics LTDA': 'CL',
+  'SouthGenetics LLC Colombia': 'CO',
+  'SouthGenetics LLC México': 'MX',
+  'SouthGenetics LLC Venezuela': 'VE',
+}
+
+/**
+ * Obtiene el total de ventas registradas por producto (tabla ventas), sin filtrar por año.
+ * Si se pasa countryCode, solo cuenta ventas de compañías que pertenecen a ese país.
+ * Devuelve un mapa product_id -> cantidad total de ventas.
+ */
+export async function getTotalSalesByProductIds(
+  productIds: string[],
+  countryCode?: string
+): Promise<Record<string, number>> {
+  if (productIds.length === 0) return {}
+
+  const { data, error } = await supabase
+    .from('ventas')
+    .select('id_producto, company')
+    .in('id_producto', productIds)
+
+  if (error) {
+    console.error('Error fetching total sales by product:', error)
+    throw error
+  }
+
+  const counts: Record<string, number> = {}
+  productIds.forEach(id => { counts[id] = 0 })
+
+  ;(data || []).forEach((row: { id_producto: string | null; company: string | null }) => {
+    if (!row.id_producto) return
+    if (countryCode) {
+      const companyCountry = row.company ? COMPANY_TO_COUNTRY[row.company.trim()] : undefined
+      if (companyCountry !== countryCode) return
+    }
+    counts[row.id_producto] = (counts[row.id_producto] ?? 0) + 1
+  })
+  return counts
 }
 
 /**
@@ -282,6 +409,93 @@ export async function getProductsFromSales(): Promise<string[]> {
 
   const uniqueProducts = Array.from(new Set(data.map((item: any) => item.producto)))
   return uniqueProducts
+}
+
+/** Evolución mensual de ventas (para gráfico 2025 vs 2026) */
+export interface MonthlyEvolutionPoint {
+  mes: number
+  mesLabel: string
+  año: number
+  periodo: string
+  cantidad_ventas: number
+  monto_total: number
+}
+
+const MES_LABELS: Record<number, string> = {
+  1: 'Ene', 2: 'Feb', 3: 'Mar', 4: 'Abr', 5: 'May', 6: 'Jun',
+  7: 'Jul', 8: 'Ago', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dic',
+}
+
+/**
+ * Obtiene la evolución mensual de ventas para 2025 y 2026 (agregado por mes).
+ * Opcionalmente filtra por compañía y producto.
+ */
+export async function getMonthlySalesEvolution(
+  company?: string,
+  productName?: string
+): Promise<{ year2025: MonthlyEvolutionPoint[]; year2026: MonthlyEvolutionPoint[] }> {
+  let query = supabase
+    .from('ventas_mensuales_view')
+    .select('año, mes, periodo, cantidad_ventas, monto_total, compañia, producto')
+
+  const { data, error } = await query
+
+  if (error) {
+    console.error('Error getMonthlySalesEvolution:', error)
+    throw error
+  }
+  if (!data || data.length === 0) {
+    const emptyMonth = (mes: number) => ({
+      mes,
+      mesLabel: MES_LABELS[mes] || String(mes),
+      año: 0,
+      periodo: '',
+      cantidad_ventas: 0,
+      monto_total: 0,
+    })
+    return {
+      year2025: [1,2,3,4,5,6,7,8,9,10,11,12].map(m => ({ ...emptyMonth(m), año: 2025 })),
+      year2026: [1,2,3,4,5,6,7,8,9,10,11,12].map(m => ({ ...emptyMonth(m), año: 2026 })),
+    }
+  }
+
+  const normalizedCompany = company?.trim()
+  const normalizedProduct = productName?.trim()
+
+  const filtered = (data as any[]).filter((row) => {
+    if (normalizedCompany && normalizedCompany !== 'Todas las compañías' && row.compañia !== normalizedCompany) return false
+    if (normalizedProduct && normalizedProduct !== 'Todos' && row.producto !== normalizedProduct) return false
+    return row.año === 2025 || row.año === 2026
+  })
+
+  const agg = new Map<string, { año: number; mes: number; cantidad_ventas: number; monto_total: number }>()
+  filtered.forEach((row: any) => {
+    const key = `${row.año}-${row.mes}`
+    const current = agg.get(key) || { año: row.año, mes: row.mes, cantidad_ventas: 0, monto_total: 0 }
+    current.cantidad_ventas += Number(row.cantidad_ventas) || 0
+    current.monto_total += Number(row.monto_total) || 0
+    agg.set(key, current)
+  })
+
+  const toPoints = (año: number): MonthlyEvolutionPoint[] => {
+    return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((mes) => {
+      const key = `${año}-${mes}`
+      const v = agg.get(key)
+      return {
+        mes,
+        mesLabel: MES_LABELS[mes] || String(mes),
+        año,
+        periodo: v ? `${año}-${String(mes).padStart(2, '0')}` : '',
+        cantidad_ventas: v?.cantidad_ventas ?? 0,
+        monto_total: v?.monto_total ?? 0,
+      }
+    })
+  }
+
+  return {
+    year2025: toPoints(2025),
+    year2026: toPoints(2026),
+  }
 }
 
 /**

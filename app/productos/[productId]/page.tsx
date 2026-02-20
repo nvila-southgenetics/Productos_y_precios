@@ -46,6 +46,14 @@ export default function ProductDetailPage() {
     // TODO: Mostrar toast de éxito
   }
 
+  const handleBackToList = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back()
+    } else {
+      router.push("/productos")
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-r from-blue-900 via-blue-950 to-slate-900">
@@ -66,7 +74,7 @@ export default function ProductDetailPage() {
             <h1 className="text-2xl font-bold mb-4 text-white">Producto no encontrado</h1>
             <p className="text-white/70 mb-6">{error || "El producto que buscas no existe"}</p>
             <Button 
-              onClick={() => router.push("/productos")}
+              onClick={handleBackToList}
               className="bg-white/10 border-white/20 text-white hover:bg-white/20"
             >
               Volver a Productos
@@ -84,7 +92,7 @@ export default function ProductDetailPage() {
         <div className="mb-6">
           <div className="flex items-center gap-2 text-sm text-white/70 mb-4">
             <button
-              onClick={() => router.push("/productos")}
+              onClick={handleBackToList}
               className="hover:text-white transition-colors"
             >
               Productos
@@ -97,7 +105,7 @@ export default function ProductDetailPage() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => router.push("/productos")}
+                onClick={handleBackToList}
                 className="text-white/70 hover:text-white hover:bg-white/10"
               >
                 <ArrowLeft className="h-4 w-4" />

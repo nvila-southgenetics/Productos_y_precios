@@ -3,13 +3,13 @@
 import { cn } from "@/lib/utils"
 
 const countries = [
-  { code: "UY", name: "Uruguay" },
   { code: "AR", name: "Argentina" },
-  { code: "MX", name: "México" },
   { code: "CL", name: "Chile" },
-  { code: "VE", name: "Venezuela" },
   { code: "CO", name: "Colombia" },
-]
+  { code: "MX", name: "México" },
+  { code: "UY", name: "Uruguay" },
+  { code: "VE", name: "Venezuela" },
+].sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }))
 
 interface CountryPillsProps {
   selectedCountry: string

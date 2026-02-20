@@ -20,13 +20,16 @@ import {
   getTopMarginProducts,
   getBottomMarginProducts,
   getMostExpensiveProducts,
+  getMonthlySalesEvolution,
   type DashboardProduct,
+  type MonthlyEvolutionPoint,
 } from "@/lib/supabase-mcp"
 import { MetricCard } from "@/components/dashboard/MetricCard"
 import { ProductRanking } from "@/components/dashboard/ProductRanking"
 import { SalesChart } from "@/components/dashboard/SalesChart"
 import { MarginChart } from "@/components/dashboard/MarginChart"
 import { CategoryDistribution } from "@/components/dashboard/CategoryDistribution"
+import { MonthlySalesEvolutionChart } from "@/components/dashboard/MonthlySalesEvolutionChart"
 
 export default function DashboardPage() {
   const [companies, setCompanies] = useState<string[]>([])
@@ -40,6 +43,10 @@ export default function DashboardPage() {
   const [topMargin, setTopMargin] = useState<DashboardProduct[]>([])
   const [bottomMargin, setBottomMargin] = useState<DashboardProduct[]>([])
   const [mostExpensive, setMostExpensive] = useState<DashboardProduct[]>([])
+  const [monthlyEvolution2025, setMonthlyEvolution2025] = useState<MonthlyEvolutionPoint[]>([])
+  const [monthlyEvolution2026, setMonthlyEvolution2026] = useState<MonthlyEvolutionPoint[]>([])
+  const [chartProductFilter, setChartProductFilter] = useState("Todos")
+  const [isEvolutionLoading, setIsEvolutionLoading] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
   // Cargar compañías y productos
@@ -128,6 +135,26 @@ export default function DashboardPage() {
     }
     loadDashboardData()
   }, [selectedCompany, selectedYear, selectedMonth, selectedProduct])
+
+  // Cargar evolución mensual 2025 vs 2026 (usa el filtro de producto de la gráfica)
+  useEffect(() => {
+    async function loadEvolution() {
+      setIsEvolutionLoading(true)
+      try {
+        const company =
+          selectedCompany === "Todas las compañías" ? undefined : selectedCompany
+        const product = chartProductFilter === "Todos" ? undefined : chartProductFilter
+        const { year2025, year2026 } = await getMonthlySalesEvolution(company, product)
+        setMonthlyEvolution2025(year2025)
+        setMonthlyEvolution2026(year2026)
+      } catch (error) {
+        console.error("Error loading monthly evolution:", error)
+      } finally {
+        setIsEvolutionLoading(false)
+      }
+    }
+    loadEvolution()
+  }, [selectedCompany, chartProductFilter])
 
   // Calcular métricas agregadas
   const metrics = useMemo(() => {
@@ -254,6 +281,23 @@ export default function DashboardPage() {
                 subtitle="Por producto"
                 icon={Percent}
                 iconColor="text-purple-600"
+              />
+            </motion.div>
+
+            {/* Evolución mensual 2025 vs 2026 */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.25 }}
+              className="mb-6"
+            >
+              <MonthlySalesEvolutionChart
+                year2025={monthlyEvolution2025}
+                year2026={monthlyEvolution2026}
+                products={products}
+                selectedProduct={chartProductFilter}
+                onProductChange={setChartProductFilter}
+                isLoading={isEvolutionLoading}
               />
             </motion.div>
 

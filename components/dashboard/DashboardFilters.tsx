@@ -1,9 +1,6 @@
 "use client"
 
-import { CompanyFilter } from "@/components/pl-import/CompanyFilter"
-import { ProductFilter } from "@/components/pl-import/ProductFilter"
-import { YearFilter } from "@/components/pl-import/YearFilter"
-import { MonthFilter } from "@/components/dashboard/MonthFilter"
+import { ProductSearchFilter } from "@/components/dashboard/ProductSearchFilter"
 
 interface DashboardFiltersProps {
   companies: string[]
@@ -52,23 +49,12 @@ export function DashboardFilters({
         </select>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium text-white/90">Producto</label>
-        <select
-          value={selectedProduct}
-          onChange={(e) => onProductChange(e.target.value)}
-          className="w-full h-10 rounded-md border border-white/20 bg-white/10 backdrop-blur-sm px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/30 focus:ring-offset-2 focus:ring-offset-transparent disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <option value="Todos" className="bg-blue-900 text-white">
-            Todos
-          </option>
-          {products.map((product) => (
-            <option key={product} value={product} className="bg-blue-900 text-white">
-              {product}
-            </option>
-          ))}
-        </select>
-      </div>
+      <ProductSearchFilter
+        products={products}
+        selectedProduct={selectedProduct}
+        onProductChange={onProductChange}
+        disabled={products.length === 0}
+      />
 
       <div className="flex flex-col gap-2">
         <label className="text-sm font-medium text-white/90">Año</label>
