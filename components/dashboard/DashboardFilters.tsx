@@ -14,6 +14,7 @@ interface DashboardFiltersProps {
   onProductChange: (product: string) => void
   onYearChange: (year: string) => void
   onMonthChange: (month: string) => void
+  showAllCompanies?: boolean
 }
 
 export function DashboardFilters({
@@ -28,6 +29,7 @@ export function DashboardFilters({
   onProductChange,
   onYearChange,
   onMonthChange,
+  showAllCompanies = true,
 }: DashboardFiltersProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -38,9 +40,11 @@ export function DashboardFilters({
           onChange={(e) => onCompanyChange(e.target.value)}
           className="w-full h-10 rounded-md border border-white/20 bg-white/10 backdrop-blur-sm px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/30 focus:ring-offset-2 focus:ring-offset-transparent disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <option value="Todas las compañías" className="bg-blue-900 text-white">
-            Todas las compañías
-          </option>
+          {showAllCompanies && (
+            <option value="Todas las compañías" className="bg-blue-900 text-white">
+              Todas las compañías
+            </option>
+          )}
           {companies.map((company) => (
             <option key={company} value={company} className="bg-blue-900 text-white">
               {company}
@@ -81,9 +85,7 @@ export function DashboardFilters({
           onChange={(e) => onMonthChange(e.target.value)}
           className="w-full h-10 rounded-md border border-white/20 bg-white/10 backdrop-blur-sm px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/30 focus:ring-offset-2 focus:ring-offset-transparent disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <option value="Todos" className="bg-blue-900 text-white">
-            Todos los meses
-          </option>
+          <option value="Todos" className="bg-blue-900 text-white">Todos los meses</option>
           <option value="01" className="bg-blue-900 text-white">Enero</option>
           <option value="02" className="bg-blue-900 text-white">Febrero</option>
           <option value="03" className="bg-blue-900 text-white">Marzo</option>

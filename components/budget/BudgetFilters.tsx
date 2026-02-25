@@ -14,6 +14,7 @@ interface BudgetFiltersProps {
   countries?: string[]
   products?: string[]
   allowedCountries?: string[]
+  showAllCountries?: boolean
 }
 
 const MONTHS = [
@@ -59,10 +60,11 @@ export function BudgetFilters({
   onMonthChange,
   products = [],
   allowedCountries,
+  showAllCountries = true,
 }: BudgetFiltersProps) {
   const filteredCountries = allowedCountries?.length
-    ? countries.filter((c) => c.code === "all" || allowedCountries.includes(c.code))
-    : countries
+    ? countries.filter((c) => (showAllCountries && c.code === "all") || allowedCountries.includes(c.code))
+    : (showAllCountries ? countries : countries.filter((c) => c.code !== "all"))
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

@@ -11,13 +11,20 @@ import { supabase } from "@/lib/supabase"
 import { usePermissions } from "@/lib/use-permissions"
 
 export default function BudgetPage() {
-  const { allowedCountries, canEdit } = usePermissions()
+  const { allowedCountries, canEdit, isAdmin, loading: permLoading } = usePermissions()
   const [selectedYear, setSelectedYear] = useState(2026)
   const [selectedCountry, setSelectedCountry] = useState<string>("all")
   const [selectedProduct, setSelectedProduct] = useState<string>("all")
   const [selectedMonth, setSelectedMonth] = useState<string>("all")
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [products, setProducts] = useState<string[]>([])
+
+  // Auto-seleccionar primer país para no-admins
+  useEffect(() => {
+    if (!permLoading && !isAdmin && allowedCountries.length > 0) {
+      setSelectedCountry(allowedCountries[0])
+    }
+  }, [permLoading, isAdmin, allowedCountries])
 
   useEffect(() => {
     fetchProducts()
@@ -91,6 +98,7 @@ export default function BudgetPage() {
             onMonthChange={setSelectedMonth}
             products={products}
             allowedCountries={allowedCountries}
+            showAllCountries={isAdmin}
           />
         </div>
 

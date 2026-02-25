@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Download, AlertCircle } from 'lucide-react';
 import { ComparisonFilters } from '@/components/comparacion/ComparisonFilters';
@@ -9,10 +9,17 @@ import { ComparisonTable } from '@/components/comparacion/ComparisonTable';
 import { usePermissions } from '@/lib/use-permissions';
 
 export default function ComparacionPage() {
-  const { allowedCountries } = usePermissions();
+  const { allowedCountries, isAdmin, loading: permLoading } = usePermissions();
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
   const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<string>('all');
+
+  // Para no-admins, pre-seleccionar automáticamente sus países permitidos
+  useEffect(() => {
+    if (!permLoading && !isAdmin && allowedCountries.length > 0) {
+      setSelectedCountries(allowedCountries);
+    }
+  }, [permLoading, isAdmin, allowedCountries]);
 
   return (
     <div className="min-h-screen bg-gradient-to-r from-blue-900 via-blue-950 to-slate-900">
@@ -66,6 +73,7 @@ export default function ComparacionPage() {
         onCountriesChange={setSelectedCountries}
         onProductChange={setSelectedProduct}
         allowedCountries={allowedCountries}
+        showAllCountries={isAdmin}
       />
 
       {/* Resumen comparativo */}

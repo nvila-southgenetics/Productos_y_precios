@@ -15,6 +15,7 @@ interface ComparisonFiltersProps {
   onCountriesChange: (countries: string[]) => void;
   onProductChange: (product: string) => void;
   allowedCountries?: string[];
+  showAllCountries?: boolean;
 }
 
 const MONTHS = [
@@ -60,6 +61,7 @@ export function ComparisonFilters({
   onCountriesChange,
   onProductChange,
   allowedCountries,
+  showAllCountries = true,
 }: ComparisonFiltersProps) {
   const [products, setProducts] = useState<string[]>([]);
   const [countriesOpen, setCountriesOpen] = useState(false);
@@ -171,14 +173,16 @@ export function ComparisonFilters({
           </button>
           {countriesOpen && (
             <div className="absolute z-50 mt-1 w-full rounded-md border border-white/20 bg-blue-950/95 backdrop-blur-sm py-2 shadow-lg max-h-64 overflow-y-auto">
-              <button
-                type="button"
-                onClick={selectAllCountries}
-                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/90 hover:bg-white/10"
-              >
-                <Checkbox checked={selectedCountries.length === 0} />
-                Todos los países
-              </button>
+              {showAllCountries && (
+                <button
+                  type="button"
+                  onClick={selectAllCountries}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/90 hover:bg-white/10"
+                >
+                  <Checkbox checked={selectedCountries.length === 0} />
+                  Todos los países
+                </button>
+              )}
               {filteredCountryList.map((country) => (
                 <button
                   key={country.value}

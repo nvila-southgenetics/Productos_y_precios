@@ -34,7 +34,7 @@ import { CategoryDistribution } from "@/components/dashboard/CategoryDistributio
 import { MonthlySalesEvolutionChart } from "@/components/dashboard/MonthlySalesEvolutionChart"
 
 export default function DashboardPage() {
-  const { allowedCountries } = usePermissions()
+  const { allowedCountries, isAdmin, loading: permLoading } = usePermissions()
   const [companies, setCompanies] = useState<string[]>([])
   const [products, setProducts] = useState<string[]>([])
   const [selectedCompany, setSelectedCompany] = useState("Todas las compañías")
@@ -61,16 +61,21 @@ export default function DashboardPage() {
           getCompanies(),
           getProductsFromSales(),
         ])
-        setCompanies(filterCompaniesByCountries(companiesData, allowedCountries))
+        const filtered = filterCompaniesByCountries(companiesData, allowedCountries)
+        setCompanies(filtered)
         setProducts(productsData)
+        // Para no-admins, auto-seleccionar la primera compañía permitida
+        if (!isAdmin && filtered.length > 0) {
+          setSelectedCompany(filtered[0])
+        }
       } catch (error) {
         console.error("Error loading initial data:", error)
       } finally {
         setIsLoading(false)
       }
     }
-    loadInitialData()
-  }, [allowedCountries])
+    if (!permLoading) loadInitialData()
+  }, [allowedCountries, isAdmin, permLoading])
 
   // Cargar años disponibles
   useEffect(() => {
@@ -229,6 +234,7 @@ export default function DashboardPage() {
             onProductChange={setSelectedProduct}
             onYearChange={setSelectedYear}
             onMonthChange={setSelectedMonth}
+            showAllCompanies={isAdmin}
           />
         </motion.div>
 

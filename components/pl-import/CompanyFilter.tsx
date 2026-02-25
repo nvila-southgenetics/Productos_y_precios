@@ -6,12 +6,14 @@ interface CompanyFilterProps {
   companies: string[]
   selectedCompany: string
   onCompanyChange: (company: string) => void
+  showAllCompanies?: boolean
 }
 
 export function CompanyFilter({
   companies,
   selectedCompany,
   onCompanyChange,
+  showAllCompanies = true,
 }: CompanyFilterProps) {
   return (
     <div className="flex flex-col gap-2">
@@ -21,7 +23,11 @@ export function CompanyFilter({
         onChange={(e) => onCompanyChange(e.target.value)}
         className="w-full bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-white/30"
       >
-        <option value="Todas las compañías" className="bg-blue-900 text-white">Todas las compañías</option>
+        {showAllCompanies && (
+          <option value="Todas las compañías" className="bg-blue-900 text-white">
+            Todas las compañías
+          </option>
+        )}
         {companies.map((company) => (
           <option key={company} value={company} className="bg-blue-900 text-white">
             {company}
@@ -31,6 +37,3 @@ export function CompanyFilter({
     </div>
   )
 }
-
-
-
