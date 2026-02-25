@@ -9,6 +9,7 @@ import { BudgetSummary } from "@/components/budget/BudgetSummary"
 import { ImportBudgetDialog } from "@/components/budget/ImportBudgetDialog"
 import { supabase } from "@/lib/supabase"
 import { usePermissions } from "@/lib/use-permissions"
+import { productNameSortKey } from "@/lib/utils"
 
 export default function BudgetPage() {
   const { allowedCountries, canEdit, isAdmin, loading: permLoading } = usePermissions()
@@ -38,7 +39,7 @@ export default function BudgetPage() {
         .eq("year", selectedYear)
 
       if (budgetData) {
-        const uniqueProducts = ([...new Set(budgetData.map((b: { product_name: string }) => b.product_name))] as string[]).sort()
+        const uniqueProducts = ([...new Set(budgetData.map((b: { product_name: string }) => b.product_name))] as string[]).sort((a, b) => productNameSortKey(a).localeCompare(productNameSortKey(b), 'es', { sensitivity: 'base' }))
         setProducts(uniqueProducts)
       }
     } catch (error) {

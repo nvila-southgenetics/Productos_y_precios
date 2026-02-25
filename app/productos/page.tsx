@@ -9,6 +9,7 @@ import { ProductFilters } from "@/components/products/ProductFilters"
 import { CountryPills } from "@/components/products/CountryPills"
 import { getProductsWithOverrides, deleteProductFromCountry, deleteProductFromAllCountries, getTotalSalesByProductIds, type ProductWithOverrides } from "@/lib/supabase-mcp"
 import { usePermissions } from "@/lib/use-permissions"
+import { productNameSortKey } from "@/lib/utils"
 
 const VALID_COUNTRIES = new Set(["UY", "AR", "MX", "CL", "VE", "CO"])
 
@@ -84,7 +85,7 @@ function ProductosContent() {
       try {
         const data = await getProductsWithOverrides(selectedCountry)
         // Ordenar productos alfabéticamente por nombre
-        const sortedData = data.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }))
+        const sortedData = data.sort((a, b) => productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), 'es', { sensitivity: 'base' }))
         setProducts(sortedData)
         if (sortedData.length === 0) {
           setError("No se encontraron productos. Verifica la conexión con la base de datos.")
@@ -129,7 +130,7 @@ function ProductosContent() {
     }
 
     // Ordenar productos alfabéticamente por nombre
-    filtered.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }))
+    filtered.sort((a, b) => productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), 'es', { sensitivity: 'base' }))
 
     setFilteredProducts(filtered)
   }, [products, searchQuery, selectedCategory, selectedTipo])
@@ -152,7 +153,7 @@ function ProductosContent() {
       
       // Recargar productos después de eliminar
       const data = await getProductsWithOverrides(selectedCountry)
-      const sortedData = data.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }))
+      const sortedData = data.sort((a, b) => productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), 'es', { sensitivity: 'base' }))
       setProducts(sortedData)
     } catch (error) {
       console.error("Error deleting product:", error)
@@ -164,7 +165,7 @@ function ProductosContent() {
     // Recargar productos después de actualizar el estado de revisión
     try {
       const data = await getProductsWithOverrides(selectedCountry)
-      const sortedData = data.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }))
+      const sortedData = data.sort((a, b) => productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), 'es', { sensitivity: 'base' }))
       setProducts(sortedData)
     } catch (error) {
       console.error("Error reloading products after review toggle:", error)

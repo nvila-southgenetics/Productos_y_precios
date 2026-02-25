@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
-import { formatCurrency, formatPercentage, cn } from "@/lib/utils"
+import { formatCurrency, formatPercentage, cn, productNameSortKey } from "@/lib/utils"
 import type { ProductWithOverrides, ProductCountryOverride } from "@/lib/supabase-mcp"
 import { updateProductCountryOverride, getProductsWithOverrides, CHANNELS } from "@/lib/supabase-mcp"
 import { Info, AlertTriangle, GitCompare, ChevronDown, Search } from "lucide-react"
@@ -126,7 +126,7 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
     setIsLoadingProducts(true)
     try {
       const products = await getProductsWithOverrides()
-      setAllProducts(products.map(p => ({ id: p.id, name: p.name })).sort((a, b) => a.name.localeCompare(b.name)))
+      setAllProducts(products.map(p => ({ id: p.id, name: p.name })).sort((a, b) => productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), 'es', { sensitivity: 'base' })))
     } catch (error) {
       console.error("Error loading products:", error)
     } finally {

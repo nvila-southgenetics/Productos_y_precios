@@ -27,5 +27,10 @@ export function formatPercentage(value: number): string {
   return `${(value * 100).toFixed(2)}%`
 }
 
+/** Clave para ordenar nombres de producto: ignora "[" al inicio (no los elimina del nombre). */
+export function productNameSortKey(name: string): string {
+  return name.replace(/^\[+/, "").trim()
+}
+
 
 

@@ -5,7 +5,7 @@ import Link from "next/link"
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
-import { formatCurrency } from "@/lib/utils"
+import { formatCurrency, productNameSortKey } from "@/lib/utils"
 
 interface BudgetRow {
   id: string
@@ -253,12 +253,12 @@ export function BudgetTable({ year, country, product, month }: BudgetTableProps)
         })
       )
 
-      // Ordenar por país y luego por producto
+      // Ordenar por país y luego por producto (ignorar "[" al inicio del nombre)
       processedData.sort((a, b) => {
         if (a.country !== b.country) {
           return a.country.localeCompare(b.country)
         }
-        return a.product_name.localeCompare(b.product_name)
+        return productNameSortKey(a.product_name).localeCompare(productNameSortKey(b.product_name), "es", { sensitivity: "base" })
       })
 
       setData(processedData)
