@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     : []
 
   const { data: inviteData, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
-    redirectTo: `${request.headers.get("origin") ?? ""}/login`,
+    redirectTo: `${request.headers.get("origin") ?? ""}/reset-password`,
   })
 
   if (inviteError) {

@@ -16,16 +16,27 @@ export default function ResetPasswordPage() {
   const [ready, setReady] = useState(false)
   const [hasSession, setHasSession] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [isInvite, setIsInvite] = useState(false)
 
   useEffect(() => {
+    // Detectar si viene de una invitación por el hash de la URL
+    const hash = window.location.hash
+    if (hash.includes("type=invite") || hash.includes("type=signup")) {
+      setIsInvite(true)
+    }
+
     let cancelled = false
-    supabase.auth.getSession().then(({ data }: { data: { session: unknown } }) => {
-      if (cancelled) return
-      setHasSession(!!data.session)
-      setReady(true)
-    })
+    // Pequeño delay para que el cliente Supabase procese el hash
+    const timer = setTimeout(() => {
+      supabase.auth.getSession().then(({ data }: { data: { session: unknown } }) => {
+        if (cancelled) return
+        setHasSession(!!data.session)
+        setReady(true)
+      })
+    }, 300)
     return () => {
       cancelled = true
+      clearTimeout(timer)
     }
   }, [])
 
@@ -47,8 +58,8 @@ export default function ResetPasswordPage() {
     try {
       const { error } = await supabase.auth.updateUser({ password })
       if (error) throw error
-      setMessage("Contraseña actualizada. Ya podés iniciar sesión.")
-      setTimeout(() => router.replace("/login"), 800)
+      setMessage(isInvite ? "¡Contraseña creada! Ingresando..." : "Contraseña actualizada. Ingresando...")
+      setTimeout(() => router.replace("/productos"), 800)
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo actualizar la contraseña")
     } finally {
@@ -79,8 +90,14 @@ export default function ResetPasswordPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold text-white">Nueva contraseña</h1>
-        <p className="text-sm text-white/70 mt-1">Elegí una contraseña nueva</p>
+        <h1 className="text-2xl font-bold text-white">
+          {isInvite ? "Crear contraseña" : "Nueva contraseña"}
+        </h1>
+        <p className="text-sm text-white/70 mt-1">
+          {isInvite
+            ? "¡Bienvenido! Elegí una contraseña para tu cuenta."
+            : "Elegí una contraseña nueva"}
+        </p>
       </div>
 
       {error && (
