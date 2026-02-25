@@ -20,10 +20,10 @@ export default function BudgetPage() {
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [products, setProducts] = useState<string[]>([])
 
-  // Auto-seleccionar primer país para no-admins
+  // No-admins: un solo país → seleccionarlo; varios → "Todos (mis países)"
   useEffect(() => {
     if (!permLoading && !isAdmin && allowedCountries.length > 0) {
-      setSelectedCountry(allowedCountries[0])
+      setSelectedCountry(allowedCountries.length === 1 ? allowedCountries[0] : "all")
     }
   }, [permLoading, isAdmin, allowedCountries])
 
@@ -110,6 +110,7 @@ export default function BudgetPage() {
             country={selectedCountry}
             product={selectedProduct}
             month={selectedMonth}
+            allowedCountryCodes={!isAdmin ? allowedCountries : undefined}
           />
         </div>
 
@@ -119,6 +120,7 @@ export default function BudgetPage() {
           country={selectedCountry}
           product={selectedProduct}
           month={selectedMonth}
+          allowedCountryCodes={!isAdmin ? allowedCountries : undefined}
         />
 
         {/* Dialog de importación */}

@@ -40,6 +40,8 @@ interface BudgetTableProps {
   country: string
   product: string
   month: string
+  /** Cuando country === "all" y hay varios países permitidos (no-admin), filtrar por estos. */
+  allowedCountryCodes?: string[]
 }
 
 const MONTH_NAMES = [
@@ -111,14 +113,14 @@ function getMarginColor(margin: number): string {
   return "text-red-300"
 }
 
-export function BudgetTable({ year, country, product, month }: BudgetTableProps) {
+export function BudgetTable({ year, country, product, month, allowedCountryCodes }: BudgetTableProps) {
   const [data, setData] = useState<BudgetRow[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     fetchBudgetData()
-  }, [year, country, product, month])
+  }, [year, country, product, month, allowedCountryCodes])
 
   const fetchBudgetData = async () => {
     setLoading(true)
@@ -127,6 +129,8 @@ export function BudgetTable({ year, country, product, month }: BudgetTableProps)
 
       if (country !== "all") {
         query = query.eq("country_code", country)
+      } else if (allowedCountryCodes?.length) {
+        query = query.in("country_code", allowedCountryCodes)
       }
 
       if (product !== "all") {

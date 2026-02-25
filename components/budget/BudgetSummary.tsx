@@ -10,6 +10,8 @@ interface BudgetSummaryProps {
   country: string
   product: string
   month: string
+  /** Cuando country === "all" y hay varios países permitidos (no-admin), filtrar por estos. */
+  allowedCountryCodes?: string[]
 }
 
 const MONTH_KEYS = [
@@ -68,7 +70,7 @@ function calculateGrossProfit(overrides: any): number {
   return salesRevenueUSD - totalCosts
 }
 
-export function BudgetSummary({ year, country, product, month }: BudgetSummaryProps) {
+export function BudgetSummary({ year, country, product, month, allowedCountryCodes }: BudgetSummaryProps) {
   const [summary, setSummary] = useState<SummaryData>({
     totalUnits: 0,
     totalGrossSale: 0,
@@ -79,7 +81,7 @@ export function BudgetSummary({ year, country, product, month }: BudgetSummaryPr
 
   useEffect(() => {
     fetchSummary()
-  }, [year, country, product, month])
+  }, [year, country, product, month, allowedCountryCodes])
 
   const fetchSummary = async () => {
     setLoading(true)
@@ -88,6 +90,8 @@ export function BudgetSummary({ year, country, product, month }: BudgetSummaryPr
 
       if (country !== "all") {
         query = query.eq("country_code", country)
+      } else if (allowedCountryCodes?.length) {
+        query = query.in("country_code", allowedCountryCodes)
       }
 
       if (product !== "all") {

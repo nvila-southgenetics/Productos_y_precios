@@ -35,11 +35,12 @@ const MONTHS = [
 
 const countries = [
   { code: "all", name: "Todos los países" },
-  { code: "CL", name: "Chile" },
-  { code: "UY", name: "Uruguay" },
   { code: "AR", name: "Argentina" },
-  { code: "MX", name: "México" },
+  { code: "CL", name: "Chile" },
   { code: "CO", name: "Colombia" },
+  { code: "MX", name: "México" },
+  { code: "UY", name: "Uruguay" },
+  { code: "VE", name: "Venezuela" },
   { code: "PE", name: "Perú" },
   { code: "BO", name: "Bolivia" },
   { code: "TT", name: "Trinidad y Tobago" },
@@ -62,9 +63,16 @@ export function BudgetFilters({
   allowedCountries,
   showAllCountries = true,
 }: BudgetFiltersProps) {
+  // Admins: "Todos los países" + todos. No-admins: solo países permitidos; si tiene varios, también "Todos (mis países)".
   const filteredCountries = allowedCountries?.length
-    ? countries.filter((c) => (showAllCountries && c.code === "all") || allowedCountries.includes(c.code))
-    : (showAllCountries ? countries : countries.filter((c) => c.code !== "all"))
+    ? countries.filter(
+        (c) =>
+          (c.code === "all" && (showAllCountries || allowedCountries.length > 1)) ||
+          allowedCountries.includes(c.code)
+      )
+    : showAllCountries
+      ? countries
+      : countries.filter((c) => c.code !== "all")
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -105,7 +113,9 @@ export function BudgetFilters({
         >
           {filteredCountries.map((country) => (
             <option key={country.code} value={country.code} className="bg-blue-900 text-white">
-              {country.name}
+              {country.code === "all" && !showAllCountries && allowedCountries?.length
+                ? "Todos (mis países)"
+                : country.name}
             </option>
           ))}
         </Select>
