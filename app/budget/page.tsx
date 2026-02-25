@@ -8,8 +8,10 @@ import { BudgetTable } from "@/components/budget/BudgetTable"
 import { BudgetSummary } from "@/components/budget/BudgetSummary"
 import { ImportBudgetDialog } from "@/components/budget/ImportBudgetDialog"
 import { supabase } from "@/lib/supabase"
+import { usePermissions } from "@/lib/use-permissions"
 
 export default function BudgetPage() {
+  const { allowedCountries, canEdit } = usePermissions()
   const [selectedYear, setSelectedYear] = useState(2026)
   const [selectedCountry, setSelectedCountry] = useState<string>("all")
   const [selectedProduct, setSelectedProduct] = useState<string>("all")
@@ -29,7 +31,7 @@ export default function BudgetPage() {
         .eq("year", selectedYear)
 
       if (budgetData) {
-        const uniqueProducts = [...new Set(budgetData.map((b) => b.product_name))].sort()
+        const uniqueProducts = ([...new Set(budgetData.map((b: { product_name: string }) => b.product_name))] as string[]).sort()
         setProducts(uniqueProducts)
       }
     } catch (error) {
@@ -50,22 +52,23 @@ export default function BudgetPage() {
           </div>
 
           <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="bg-white/10 border-white/20 text-white hover:bg-white/20"
-              onClick={() => setShowImportDialog(true)}
-            >
-              <Upload className="w-4 h-4 mr-2" />
-              Importar Excel
-            </Button>
+            {canEdit && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="bg-white/10 border-white/20 text-white hover:bg-white/20"
+                onClick={() => setShowImportDialog(true)}
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Importar Excel
+              </Button>
+            )}
 
             <Button
               variant="outline"
               size="sm"
               className="bg-white/10 border-white/20 text-white hover:bg-white/20"
               onClick={() => {
-                // TODO: Implementar exportación
                 alert("Exportar - Funcionalidad próximamente")
               }}
             >
@@ -87,6 +90,7 @@ export default function BudgetPage() {
             onProductChange={setSelectedProduct}
             onMonthChange={setSelectedMonth}
             products={products}
+            allowedCountries={allowedCountries}
           />
         </div>
 

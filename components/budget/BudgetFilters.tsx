@@ -13,6 +13,7 @@ interface BudgetFiltersProps {
   onMonthChange: (month: string) => void
   countries?: string[]
   products?: string[]
+  allowedCountries?: string[]
 }
 
 const MONTHS = [
@@ -57,7 +58,12 @@ export function BudgetFilters({
   onProductChange,
   onMonthChange,
   products = [],
+  allowedCountries,
 }: BudgetFiltersProps) {
+  const filteredCountries = allowedCountries?.length
+    ? countries.filter((c) => c.code === "all" || allowedCountries.includes(c.code))
+    : countries
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
       <div className="flex flex-col gap-2">
@@ -95,7 +101,7 @@ export function BudgetFilters({
           onChange={(e) => onCountryChange(e.target.value)}
           className="w-full bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-white/30"
         >
-          {countries.map((country) => (
+          {filteredCountries.map((country) => (
             <option key={country.code} value={country.code} className="bg-blue-900 text-white">
               {country.name}
             </option>

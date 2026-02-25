@@ -14,6 +14,10 @@ import { Info, AlertTriangle, GitCompare, ChevronDown, Search } from "lucide-rea
 
 interface ProductDetailViewProps {
   product: ProductWithOverrides
+  /** Si false, solo lectura (sin editar costos, reiniciar, comparar, revisado). */
+  canEdit?: boolean
+  /** Si se pasa, solo se muestran estos países en las pestañas. */
+  allowedCountries?: string[]
 }
 
 const countries = [
@@ -59,7 +63,7 @@ interface CostRow {
   setChecked: (overrides: ProductCountryOverride["overrides"], checked: boolean) => ProductCountryOverride["overrides"]
 }
 
-export function ProductDetailView({ product }: ProductDetailViewProps) {
+export function ProductDetailView({ product, canEdit = true, allowedCountries }: ProductDetailViewProps) {
   const router = useRouter()
   const params = useParams()
   const currentProductId = params.productId as string
@@ -80,6 +84,10 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
   const [reviewedStates, setReviewedStates] = useState<Record<string, boolean>>({})
   // Cache de overrides guardados por país+canal para que al cambiar de canal y volver se vea el valor actual
   const [savedOverridesCache, setSavedOverridesCache] = useState<Record<string, ProductCountryOverride["overrides"]>>({})
+
+  const displayCountries = allowedCountries?.length
+    ? countries.filter((c) => allowedCountries.includes(c.code))
+    : countries
 
   // Restaurar países seleccionados desde query params
   useEffect(() => {
@@ -380,7 +388,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
   const grossProfit = salesRevenue - totalCostOfSales
 
   const handleDoubleClick = (row: CostRow) => {
-    if (!row.editable) return
+    if (!canEdit || !row.editable) return
     setEditingField(row.concept)
     setEditValue(row.getValue(overrides).toString())
   }
@@ -495,7 +503,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
   }
 
   const handleReset = () => {
-    const countryName = countries.find(c => c.code === selectedCountry)?.name || selectedCountry
+    const countryName = displayCountries.find(c => c.code === selectedCountry)?.name || selectedCountry
     if (!confirm(`¿Estás seguro? Esto eliminará todos los valores personalizados (costos y descuentos) para ${countryName} en el canal "${selectedChannel}". Solo afecta a este país y este canal.`)) {
       return
     }
@@ -554,7 +562,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
       .filter((row) => row.concept !== "Gross Sales (sin IVA)" && row.concept !== "Commercial Discount" && row.getChecked(countryOverrides))
       .reduce((sum, row) => sum + row.getValue(countryOverrides), 0)
     const countryGrossProfit = countrySalesRevenue - countryTotalCostOfSales
-    const countryName = countries.find(c => c.code === countryCode)?.name || countryCode
+    const countryName = displayCountries.find(c => c.code === countryCode)?.name || countryCode
 
     return (
       <div key={countryCode} className="flex-shrink-0 w-[min(100%,320px)] min-w-[280px]">
@@ -667,7 +675,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
                 <div className="flex items-center gap-4 flex-wrap">
                   <Tabs value={selectedCountry} onValueChange={setSelectedCountry}>
                     <TabsList className="bg-white/10 border border-white/20 p-1">
-                      {countries.map((country) => (
+                      {displayCountries.map((country) => (
                         <TabsTrigger 
                           key={country.code}
                           value={country.code}
@@ -705,6 +713,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
                     </select>
                   </div>
                 </div>
+                {canEdit && (
                 <div className="flex items-center gap-2">
                   <Checkbox
                     id="review-current-country"
@@ -722,11 +731,13 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
                     )}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    Marcar como revisado ({countries.find(c => c.code === selectedCountry)?.name ?? selectedCountry})
+                    Marcar como revisado ({displayCountries.find(c => c.code === selectedCountry)?.name ?? selectedCountry})
                   </label>
                 </div>
+                )}
               </div>
-              <div className="flex flex-wrap items-center gap-2">
+                {canEdit && (
+                <div className="flex flex-wrap items-center gap-2">
                 <Button 
                   variant="outline" 
                   onClick={handleCompareCountries}
@@ -743,6 +754,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
                   Reiniciar Parámetros
                 </Button>
               </div>
+                )}
             </>
           ) : (
             <div className="space-y-4 w-full">
@@ -847,7 +859,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
               </div>
               <p className="text-sm text-white/70">Selecciona países para ver los costos lado a lado:</p>
               <div className="flex flex-wrap gap-2">
-                {countries.map((country) => {
+                {displayCountries.map((country) => {
                   const selected = selectedCountriesToCompare.includes(country.code)
                   return (
                     <button
@@ -996,6 +1008,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
                     <Checkbox
                       checked={costRows[1].getChecked(overrides)}
                       onChange={(checked) => handleCheckboxChange(costRows[1], checked)}
+                      disabled={!canEdit}
                     />
                     <span className="text-white/90">Commercial Discount</span>
                   </div>
@@ -1061,6 +1074,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
                         <Checkbox
                           checked={isChecked}
                           onChange={(checked) => handleCheckboxChange(row, checked)}
+                          disabled={!canEdit}
                         />
                         <span className="text-white/90">{row.concept}</span>
                       </div>

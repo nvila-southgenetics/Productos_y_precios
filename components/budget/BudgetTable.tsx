@@ -143,10 +143,11 @@ export function BudgetTable({ year, country, product, month }: BudgetTableProps)
       }
 
       // Obtener productos únicos para hacer join con overrides
+      type RawBudgetRow = { product_id: string | null; product_name: string }
       const productIds = budgetData
-        .map((b) => b.product_id)
-        .filter((id): id is string => id !== null)
-      const productNames = [...new Set(budgetData.map((b) => b.product_name))]
+        .map((b: RawBudgetRow) => b.product_id)
+        .filter((id: string | null): id is string => id !== null)
+      const productNames = [...new Set(budgetData.map((b: RawBudgetRow) => b.product_name))]
 
       // Obtener productos
       const { data: products } = await supabase
@@ -156,7 +157,7 @@ export function BudgetTable({ year, country, product, month }: BudgetTableProps)
 
       // Mapear productos por nombre e ID
       const productMap = new Map<string, string>()
-      products?.forEach((p) => {
+      products?.forEach((p: { name: string; id: string }) => {
         productMap.set(p.name, p.id)
       })
 
@@ -167,8 +168,9 @@ export function BudgetTable({ year, country, product, month }: BudgetTableProps)
 
       // Procesar datos y calcular financieros
       // IMPORTANTE: Hacer query individual para cada override para asegurar el país correcto
+      type RawRow = { product_id: string | null; product_name: string; country_code: string; total_units?: number } & Record<string, unknown>
       const processedData: BudgetRow[] = await Promise.all(
-        budgetData.map(async (row) => {
+        budgetData.map(async (row: RawRow) => {
           const productId = row.product_id || productMap.get(row.product_name) || null
 
           let totalGrossSale = 0
@@ -207,12 +209,12 @@ export function BudgetTable({ year, country, product, month }: BudgetTableProps)
               )
             }
 
-            totalGrossSale = grossSaleUSD * row.total_units
-            totalGrossProfit = grossProfitUSD * row.total_units
+            totalGrossSale = grossSaleUSD * (row.total_units ?? 0)
+            totalGrossProfit = grossProfitUSD * (row.total_units ?? 0)
 
             // Calcular valores específicos del mes si está filtrado
             if (isMonthFiltered && monthKey) {
-              monthlyUnits = row[monthKey as keyof typeof row] || 0
+              monthlyUnits = Number(row[monthKey as keyof RawRow] ?? 0)
               monthlyGrossSale = grossSaleUSD * monthlyUnits
               monthlyGrossProfit = grossProfitUSD * monthlyUnits
             }
@@ -243,9 +245,9 @@ export function BudgetTable({ year, country, product, month }: BudgetTableProps)
           monthly_gross_sale: monthlyGrossSale,
           monthly_gross_profit: monthlyGrossProfit,
           // Guardar commercialDiscount para el cálculo del margen
-          commercial_discount: commercialDiscountUSD * row.total_units,
-          monthly_commercial_discount: isMonthFiltered && monthKey 
-            ? commercialDiscountUSD * (row[monthKey as keyof typeof row] || 0)
+          commercial_discount: commercialDiscountUSD * (row.total_units ?? 0),
+          monthly_commercial_discount: isMonthFiltered && monthKey
+            ? commercialDiscountUSD * Number(row[monthKey as keyof RawRow] ?? 0)
             : 0,
         }
         })

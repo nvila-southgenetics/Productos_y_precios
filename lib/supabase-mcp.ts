@@ -181,14 +181,14 @@ export async function getProductsWithOverrides(countryCode?: string): Promise<Pr
   if (overridesError) throw overridesError
 
   // Combinar productos con sus overrides
-  const productsWithOverrides = products.map(product => ({
+  const productsWithOverrides = products.map((product: Product) => ({
     ...product,
-    country_overrides: overrides?.filter(o => o.product_id === product.id) || []
+    country_overrides: overrides?.filter((o: ProductCountryOverride) => o.product_id === product.id) || []
   }))
 
   // Si se especifica un país, solo devolver productos que tengan overrides para ese país
   if (countryCode) {
-    return productsWithOverrides.filter(product => 
+    return productsWithOverrides.filter((product: ProductWithOverrides) =>
       product.country_overrides && product.country_overrides.length > 0
     )
   }
@@ -389,8 +389,8 @@ export async function getCompanies(): Promise<string[]> {
   if (error) throw error
   if (!data) return []
 
-  const uniqueCompanies = Array.from(
-    new Set(data.map((item: any) => item.compañia))
+  const uniqueCompanies: string[] = Array.from(
+    new Set(data.map((item: { compañia: string }) => item.compañia))
   )
   return uniqueCompanies
 }
@@ -407,7 +407,7 @@ export async function getProductsFromSales(): Promise<string[]> {
   if (error) throw error
   if (!data) return []
 
-  const uniqueProducts = Array.from(new Set(data.map((item: any) => item.producto)))
+  const uniqueProducts: string[] = Array.from(new Set(data.map((item: { producto: string }) => item.producto)))
   return uniqueProducts
 }
 
@@ -606,10 +606,10 @@ export async function getMonthlySales(
     }, {})
     
     // Convertir a array y agregar información de productos
-    return Object.values(groupedByProduct).map((sale: any) => {
-      const product = products?.find(p => p.name === sale.producto)
+    return (Object.values(groupedByProduct) as MonthlySales[]).map((sale: MonthlySales) => {
+      const product = products?.find((p: Product) => p.name === sale.producto)
       // Buscar overrides de cualquier país (usar el primero disponible)
-      const productOverrides = overrides?.find(o => o.product_id === product?.id)
+      const productOverrides = overrides?.find((o: ProductCountryOverride) => o.product_id === product?.id)
       
       // Recalcular precio promedio
       if (sale.cantidad_ventas > 0 && sale.monto_total) {
@@ -627,12 +627,12 @@ export async function getMonthlySales(
   }
   
   // Si no es "Todas las compañías", comportamiento normal
-  return sales.map((sale: any) => {
-    const product = products?.find(p => p.name === sale.producto)
-    const saleCompany = sale.compañia || sale.company
+  return sales.map((sale: MonthlySales) => {
+    const product = products?.find((p: Product) => p.name === sale.producto)
+    const saleCompany = sale.compañia
     const saleCountryCode = companyToCountry[saleCompany] || 'UY'
     const productOverrides = overrides?.find(
-      o => o.product_id === product?.id && o.country_code === saleCountryCode
+      (o: ProductCountryOverride) => o.product_id === product?.id && o.country_code === saleCountryCode
     )
 
     return {
@@ -674,7 +674,7 @@ export async function getAvailablePeriods(company: string): Promise<string[]> {
     return []
   }
 
-  const uniquePeriods = Array.from(new Set(data.map(item => item.periodo)))
+  const uniquePeriods: string[] = Array.from(new Set(data.map((item: { periodo: string }) => item.periodo)))
   
   // Debug: mostrar períodos encontrados
   console.log(`📅 Períodos encontrados para ${normalizedCompany}:`, uniquePeriods)
@@ -717,9 +717,13 @@ export async function getAnnualTotal(
   if (error) throw error
   if (!sales) return []
 
+  const isAllCompanies = normalizedCompany === "Todas las compañías"
+  type SaleRow = { producto: string; compañia: string; cantidad_ventas: number; monto_total: number | null }
+  type CompanyBreakdownItem = { compañia: string; cantidad_ventas: number; monto_total: number | null }
+
   // Agregar por producto
-  const aggregated = sales.reduce((acc, sale: any) => {
-    const existing = acc.find((item: any) => item.producto === sale.producto)
+  const aggregated = sales.reduce((acc: MonthlySalesWithProduct[], sale: SaleRow) => {
+    const existing = acc.find((item: MonthlySalesWithProduct) => item.producto === sale.producto)
     if (existing) {
       existing.cantidad_ventas += sale.cantidad_ventas
       existing.monto_total = (existing.monto_total || 0) + (sale.monto_total || 0)
@@ -729,7 +733,7 @@ export async function getAnnualTotal(
         if (!existing.companyBreakdown) {
           existing.companyBreakdown = []
         }
-        const companyBreakdown = existing.companyBreakdown.find((cb: any) => cb.compañia === sale.compañia)
+        const companyBreakdown = existing.companyBreakdown!.find((cb: CompanyBreakdownItem) => cb.compañia === sale.compañia)
         if (companyBreakdown) {
           companyBreakdown.cantidad_ventas += sale.cantidad_ventas
           companyBreakdown.monto_total = (companyBreakdown.monto_total || 0) + (sale.monto_total || 0)
@@ -742,24 +746,15 @@ export async function getAnnualTotal(
         }
       }
     } else {
-      const newItem: any = {
+      const newItem: MonthlySalesWithProduct = {
         ...sale,
         mes: 0,
         año: 0,
         periodo: 'Total',
         precio_promedio: null,
+        ...(isAllCompanies ? { companyBreakdown: [{ compañia: sale.compañia, cantidad_ventas: sale.cantidad_ventas, monto_total: sale.monto_total || 0 }] } : {}),
       }
-      
-      // Si es "Todas las compañías", agregar desglose por compañía
-      if (isAllCompanies) {
-        newItem.companyBreakdown = [{
-          compañia: sale.compañia,
-          cantidad_ventas: sale.cantidad_ventas,
-          monto_total: sale.monto_total || 0
-        }]
-      }
-      
-      acc.push(newItem as MonthlySalesWithProduct)
+      acc.push(newItem)
     }
     return acc
   }, [] as MonthlySalesWithProduct[])
@@ -786,17 +781,15 @@ export async function getAnnualTotal(
     'SouthGenetics LLC Venezuela': 'VE',
   }
 
-  // Si es "Todas las compañías", no aplicar overrides específicos por país
-  const isAllCompanies = normalizedCompany === "Todas las compañías"
   const countryCode = isAllCompanies ? null : (companyToCountry[company] || 'UY')
 
   // Combinar datos
-  return aggregated.map(sale => {
-    const product = products?.find(p => p.name === sale.producto)
+  return aggregated.map((sale: MonthlySalesWithProduct) => {
+    const product = products?.find((p: Product) => p.name === sale.producto)
     // Si es todas las compañías, buscar overrides de cualquier país o usar el primero disponible
     const productOverrides = isAllCompanies 
-      ? overrides?.find(o => o.product_id === product?.id) // Cualquier override del producto
-      : overrides?.find(o => o.product_id === product?.id && o.country_code === countryCode)
+      ? overrides?.find((o: ProductCountryOverride) => o.product_id === product?.id) // Cualquier override del producto
+      : overrides?.find((o: ProductCountryOverride) => o.product_id === product?.id && o.country_code === countryCode)
 
     return {
       ...sale,
@@ -846,9 +839,10 @@ async function getProductsWithMetrics(
   if (!sales) return []
   
   // Agrupar por producto
-  const productMap = new Map<string, any>()
+  type ProductAgg = { producto: string; cantidad_ventas: number; monto_total: number }
+  const productMap = new Map<string, ProductAgg>()
   
-  sales.forEach((sale: any) => {
+  sales.forEach((sale: { producto: string; cantidad_ventas: number; monto_total: number | null }) => {
     const key = sale.producto
     if (!productMap.has(key)) {
       productMap.set(key, {
@@ -886,8 +880,8 @@ async function getProductsWithMetrics(
   // Calcular métricas para cada producto
   const dashboardProducts: DashboardProduct[] = []
   
-  Array.from(productMap.values()).forEach((product: any) => {
-    const productInfo = products?.find(p => p.name === product.producto)
+  Array.from(productMap.values()).forEach((product: ProductAgg) => {
+    const productInfo = products?.find((p: Product) => p.name === product.producto)
     
     // Si es todas las compañías, usar el primer override disponible
     const countryCode = isAllCompanies 
@@ -895,8 +889,8 @@ async function getProductsWithMetrics(
       : (companyToCountry[company] || 'UY')
     
     const productOverride = isAllCompanies
-      ? overrides?.find(o => o.product_id === productInfo?.id)
-      : overrides?.find(o => o.product_id === productInfo?.id && o.country_code === countryCode)
+      ? overrides?.find((o: ProductCountryOverride) => o.product_id === productInfo?.id)
+      : overrides?.find((o: ProductCountryOverride) => o.product_id === productInfo?.id && o.country_code === countryCode)
     
     const overrideData = productOverride?.overrides || {}
     const grossSalesUSD = overrideData.grossSalesUSD || 0

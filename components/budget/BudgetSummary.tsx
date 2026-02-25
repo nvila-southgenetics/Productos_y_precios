@@ -109,10 +109,11 @@ export function BudgetSummary({ year, country, product, month }: BudgetSummaryPr
       }
 
       // Obtener productos únicos para hacer join con overrides
+      type BudgetRow = { product_id: string | null; product_name: string }
       const productIds = budgetData
-        .map((b) => b.product_id)
-        .filter((id): id is string => id !== null)
-      const productNames = [...new Set(budgetData.map((b) => b.product_name))]
+        .map((b: BudgetRow) => b.product_id)
+        .filter((id: string | null): id is string => id !== null)
+      const productNames = [...new Set(budgetData.map((b: BudgetRow) => b.product_name))]
 
       // Obtener productos
       const { data: products } = await supabase
@@ -122,7 +123,7 @@ export function BudgetSummary({ year, country, product, month }: BudgetSummaryPr
 
       // Mapear productos por nombre e ID
       const productMap = new Map<string, string>()
-      products?.forEach((p) => {
+      products?.forEach((p: { name: string; id: string }) => {
         productMap.set(p.name, p.id)
       })
 
@@ -137,12 +138,15 @@ export function BudgetSummary({ year, country, product, month }: BudgetSummaryPr
       const monthKey = isMonthFiltered ? MONTH_KEYS[parseInt(month) - 1] : null
 
       // Procesar cada registro con query individual para override correcto
+      type SummaryRow = BudgetRow & { country_code: string; total_units?: number; [k: string]: unknown }
       await Promise.all(
-        budgetData.map(async (row) => {
+        budgetData.map(async (row: SummaryRow) => {
           // Si hay filtro de mes, usar solo ese mes
-          const units = isMonthFiltered
-            ? row[monthKey as keyof typeof row] || 0
-            : row.total_units || 0
+          const units = Number(
+            isMonthFiltered
+              ? row[monthKey as keyof SummaryRow] || 0
+              : row.total_units || 0
+          )
 
           totalUnits += units
 

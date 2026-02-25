@@ -24,6 +24,8 @@ import {
   type DashboardProduct,
   type MonthlyEvolutionPoint,
 } from "@/lib/supabase-mcp"
+import { usePermissions } from "@/lib/use-permissions"
+import { filterCompaniesByCountries } from "@/lib/auth-constants"
 import { MetricCard } from "@/components/dashboard/MetricCard"
 import { ProductRanking } from "@/components/dashboard/ProductRanking"
 import { SalesChart } from "@/components/dashboard/SalesChart"
@@ -32,6 +34,7 @@ import { CategoryDistribution } from "@/components/dashboard/CategoryDistributio
 import { MonthlySalesEvolutionChart } from "@/components/dashboard/MonthlySalesEvolutionChart"
 
 export default function DashboardPage() {
+  const { allowedCountries } = usePermissions()
   const [companies, setCompanies] = useState<string[]>([])
   const [products, setProducts] = useState<string[]>([])
   const [selectedCompany, setSelectedCompany] = useState("Todas las compañías")
@@ -58,7 +61,7 @@ export default function DashboardPage() {
           getCompanies(),
           getProductsFromSales(),
         ])
-        setCompanies(companiesData)
+        setCompanies(filterCompaniesByCountries(companiesData, allowedCountries))
         setProducts(productsData)
       } catch (error) {
         console.error("Error loading initial data:", error)
@@ -67,7 +70,7 @@ export default function DashboardPage() {
       }
     }
     loadInitialData()
-  }, [])
+  }, [allowedCountries])
 
   // Cargar años disponibles
   useEffect(() => {

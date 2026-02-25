@@ -20,6 +20,8 @@ interface ProductTableProps {
   onEditProduct: (product: ProductWithOverrides) => void
   onDeleteProduct: (product: ProductWithOverrides, deleteFromAllCountries: boolean) => Promise<void>
   onReviewToggle?: (productId: string, countryCode: string, checked: boolean) => Promise<void>
+  /** Si false, se ocultan botones de editar/eliminar/revisado. */
+  canEdit?: boolean
 }
 
 const categoryColors: Record<string, string> = {
@@ -52,6 +54,7 @@ export function ProductTable({
   onEditProduct,
   onDeleteProduct,
   onReviewToggle,
+  canEdit = true,
 }: ProductTableProps) {
   const router = useRouter()
   const [reviewedStates, setReviewedStates] = useState<Record<string, boolean>>({})
@@ -162,9 +165,11 @@ export function ProductTable({
       <table className="w-full">
         <thead>
           <tr className="border-b border-white/20 bg-white/10">
-            <th className="h-12 px-4 text-left align-middle font-semibold text-white w-12">
-              Revisado
-            </th>
+            {canEdit && (
+              <th className="h-12 px-4 text-left align-middle font-semibold text-white w-12">
+                Revisado
+              </th>
+            )}
             <th className="h-12 px-4 text-left align-middle font-semibold text-white">
               Producto
             </th>
@@ -199,20 +204,22 @@ export function ProductTable({
                   className="border-b border-white/10 transition-colors hover:bg-white/5 cursor-pointer"
                   onClick={() => handleProductClick(product)}
                 >
-                  <td className="p-4">
-                    <div onClick={(e) => e.stopPropagation()}>
-                      <Checkbox
-                        id={`review-${product.id}`}
-                        checked={isReviewed}
-                        onChange={(checked) => {
-                          const syntheticEvent = { stopPropagation: () => {} } as React.MouseEvent
-                          handleReviewToggle(syntheticEvent, product, checked)
-                        }}
-                        disabled={isUpdating}
-                        className="data-[state=checked]:bg-blue-500 data-[state=checked]:border-blue-500 border-white/30"
-                      />
-                    </div>
-                  </td>
+                  {canEdit && (
+                    <td className="p-4">
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          id={`review-${product.id}`}
+                          checked={isReviewed}
+                          onChange={(checked) => {
+                            const syntheticEvent = { stopPropagation: () => {} } as React.MouseEvent
+                            handleReviewToggle(syntheticEvent, product, checked)
+                          }}
+                          disabled={isUpdating}
+                          className="data-[state=checked]:bg-blue-500 data-[state=checked]:border-blue-500 border-white/30"
+                        />
+                      </div>
+                    </td>
+                  )}
                   <td className="p-4">
                   <div className="flex flex-col gap-2">
                     <div className="font-semibold text-white hover:text-blue-300 transition-colors">{product.name}</div>
@@ -256,24 +263,28 @@ export function ProductTable({
                     >
                       <Eye className="h-4 w-4" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={(e) => handleEditClick(e, product)}
-                      title="Editar producto"
-                      className="hover:bg-white/20 hover:text-white text-white/70"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={(e) => handleDeleteClick(e, product)}
-                      title="Eliminar producto"
-                      className="hover:bg-red-500/20 hover:text-red-200 text-white/70"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {canEdit && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => handleEditClick(e, product)}
+                          title="Editar producto"
+                          className="hover:bg-white/20 hover:text-white text-white/70"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => handleDeleteClick(e, product)}
+                          title="Eliminar producto"
+                          className="hover:bg-red-500/20 hover:text-red-200 text-white/70"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
                   </div>
                   </td>
                 </tr>

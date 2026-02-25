@@ -6,8 +6,10 @@ import { Download, AlertCircle } from 'lucide-react';
 import { ComparisonFilters } from '@/components/comparacion/ComparisonFilters';
 import { ComparisonSummary } from '@/components/comparacion/ComparisonSummary';
 import { ComparisonTable } from '@/components/comparacion/ComparisonTable';
+import { usePermissions } from '@/lib/use-permissions';
 
 export default function ComparacionPage() {
+  const { allowedCountries } = usePermissions();
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
   const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<string>('all');
@@ -63,6 +65,7 @@ export default function ComparacionPage() {
         onMonthChange={setSelectedMonth}
         onCountriesChange={setSelectedCountries}
         onProductChange={setSelectedProduct}
+        allowedCountries={allowedCountries}
       />
 
       {/* Resumen comparativo */}

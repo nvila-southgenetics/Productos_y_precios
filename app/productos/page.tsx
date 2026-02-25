@@ -8,12 +8,14 @@ import { ProductTable } from "@/components/products/ProductTable"
 import { ProductFilters } from "@/components/products/ProductFilters"
 import { CountryPills } from "@/components/products/CountryPills"
 import { getProductsWithOverrides, deleteProductFromCountry, deleteProductFromAllCountries, getTotalSalesByProductIds, type ProductWithOverrides } from "@/lib/supabase-mcp"
+import { usePermissions } from "@/lib/use-permissions"
 
 const VALID_COUNTRIES = new Set(["UY", "AR", "MX", "CL", "VE", "CO"])
 
 function ProductosContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
+  const { allowedCountries, canEdit } = usePermissions()
   const [products, setProducts] = useState<ProductWithOverrides[]>([])
   const [filteredProducts, setFilteredProducts] = useState<ProductWithOverrides[]>([])
   const [selectedCountry, setSelectedCountry] = useState("UY")
@@ -24,7 +26,7 @@ function ProductosContent() {
   const [error, setError] = useState<string | null>(null)
   const [salesCountByProductId, setSalesCountByProductId] = useState<Record<string, number>>({})
 
-  // Restaurar filtros desde la URL al cargar o al volver atrás
+  // Restaurar filtros desde la URL
   useEffect(() => {
     const country = searchParams.get("country")
     const q = searchParams.get("q")
@@ -35,6 +37,12 @@ function ProductosContent() {
     if (category !== null) setSelectedCategory(category)
     if (tipo !== null) setSelectedTipo(tipo)
   }, [searchParams])
+
+  // Ajustar país seleccionado a los permitidos cuando carguen los permisos
+  useEffect(() => {
+    if (!allowedCountries.length) return
+    setSelectedCountry((prev) => (allowedCountries.includes(prev) ? prev : allowedCountries[0]))
+  }, [allowedCountries])
 
   // Mantener la URL en sync con los filtros para que al volver atrás se conserven
   useEffect(() => {
@@ -188,6 +196,7 @@ function ProductosContent() {
           <CountryPills
             selectedCountry={selectedCountry}
             onCountryChange={setSelectedCountry}
+            allowedCountries={allowedCountries.length ? allowedCountries : undefined}
           />
         </div>
 
@@ -222,6 +231,7 @@ function ProductosContent() {
             onEditProduct={handleEditProduct}
             onDeleteProduct={handleDeleteProduct}
             onReviewToggle={handleReviewToggle}
+            canEdit={canEdit}
           />
         )}
       </div>

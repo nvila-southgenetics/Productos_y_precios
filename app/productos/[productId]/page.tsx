@@ -6,11 +6,13 @@ import { ArrowLeft, Link as LinkIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ProductDetailView } from "@/components/products/ProductDetailView"
 import { getProductById, type ProductWithOverrides } from "@/lib/supabase-mcp"
+import { usePermissions } from "@/lib/use-permissions"
 
 export default function ProductDetailPage() {
   const params = useParams()
   const router = useRouter()
   const productId = params.productId as string
+  const { canEdit, allowedCountries } = usePermissions()
 
   const [product, setProduct] = useState<ProductWithOverrides | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -124,7 +126,11 @@ export default function ProductDetailPage() {
         </div>
 
         {/* Vista Detallada */}
-        <ProductDetailView product={product} />
+        <ProductDetailView
+          product={product}
+          canEdit={canEdit}
+          allowedCountries={allowedCountries.length ? allowedCountries : undefined}
+        />
       </div>
     </div>
   )

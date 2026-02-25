@@ -52,7 +52,7 @@ export function ImportBudgetDialog({ open, onClose }: ImportBudgetDialogProps) {
         .select("id, name")
 
       const productMap = new Map<string, string>()
-      products?.forEach((p) => {
+      products?.forEach((p: { name: string; id: string }) => {
         // Intentar match por nombre exacto o parcial
         productNames.forEach((name) => {
           if (p.name.toUpperCase().includes(name.toUpperCase()) || 

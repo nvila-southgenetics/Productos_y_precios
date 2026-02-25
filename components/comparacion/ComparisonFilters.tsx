@@ -14,6 +14,7 @@ interface ComparisonFiltersProps {
   onMonthChange: (month: string) => void;
   onCountriesChange: (countries: string[]) => void;
   onProductChange: (product: string) => void;
+  allowedCountries?: string[];
 }
 
 const MONTHS = [
@@ -58,10 +59,15 @@ export function ComparisonFilters({
   onMonthChange,
   onCountriesChange,
   onProductChange,
+  allowedCountries,
 }: ComparisonFiltersProps) {
   const [products, setProducts] = useState<string[]>([]);
   const [countriesOpen, setCountriesOpen] = useState(false);
   const countriesRef = useRef<HTMLDivElement>(null);
+
+  const filteredCountryList = allowedCountries?.length
+    ? COUNTRIES.filter((c) => allowedCountries.includes(c.value))
+    : COUNTRIES;
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -173,7 +179,7 @@ export function ComparisonFilters({
                 <Checkbox checked={selectedCountries.length === 0} />
                 Todos los países
               </button>
-              {COUNTRIES.map((country) => (
+              {filteredCountryList.map((country) => (
                 <button
                   key={country.value}
                   type="button"

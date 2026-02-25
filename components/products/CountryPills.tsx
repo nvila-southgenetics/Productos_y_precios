@@ -14,12 +14,17 @@ const countries = [
 interface CountryPillsProps {
   selectedCountry: string
   onCountryChange: (country: string) => void
+  /** Si se pasa, solo se muestran estos países (permisos del usuario). */
+  allowedCountries?: string[]
 }
 
-export function CountryPills({ selectedCountry, onCountryChange }: CountryPillsProps) {
+export function CountryPills({ selectedCountry, onCountryChange, allowedCountries }: CountryPillsProps) {
+  const list = allowedCountries?.length
+    ? countries.filter((c) => allowedCountries.includes(c.code))
+    : countries
   return (
     <div className="flex gap-2 flex-wrap">
-      {countries.map((country) => (
+      {list.map((country) => (
         <button
           key={country.code}
           onClick={() => onCountryChange(country.code)}

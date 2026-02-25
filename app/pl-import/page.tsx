@@ -20,8 +20,11 @@ import {
   type MonthlySalesWithProduct,
   type VentaByDate,
 } from "@/lib/supabase-mcp"
+import { usePermissions } from "@/lib/use-permissions"
+import { filterCompaniesByCountries } from "@/lib/auth-constants"
 
 export default function PLImportPage() {
+  const { allowedCountries } = usePermissions()
   const [companies, setCompanies] = useState<string[]>([])
   const [products, setProducts] = useState<string[]>([])
   const [selectedCompany, setSelectedCompany] = useState("Todas las compañías")
@@ -49,9 +52,8 @@ export default function PLImportPage() {
           getCompanies(),
           getProductsFromSales(),
         ])
-        setCompanies(companiesData)
+        setCompanies(filterCompaniesByCountries(companiesData, allowedCountries))
         setProducts(productsData)
-        // Mantener "Todas las compañías" como valor por defecto
       } catch (error) {
         console.error("Error loading initial data:", error)
       } finally {
@@ -59,7 +61,7 @@ export default function PLImportPage() {
       }
     }
     loadInitialData()
-  }, [])
+  }, [allowedCountries])
 
   // Función para cargar datos de un período específico - MEMOIZADA para evitar loops infinitos
   const loadPeriodData = useCallback(async (periodo: string) => {
