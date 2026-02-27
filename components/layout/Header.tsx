@@ -33,7 +33,7 @@ export function Header() {
   const navItems = [
     { href: "/dashboard", label: "Dashboard" },
     { href: "/productos", label: "Productos" },
-    { href: "/pl-import", label: "P&L Import" },
+    { href: "/pl-import", label: "Real Import" },
     { href: "/budget", label: "Budget" },
     { href: "/comparacion", label: "Comparación" },
     ...(isAdmin ? [{ href: "/admin", label: "Admin" }] : []),

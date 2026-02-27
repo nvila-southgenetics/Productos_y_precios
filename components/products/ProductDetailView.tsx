@@ -68,11 +68,13 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
   const params = useParams()
   const currentProductId = params.productId as string
   
-  const [selectedCountry, setSelectedCountry] = useState("UY")
+  const [selectedCountry, setSelectedCountry] = useState("AR")
   const [selectedChannel, setSelectedChannel] = useState("Paciente")
   const [overrides, setOverrides] = useState<ProductCountryOverride["overrides"]>({})
   const [editingField, setEditingField] = useState<string | null>(null)
   const [editValue, setEditValue] = useState("")
+  const [editingPctField, setEditingPctField] = useState<string | null>(null)
+  const [editPctValue, setEditPctValue] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const [isComparing, setIsComparing] = useState(false)
   const [selectedCountriesToCompare, setSelectedCountriesToCompare] = useState<string[]>([])
@@ -366,15 +368,25 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
 
   // Vista previa en tiempo real: mientras se edita un campo, usar ese valor para totales y %
   const displayOverrides = (() => {
-    if (!editingField) return overrides
-    const row = costRows.find((r) => r.concept === editingField)
-    if (!row) return overrides
-    const val = parseFloat(editValue) || 0
-    const gs =
-      editingField === "Gross Sales (sin IVA)"
-        ? val
-        : (overrides.grossSalesUSD || 0)
-    return row.setValue(overrides, val, gs)
+    if (editingField) {
+      const row = costRows.find((r) => r.concept === editingField)
+      if (!row) return overrides
+      const val = parseFloat(editValue) || 0
+      const gs =
+        editingField === "Gross Sales (sin IVA)"
+          ? val
+          : (overrides.grossSalesUSD || 0)
+      return row.setValue(overrides, val, gs)
+    }
+    if (editingPctField) {
+      const row = costRows.find((r) => r.concept === editingPctField)
+      if (!row) return overrides
+      const pct = parseFloat(editPctValue) || 0
+      const gs = overrides.grossSalesUSD || 0
+      const usdVal = (pct / 100) * gs
+      return row.setValue(overrides, usdVal, gs)
+    }
+    return overrides
   })()
 
   const grossSales = displayOverrides.grossSalesUSD || 0
@@ -389,8 +401,43 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
 
   const handleDoubleClick = (row: CostRow) => {
     if (!canEdit || !row.editable) return
+    setEditingPctField(null)
+    setEditPctValue("")
     setEditingField(row.concept)
     setEditValue(row.getValue(overrides).toString())
+  }
+
+  const handleDoubleClickPct = (row: CostRow) => {
+    if (!canEdit || !row.editable) return
+    if (row.concept === "Gross Sales (sin IVA)") return
+    setEditingField(null)
+    setEditValue("")
+    setEditingPctField(row.concept)
+    setEditPctValue((row.getPct(overrides, overrides.grossSalesUSD || 0)).toFixed(2))
+  }
+
+  const handleSavePctEdit = () => {
+    if (!editingPctField) return
+    const row = costRows.find((r) => r.concept === editingPctField)
+    if (!row) return
+    const pct = parseFloat(editPctValue) || 0
+    if (pct < 0) {
+      alert("No se permiten valores negativos")
+      setEditingPctField(null)
+      setEditPctValue("")
+      return
+    }
+    const gs = overrides.grossSalesUSD || 0
+    const usdVal = (pct / 100) * gs
+    const currentReviewed = overrides.reviewed || false
+    const newOverrides = {
+      ...row.setValue(overrides, usdVal, gs),
+      reviewed: currentReviewed,
+    }
+    setOverrides(newOverrides)
+    setEditingPctField(null)
+    setEditPctValue("")
+    saveOverrides(newOverrides)
   }
 
   const handleSaveEdit = () => {
@@ -1042,7 +1089,32 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
                   )}
                 </td>
                 <td className="p-4 text-right text-white/70">
-                  {formatPercentage(costRows[1].getPct(displayOverrides, grossSales) / 100)}
+                  {editingPctField === "Commercial Discount" ? (
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={editPctValue}
+                      onChange={(e) => setEditPctValue(e.target.value)}
+                      onBlur={handleSavePctEdit}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSavePctEdit()
+                        if (e.key === "Escape") {
+                          setEditingPctField(null)
+                          setEditPctValue("")
+                        }
+                      }}
+                      autoFocus
+                      className="w-24 ml-auto bg-white/10 border-white/20 text-white focus:border-white/40"
+                    />
+                  ) : (
+                    <span
+                      className="cursor-pointer hover:bg-white/10 px-2 py-1.5 rounded-md transition-all hover:text-white hover:shadow-sm"
+                      onDoubleClick={() => handleDoubleClickPct(costRows[1])}
+                    >
+                      {formatPercentage(costRows[1].getPct(displayOverrides, grossSales) / 100)}
+                    </span>
+                  )}
                 </td>
                 <td className="p-4 text-sm text-white/60">4.1.1.10</td>
               </tr>
@@ -1111,7 +1183,35 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
                       )}
                     </td>
                     <td className="p-4 text-right text-white/70">
-                      {formatPercentage(row.getPct(displayOverrides, grossSales) / 100)}
+                      {editingPctField === row.concept ? (
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={editPctValue}
+                          onChange={(e) => setEditPctValue(e.target.value)}
+                          onBlur={handleSavePctEdit}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSavePctEdit()
+                            if (e.key === "Escape") {
+                              setEditingPctField(null)
+                              setEditPctValue("")
+                            }
+                          }}
+                          autoFocus
+                          className="w-24 ml-auto bg-white/10 border-white/20 text-white focus:border-white/40"
+                        />
+                      ) : (
+                        <span
+                          className={cn(
+                            "px-2 py-1.5 rounded-md transition-all",
+                            row.editable && canEdit && "cursor-pointer hover:bg-white/10 hover:text-white hover:shadow-sm"
+                          )}
+                          onDoubleClick={() => handleDoubleClickPct(row)}
+                        >
+                          {formatPercentage(row.getPct(displayOverrides, grossSales) / 100)}
+                        </span>
+                      )}
                     </td>
                     <td className="p-4 text-sm text-white/60">{row.account}</td>
                   </tr>
@@ -1148,8 +1248,7 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
               <div className="flex items-start gap-3 p-3 rounded-lg bg-white/10 border border-white/20 backdrop-blur-sm">
                 <Info className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-300" />
                 <p className="text-white/90">
-                  Haz doble clic en cualquier valor USD para editarlo. Los valores con % se calculan
-                  automáticamente.
+                  Haz doble clic en cualquier valor USD o % para editarlo. Al editar el %, el valor USD se calcula automáticamente en base al Gross Sales.
                 </p>
               </div>
               <div className="flex items-start gap-3 p-3 rounded-lg bg-white/10 border border-white/20 backdrop-blur-sm">
