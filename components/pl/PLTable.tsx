@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
+import { ChevronDown, ChevronRight, Table2 } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -115,6 +117,8 @@ export function PLTable({ modelo, year, country, category, product, channel, can
   const [loading, setLoading] = useState(true)
   // Monthly quantities per product: productName → [jan..dec]
   const [quantities, setQuantities] = useState<Record<string, number[]>>({})
+  // Category per product name
+  const [productCategories, setProductCategories] = useState<Record<string, string>>({})
   // Overrides per product: productName → OverrideData
   const [overrides, setOverrides] = useState<Record<string, OverrideData>>({})
   // SGA data per month index (0-11)
@@ -122,6 +126,9 @@ export function PLTable({ modelo, year, country, category, product, channel, can
   // Editing state
   const [editingCell, setEditingCell] = useState<{ field: keyof SGAData; month: number } | null>(null)
   const [editValue, setEditValue] = useState<string>("")
+  // Detail panel
+  const [showDetail, setShowDetail] = useState(false)
+  const [detailMonth, setDetailMonth] = useState<number | null>(null) // null = all months
 
   // ── Data fetching ─────────────────────────────────────────────────────────
 
@@ -141,6 +148,13 @@ export function PLTable({ modelo, year, country, category, product, channel, can
   // Fetch quantities (budget or real) per product per month
   const fetchQuantities = async () => {
     const qtys: Record<string, number[]> = {}
+    const cats: Record<string, string> = {}
+
+    // Always load product categories for the detail panel
+    const { data: allProds } = await supabase.from("products").select("name, category")
+    for (const p of allProds || []) {
+      cats[p.name] = p.category || ""
+    }
 
     if (modelo === "budget") {
       let q = supabase.from("budget").select("product_name, jan,feb,mar,apr,may,jun,jul,aug,sep,oct,nov,dec").eq("year", year)
@@ -148,13 +162,19 @@ export function PLTable({ modelo, year, country, category, product, channel, can
       if (product !== "all") q = q.eq("product_name", product)
 
       const { data } = await q
-      if (!data) return
+      if (!data) {
+        setProductCategories(cats)
+        return
+      }
 
       // Filter by category if needed
       let allowedProducts: Set<string> | null = null
       if (category !== "all") {
-        const { data: prods } = await supabase.from("products").select("name").eq("category", category)
-        allowedProducts = new Set(prods?.map((p: { name: string }) => p.name) || [])
+        allowedProducts = new Set(
+          Object.entries(cats)
+            .filter(([, cat]) => cat === category)
+            .map(([name]) => name)
+        )
       }
 
       for (const row of data as Record<string, unknown>[]) {
@@ -162,7 +182,6 @@ export function PLTable({ modelo, year, country, category, product, channel, can
         if (allowedProducts && !allowedProducts.has(name)) continue
         const arr = MONTH_KEYS.map((k) => Number(row[k] || 0))
         if (qtys[name]) {
-          // Sum if same product appears in multiple countries (when country=all)
           qtys[name] = qtys[name].map((v, i) => v + arr[i])
         } else {
           qtys[name] = arr
@@ -173,6 +192,7 @@ export function PLTable({ modelo, year, country, category, product, channel, can
       const companies = COUNTRY_TO_COMPANIES[country] || []
       if (companies.length === 0) {
         setQuantities({})
+        setProductCategories(cats)
         return
       }
 
@@ -185,13 +205,19 @@ export function PLTable({ modelo, year, country, category, product, channel, can
       if (product !== "all") q = q.eq("producto", product)
 
       const { data } = await q
-      if (!data) return
+      if (!data) {
+        setProductCategories(cats)
+        return
+      }
 
       // Filter by category if needed
       let allowedProducts: Set<string> | null = null
       if (category !== "all") {
-        const { data: prods } = await supabase.from("products").select("name").eq("category", category)
-        allowedProducts = new Set(prods?.map((p: { name: string }) => p.name) || [])
+        allowedProducts = new Set(
+          Object.entries(cats)
+            .filter(([, cat]) => cat === category)
+            .map(([name]) => name)
+        )
       }
 
       for (const row of data as { producto: string; mes: number; cantidad_ventas: number }[]) {
@@ -206,6 +232,7 @@ export function PLTable({ modelo, year, country, category, product, channel, can
     }
 
     setQuantities(qtys)
+    setProductCategories(cats)
   }
 
   // Fetch cost overrides per product for the selected country + channel
@@ -484,6 +511,7 @@ export function PLTable({ modelo, year, country, category, product, channel, can
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
+    <>
     <div className="rounded-lg border border-white/20 bg-slate-800/60 backdrop-blur-sm shadow-xl overflow-hidden">
       {!hasData && modelo === "real" && (
         <div className="px-6 py-3 bg-amber-900/30 border-b border-amber-500/20">
@@ -625,17 +653,209 @@ export function PLTable({ modelo, year, country, category, product, channel, can
         </table>
       </div>
 
-      {/* Legend */}
-      <div className="flex items-center gap-6 px-4 py-2 bg-white/5 border-t border-white/10">
-        <span className="text-xs text-white/40">
-          YTD = acumulado hasta {MONTH_LABELS[NOW_MONTH]} {year}
-        </span>
-        {canEdit && (
+      {/* Footer */}
+      <div className="flex items-center justify-between px-4 py-2 bg-white/5 border-t border-white/10">
+        <div className="flex items-center gap-4">
           <span className="text-xs text-white/40">
-            · Doble clic en celdas de SG&A e Impuestos para editar
+            YTD = acumulado hasta {MONTH_LABELS[NOW_MONTH]} {year}
           </span>
-        )}
+          {canEdit && (
+            <span className="text-xs text-white/40">
+              · Doble clic en celdas de SG&A e Impuestos para editar
+            </span>
+          )}
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowDetail((v) => !v)}
+          className="text-white/60 hover:text-white hover:bg-white/10 text-xs"
+        >
+          <Table2 className="h-3.5 w-3.5 mr-1.5" />
+          {showDetail ? "Ocultar detalle" : "Ver detalle de productos"}
+          {showDetail ? (
+            <ChevronDown className="h-3.5 w-3.5 ml-1" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 ml-1" />
+          )}
+        </Button>
       </div>
     </div>
+
+    {/* ── Detail panel ─────────────────────────────────────────────────────── */}
+    {showDetail && (
+      <div className="mt-4 rounded-lg border border-white/20 bg-slate-800/60 backdrop-blur-sm shadow-xl overflow-hidden">
+        {/* Detail header */}
+        <div className="flex items-center justify-between px-4 py-3 bg-slate-700/60 border-b border-white/20">
+          <div className="flex items-center gap-3">
+            <Table2 className="h-4 w-4 text-blue-300" />
+            <span className="text-sm font-semibold text-white">
+              Detalle de productos — {modelo === "budget" ? "Budget" : "Real"} {year}
+            </span>
+            <span className="text-xs text-white/50">
+              ({Object.keys(quantities).length} producto{Object.keys(quantities).length !== 1 ? "s" : ""})
+            </span>
+          </div>
+          {/* Month filter buttons */}
+          <div className="flex items-center gap-1 flex-wrap justify-end">
+            <button
+              onClick={() => setDetailMonth(null)}
+              className={`px-2 py-0.5 text-[11px] rounded transition-colors ${
+                detailMonth === null
+                  ? "bg-blue-500 text-white"
+                  : "text-white/50 hover:text-white hover:bg-white/10"
+              }`}
+            >
+              Todos
+            </button>
+            {SHORT_LABELS.map((lbl, i) => (
+              <button
+                key={i}
+                onClick={() => setDetailMonth(detailMonth === i ? null : i)}
+                className={`px-2 py-0.5 text-[11px] rounded transition-colors ${
+                  detailMonth === i
+                    ? "bg-blue-500 text-white"
+                    : "text-white/50 hover:text-white hover:bg-white/10"
+                }`}
+              >
+                {lbl}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {Object.keys(quantities).length === 0 ? (
+          <div className="text-center py-8 text-white/40 text-sm">
+            No hay datos para los filtros seleccionados
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="bg-slate-700/50 border-b border-white/20">
+                  <th className="sticky left-0 bg-slate-700/95 px-3 py-2.5 text-left text-xs font-semibold text-white/70 min-w-[200px] z-20">
+                    Producto
+                  </th>
+                  <th className="px-2 py-2.5 text-left text-xs font-semibold text-white/50 min-w-[110px]">
+                    Categoría
+                  </th>
+                  {detailMonth !== null ? (
+                    <th className="px-2 py-2.5 text-right text-xs font-semibold text-white min-w-[80px]">
+                      {MONTH_LABELS[detailMonth]}
+                    </th>
+                  ) : (
+                    <>
+                      {SHORT_LABELS.map((m, i) => (
+                        <th
+                          key={i}
+                          className={`px-2 py-2.5 text-right text-xs font-semibold min-w-[52px] ${
+                            i <= NOW_MONTH ? "text-white" : "text-white/40"
+                          }`}
+                        >
+                          {m}
+                        </th>
+                      ))}
+                      <th className="px-2 py-2.5 text-right text-xs font-semibold text-blue-300 min-w-[60px] border-l border-white/20">
+                        TOTAL
+                      </th>
+                    </>
+                  )}
+                  {detailMonth === null && (
+                    <th className="px-2 py-2.5 text-right text-xs font-semibold text-blue-300 min-w-[72px]">
+                      Gross Sale
+                    </th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {Object.entries(quantities)
+                  .sort(([a], [b]) => a.localeCompare(b, "es", { sensitivity: "base" }))
+                  .map(([name, qtArr]) => {
+                    const cat = productCategories[name] || ""
+                    const rowTotal = qtArr.reduce((s, v) => s + v, 0)
+                    const ov = overrides[name]
+                    const gsPerUnit = ov?.grossSalesUSD || 0
+                    const totalGS = rowTotal * gsPerUnit
+
+                    return (
+                      <tr key={name} className="hover:bg-white/5 transition-colors">
+                        <td className="sticky left-0 bg-slate-800/95 px-3 py-2 text-xs text-white/90 whitespace-nowrap z-10">
+                          {name}
+                        </td>
+                        <td className="px-2 py-2 text-xs text-white/50 whitespace-nowrap">
+                          {cat}
+                        </td>
+                        {detailMonth !== null ? (
+                          <td className="px-2 py-2 text-right text-xs font-semibold text-white tabular-nums">
+                            {qtArr[detailMonth] || 0}
+                          </td>
+                        ) : (
+                          <>
+                            {qtArr.map((v, i) => (
+                              <td
+                                key={i}
+                                className={`px-2 py-2 text-right text-xs tabular-nums ${
+                                  v > 0 ? "text-white/80 font-medium" : "text-white/25"
+                                }`}
+                              >
+                                {v > 0 ? v : "-"}
+                              </td>
+                            ))}
+                            <td className="px-2 py-2 text-right text-xs font-bold text-white tabular-nums border-l border-white/10">
+                              {rowTotal}
+                            </td>
+                          </>
+                        )}
+                        {detailMonth === null && (
+                          <td className="px-2 py-2 text-right text-xs text-blue-300 tabular-nums font-medium">
+                            {totalGS > 0 ? `$${totalGS.toLocaleString("es-AR", { maximumFractionDigits: 0 })}` : "-"}
+                          </td>
+                        )}
+                      </tr>
+                    )
+                  })}
+              </tbody>
+              {/* Totals row */}
+              <tfoot>
+                <tr className="bg-slate-700/60 border-t border-white/20">
+                  <td className="sticky left-0 bg-slate-700/95 px-3 py-2 text-xs font-bold text-white z-10">
+                    TOTAL
+                  </td>
+                  <td className="px-2 py-2 text-xs text-white/40">
+                    {Object.keys(quantities).length} productos
+                  </td>
+                  {detailMonth !== null ? (
+                    <td className="px-2 py-2 text-right text-xs font-bold text-white tabular-nums">
+                      {Object.values(quantities).reduce((s, arr) => s + (arr[detailMonth] || 0), 0)}
+                    </td>
+                  ) : (
+                    <>
+                      {Array.from({ length: 12 }, (_, i) => (
+                        <td key={i} className="px-2 py-2 text-right text-xs font-bold text-white tabular-nums">
+                          {Object.values(quantities).reduce((s, arr) => s + (arr[i] || 0), 0) || "-"}
+                        </td>
+                      ))}
+                      <td className="px-2 py-2 text-right text-xs font-bold text-white tabular-nums border-l border-white/10">
+                        {Object.values(quantities).reduce((s, arr) => s + arr.reduce((a, b) => a + b, 0), 0)}
+                      </td>
+                    </>
+                  )}
+                  {detailMonth === null && (
+                    <td className="px-2 py-2 text-right text-xs font-bold text-blue-300 tabular-nums">
+                      ${Object.entries(quantities).reduce((s, [name, arr]) => {
+                        const ov = overrides[name]
+                        const gs = ov?.grossSalesUSD || 0
+                        return s + arr.reduce((a, b) => a + b, 0) * gs
+                      }, 0).toLocaleString("es-AR", { maximumFractionDigits: 0 })}
+                    </td>
+                  )}
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+    )}
+  </>
   )
 }
