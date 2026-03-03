@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { ArrowUp, ArrowDown, Minus, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getCountryForCompany } from '@/lib/auth-constants';
 
 interface BudgetMonthItem {
   label: string;
@@ -61,35 +62,13 @@ const COUNTRIES = [
   { value: 'KY', label: 'Cayman Islands' },
 ];
 
-// Mapeo de compañías a códigos de país
-const companyToCountry: Record<string, string> = {
-  'SouthGenetics LLC': 'UY',
-  'SouthGenetics LLC Uruguay': 'UY',
-  'SouthGenetics LLC Argentina': 'AR',
-  'SouthGenetics LLC Arge': 'AR',
-  'SouthGenetics LLC Chile': 'CL',
-  'Southgenetics LLC Chile': 'CL',
-  'SouthGenetics LLC Colombia': 'CO',
-  'SouthGenetics LLC México': 'MX',
-  'SouthGenetics LLC Venezuela': 'VE',
-};
-
-// Mapeo inverso: código de país a nombres de compañías
-const countryToCompanies = (countryCode: string): string[] => {
-  const mapping: Record<string, string[]> = {
-    'CL': ['SouthGenetics LLC Chile', 'Southgenetics LLC Chile'],
-    'UY': ['SouthGenetics LLC', 'SouthGenetics LLC Uruguay'],
-    'AR': ['SouthGenetics LLC Argentina', 'SouthGenetics LLC Arge'],
-    'MX': ['SouthGenetics LLC México'],
-    'CO': ['SouthGenetics LLC Colombia'],
-    'VE': ['SouthGenetics LLC Venezuela'],
-  };
-  return mapping[countryCode] || [];
-};
-
-// Extraer código de país de nombre de compañía (versión mejorada)
+// Extraer código de país de nombre de compañía usando el mismo mapeo que Real Import
 const extractCountryCode = (companyName: string): string => {
   if (!companyName) return 'XX';
+
+  // 1) Intentar mapeo exacto usando la misma tabla que usa Real Import
+  const direct = getCountryForCompany(companyName);
+  if (direct) return direct;
   
   const upperName = companyName.toUpperCase();
   
@@ -122,13 +101,6 @@ const extractCountryCode = (companyName: string): string => {
   // Buscar coincidencia
   for (const [key, code] of Object.entries(countryMappings)) {
     if (upperName.includes(key)) {
-      return code;
-    }
-  }
-
-  // Fallback al mapeo original
-  for (const [company, code] of Object.entries(companyToCountry)) {
-    if (upperName.includes(company.toUpperCase())) {
       return code;
     }
   }

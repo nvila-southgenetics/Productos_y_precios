@@ -21,6 +21,12 @@ const COMPANY_TO_COUNTRY_MAP: Record<string, string> = {
   "SouthGenetics LLC Venezuela": "VE",
 }
 
+/** Devuelve el código de país (ej: "AR") para una compañía de ventas concreta. */
+export function getCountryForCompany(company: string | null | undefined): string | undefined {
+  if (!company) return undefined
+  return COMPANY_TO_COUNTRY_MAP[company.trim()]
+}
+
 export function filterCompaniesByCountries(
   companies: string[],
   allowedCountries: string[]

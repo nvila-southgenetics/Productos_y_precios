@@ -36,6 +36,7 @@ export function Header() {
     { href: "/pl-import", label: "Real Import" },
     { href: "/budget", label: "Budget" },
     { href: "/comparacion", label: "Comparación" },
+    { href: "/pl", label: "P&L" },
     ...(isAdmin ? [{ href: "/admin", label: "Admin" }] : []),
   ]
 

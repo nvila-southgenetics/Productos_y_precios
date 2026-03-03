@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { TrendingUp, TrendingDown, Equal } from 'lucide-react';
+import { getCountryForCompany } from '@/lib/auth-constants';
 
 interface ComparisonSummaryProps {
   month: string;
@@ -25,22 +26,13 @@ const MONTH_KEYS = [
   'jul', 'aug', 'sep', 'oct', 'nov', 'dec'
 ];
 
-// Mapeo de compañías a códigos de país
-const companyToCountry: Record<string, string> = {
-  'SouthGenetics LLC': 'UY',
-  'SouthGenetics LLC Uruguay': 'UY',
-  'SouthGenetics LLC Argentina': 'AR',
-  'SouthGenetics LLC Arge': 'AR',
-  'SouthGenetics LLC Chile': 'CL',
-  'Southgenetics LLC Chile': 'CL',
-  'SouthGenetics LLC Colombia': 'CO',
-  'SouthGenetics LLC México': 'MX',
-  'SouthGenetics LLC Venezuela': 'VE',
-};
-
-// Extraer código de país de nombre de compañía (versión mejorada)
+// Extraer código de país de nombre de compañía usando el mismo mapeo que Real Import
 const extractCountryCodeFromCompany = (companyName: string): string => {
   if (!companyName) return 'XX';
+
+  // 1) Intentar mapeo exacto usando la misma tabla que usa Real Import
+  const direct = getCountryForCompany(companyName);
+  if (direct) return direct;
   
   const upperName = companyName.toUpperCase();
   
@@ -73,13 +65,6 @@ const extractCountryCodeFromCompany = (companyName: string): string => {
   // Buscar coincidencia
   for (const [key, code] of Object.entries(countryMappings)) {
     if (upperName.includes(key)) {
-      return code;
-    }
-  }
-
-  // Fallback al mapeo original
-  for (const [company, code] of Object.entries(companyToCountry)) {
-    if (upperName.includes(company.toUpperCase())) {
       return code;
     }
   }
@@ -119,19 +104,6 @@ const productNamesMatch = (name1: string, name2: string): boolean => {
   }
   
   return false;
-};
-
-// Mapeo inverso: código de país a nombres de compañías
-const countryToCompanies = (countryCode: string): string[] => {
-  const mapping: Record<string, string[]> = {
-    'CL': ['SouthGenetics LLC Chile', 'Southgenetics LLC Chile'],
-    'UY': ['SouthGenetics LLC', 'SouthGenetics LLC Uruguay'],
-    'AR': ['SouthGenetics LLC Argentina', 'SouthGenetics LLC Arge'],
-    'MX': ['SouthGenetics LLC México'],
-    'CO': ['SouthGenetics LLC Colombia'],
-    'VE': ['SouthGenetics LLC Venezuela'],
-  };
-  return mapping[countryCode] || [];
 };
 
 export function ComparisonSummary({ month, countries, product }: ComparisonSummaryProps) {
