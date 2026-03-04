@@ -21,6 +21,7 @@ import {
   getBottomMarginProducts,
   getMostExpensiveProducts,
   getMonthlySalesEvolution,
+  CHANNELS,
   type DashboardProduct,
   type MonthlyEvolutionPoint,
 } from "@/lib/supabase-mcp"
@@ -41,6 +42,7 @@ export default function DashboardPage() {
   const [selectedProduct, setSelectedProduct] = useState("Todos")
   const [selectedYear, setSelectedYear] = useState("Todos")
   const [selectedMonth, setSelectedMonth] = useState("Todos")
+  const [selectedChannel, setSelectedChannel] = useState<string>("Todos los canales")
   const [availableYears, setAvailableYears] = useState<string[]>([])
   const [topSelling, setTopSelling] = useState<DashboardProduct[]>([])
   const [topMargin, setTopMargin] = useState<DashboardProduct[]>([])
@@ -100,6 +102,9 @@ export default function DashboardPage() {
       if (!selectedCompany) return
       setIsLoading(true)
       try {
+        const channelParam =
+          selectedChannel && selectedChannel !== "Todos los canales" ? selectedChannel : undefined
+
         const [selling, topMarginData, bottomMarginData, expensive] =
           await Promise.all([
             getTopSellingProducts(
@@ -107,6 +112,7 @@ export default function DashboardPage() {
               selectedYear !== "Todos" ? selectedYear : undefined,
               selectedMonth !== "Todos" ? selectedMonth : undefined,
               selectedProduct !== "Todos" ? selectedProduct : undefined,
+              channelParam,
               10
             ),
             getTopMarginProducts(
@@ -114,6 +120,7 @@ export default function DashboardPage() {
               selectedYear !== "Todos" ? selectedYear : undefined,
               selectedMonth !== "Todos" ? selectedMonth : undefined,
               selectedProduct !== "Todos" ? selectedProduct : undefined,
+              channelParam,
               10
             ),
             getBottomMarginProducts(
@@ -121,6 +128,7 @@ export default function DashboardPage() {
               selectedYear !== "Todos" ? selectedYear : undefined,
               selectedMonth !== "Todos" ? selectedMonth : undefined,
               selectedProduct !== "Todos" ? selectedProduct : undefined,
+              channelParam,
               10
             ),
             getMostExpensiveProducts(
@@ -128,6 +136,7 @@ export default function DashboardPage() {
               selectedYear !== "Todos" ? selectedYear : undefined,
               selectedMonth !== "Todos" ? selectedMonth : undefined,
               selectedProduct !== "Todos" ? selectedProduct : undefined,
+              channelParam,
               10
             ),
           ])
@@ -142,7 +151,7 @@ export default function DashboardPage() {
       }
     }
     loadDashboardData()
-  }, [selectedCompany, selectedYear, selectedMonth, selectedProduct])
+  }, [selectedCompany, selectedYear, selectedMonth, selectedProduct, selectedChannel])
 
   // Cargar evolución mensual 2025 vs 2026 (usa el filtro de producto de la gráfica)
   useEffect(() => {
@@ -230,10 +239,12 @@ export default function DashboardPage() {
             selectedProduct={selectedProduct}
             selectedYear={selectedYear}
             selectedMonth={selectedMonth}
+            selectedChannel={selectedChannel}
             onCompanyChange={setSelectedCompany}
             onProductChange={setSelectedProduct}
             onYearChange={setSelectedYear}
             onMonthChange={setSelectedMonth}
+            onChannelChange={setSelectedChannel}
             showAllCompanies={isAdmin}
           />
         </motion.div>

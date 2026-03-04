@@ -3,7 +3,6 @@
 import { Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
-import { Button } from "@/components/ui/button"
 
 interface ProductFiltersProps {
   searchQuery: string
@@ -14,6 +13,12 @@ interface ProductFiltersProps {
   onTipoChange: (tipo: string) => void
   categories: string[]
   tipos: string[]
+  /** Filtro de revisados: all | reviewed | not_reviewed */
+  reviewFilter: string
+  onReviewFilterChange: (value: string) => void
+  /** Ordenamiento: name | sales_desc */
+  sortBy: string
+  onSortByChange: (value: string) => void
 }
 
 export function ProductFilters({
@@ -25,6 +30,10 @@ export function ProductFilters({
   onTipoChange,
   categories,
   tipos,
+  reviewFilter,
+  onReviewFilterChange,
+  sortBy,
+  onSortByChange,
 }: ProductFiltersProps) {
   return (
     <div className="flex flex-wrap gap-4 items-center">
@@ -61,9 +70,23 @@ export function ProductFilters({
           </option>
         ))}
       </Select>
-      <Button variant="outline" className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:border-white/30">
-        Ordenar
-      </Button>
+      <Select
+        value={reviewFilter}
+        onChange={(e) => onReviewFilterChange(e.target.value)}
+        className="w-[190px] bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-white/30"
+      >
+        <option value="all" className="bg-blue-900 text-white">Todos (revisados y no)</option>
+        <option value="reviewed" className="bg-blue-900 text-white">Solo revisados</option>
+        <option value="not_reviewed" className="bg-blue-900 text-white">Solo no revisados</option>
+      </Select>
+      <Select
+        value={sortBy}
+        onChange={(e) => onSortByChange(e.target.value)}
+        className="w-[190px] bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-white/30"
+      >
+        <option value="name" className="bg-blue-900 text-white">Ordenar por nombre (A-Z)</option>
+        <option value="sales_desc" className="bg-blue-900 text-white">Ordenar por ventas totales</option>
+      </Select>
     </div>
   )
 }

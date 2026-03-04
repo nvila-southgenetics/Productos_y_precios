@@ -19,10 +19,13 @@ function ProductosContent() {
   const { allowedCountries, canEdit } = usePermissions()
   const [products, setProducts] = useState<ProductWithOverrides[]>([])
   const [filteredProducts, setFilteredProducts] = useState<ProductWithOverrides[]>([])
-  const [selectedCountry, setSelectedCountry] = useState("UY")
+  // País por defecto: Argentina
+  const [selectedCountry, setSelectedCountry] = useState("AR")
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("")
   const [selectedTipo, setSelectedTipo] = useState("")
+  const [reviewFilter, setReviewFilter] = useState<"all" | "reviewed" | "not_reviewed">("all")
+  const [sortBy, setSortBy] = useState<"name" | "sales_desc">("name")
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [salesCountByProductId, setSalesCountByProductId] = useState<Record<string, number>>({})
@@ -33,32 +36,50 @@ function ProductosContent() {
     const q = searchParams.get("q")
     const category = searchParams.get("category")
     const tipo = searchParams.get("tipo")
+    const review = searchParams.get("review")
+    const sort = searchParams.get("sort")
     if (country && VALID_COUNTRIES.has(country)) setSelectedCountry(country)
     if (q !== null) setSearchQuery(q)
     if (category !== null) setSelectedCategory(category)
     if (tipo !== null) setSelectedTipo(tipo)
+    if (review === "reviewed" || review === "not_reviewed" || review === "all") {
+      setReviewFilter(review)
+    }
+    if (sort === "sales_desc" || sort === "name") {
+      setSortBy(sort)
+    }
   }, [searchParams])
 
   // Ajustar país seleccionado a los permitidos cuando carguen los permisos
   useEffect(() => {
     if (!allowedCountries.length) return
-    setSelectedCountry((prev) => (allowedCountries.includes(prev) ? prev : allowedCountries[0]))
+    setSelectedCountry((prev) => {
+      // Si ya hay un país seleccionado y está permitido, respetarlo
+      if (allowedCountries.includes(prev)) return prev
+      // Si el usuario tiene Argentina entre sus países, usarla como default
+      if (allowedCountries.includes("AR")) return "AR"
+      // Si no, usar el primero permitido
+      return allowedCountries[0]
+    })
   }, [allowedCountries])
 
   // Mantener la URL en sync con los filtros para que al volver atrás se conserven
   useEffect(() => {
     const params = new URLSearchParams()
-    if (selectedCountry && selectedCountry !== "UY") params.set("country", selectedCountry)
+    // No añadimos el país a la URL cuando es el default (AR) para mantener URLs limpias
+    if (selectedCountry && selectedCountry !== "AR") params.set("country", selectedCountry)
     if (searchQuery) params.set("q", searchQuery)
     if (selectedCategory) params.set("category", selectedCategory)
     if (selectedTipo) params.set("tipo", selectedTipo)
+    if (reviewFilter !== "all") params.set("review", reviewFilter)
+    if (sortBy !== "name") params.set("sort", sortBy)
     const query = params.toString()
     const url = query ? `/productos?${query}` : "/productos"
     const current = typeof window !== "undefined" ? window.location.pathname + (window.location.search || "") : ""
     if (current !== url) {
       router.replace(url, { scroll: false })
     }
-  }, [selectedCountry, searchQuery, selectedCategory, selectedTipo, router])
+  }, [selectedCountry, searchQuery, selectedCategory, selectedTipo, reviewFilter, sortBy, router])
 
   // Obtener categorías y tipos únicos
   const categories = useMemo(() => {
@@ -129,11 +150,31 @@ function ProductosContent() {
       filtered = filtered.filter((p) => p.tipo === selectedTipo)
     }
 
-    // Ordenar productos alfabéticamente por nombre
-    filtered.sort((a, b) => productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), 'es', { sensitivity: 'base' }))
+    // Filtro por revisado
+    if (reviewFilter !== "all") {
+      filtered = filtered.filter((p) => {
+        const override = p.country_overrides?.find((o) => o.country_code === selectedCountry)
+        const reviewed = override?.overrides?.reviewed || false
+        return reviewFilter === "reviewed" ? reviewed : !reviewed
+      })
+    }
+
+    // Ordenamiento
+    if (sortBy === "sales_desc") {
+      filtered.sort((a, b) => {
+        const sa = salesCountByProductId[a.id] ?? 0
+        const sb = salesCountByProductId[b.id] ?? 0
+        if (sb !== sa) return sb - sa
+        return productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), "es", { sensitivity: "base" })
+      })
+    } else {
+      filtered.sort((a, b) =>
+        productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), "es", { sensitivity: "base" })
+      )
+    }
 
     setFilteredProducts(filtered)
-  }, [products, searchQuery, selectedCategory, selectedTipo])
+  }, [products, searchQuery, selectedCategory, selectedTipo, reviewFilter, sortBy, selectedCountry, salesCountByProductId])
 
   const handleViewProduct = (product: ProductWithOverrides) => {
     // La navegación se maneja en ProductTable
@@ -212,6 +253,10 @@ function ProductosContent() {
             onTipoChange={setSelectedTipo}
             categories={categories}
             tipos={tipos}
+            reviewFilter={reviewFilter}
+            onReviewFilterChange={(v) => setReviewFilter(v as "all" | "reviewed" | "not_reviewed")}
+            sortBy={sortBy}
+            onSortByChange={(v) => setSortBy(v as "name" | "sales_desc")}
           />
         </div>
 

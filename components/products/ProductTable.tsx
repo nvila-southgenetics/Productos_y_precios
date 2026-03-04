@@ -7,7 +7,7 @@ import { Eye, Edit, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { formatDate } from "@/lib/utils"
+import { formatDate, displayProductName } from "@/lib/utils"
 import type { ProductWithOverrides } from "@/lib/supabase-mcp"
 import { updateProductCountryOverride } from "@/lib/supabase-mcp"
 import { DeleteProductDialog } from "@/components/products/DeleteProductDialog"
@@ -76,17 +76,18 @@ export function ProductTable({
   }, [products, selectedCountry])
 
   const handleProductClick = (product: ProductWithOverrides) => {
-    router.push(`/productos/${product.id}`)
+    // Pasar el país actual como query param para que el detalle se abra en ese país
+    router.push(`/productos/${product.id}?country=${selectedCountry}`)
   }
 
   const handleViewClick = (e: React.MouseEvent, product: ProductWithOverrides) => {
     e.stopPropagation()
-    router.push(`/productos/${product.id}`)
+    router.push(`/productos/${product.id}?country=${selectedCountry}`)
   }
 
   const handleEditClick = (e: React.MouseEvent, product: ProductWithOverrides) => {
     e.stopPropagation()
-    router.push(`/productos/${product.id}`)
+    router.push(`/productos/${product.id}?country=${selectedCountry}`)
   }
 
   const handleDeleteClick = (e: React.MouseEvent, product: ProductWithOverrides) => {
@@ -222,7 +223,9 @@ export function ProductTable({
                   )}
                   <td className="p-4">
                   <div className="flex flex-col gap-2">
-                    <div className="font-semibold text-white hover:text-blue-300 transition-colors">{product.name}</div>
+                    <div className="font-semibold text-white hover:text-blue-300 transition-colors">
+                      {displayProductName(product.name)}
+                    </div>
                     <div className="flex gap-2 flex-wrap">
                       {product.category && (
                         <Badge

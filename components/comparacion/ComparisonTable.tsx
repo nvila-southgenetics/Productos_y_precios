@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { ArrowUp, ArrowDown, Minus, ChevronDown } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, displayProductName } from '@/lib/utils';
 import { getCountryForCompany } from '@/lib/auth-constants';
 
 interface BudgetMonthItem {
@@ -598,10 +598,10 @@ export function ComparisonTable({ month, countries, product }: ComparisonTablePr
                       href={`/productos/${row.product_id}`}
                       className="text-blue-300 hover:text-blue-200 hover:underline text-sm font-medium"
                     >
-                      {row.product_name}
+                      {displayProductName(row.product_name)}
                     </Link>
                   ) : (
-                    <span className="text-white/70 text-sm">{row.product_name}</span>
+                    <span className="text-white/70 text-sm">{displayProductName(row.product_name)}</span>
                   )}
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-sm text-blue-300">

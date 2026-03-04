@@ -10,10 +10,12 @@ interface DashboardFiltersProps {
   selectedProduct: string
   selectedYear: string
   selectedMonth: string
+  selectedChannel: string
   onCompanyChange: (company: string) => void
   onProductChange: (product: string) => void
   onYearChange: (year: string) => void
   onMonthChange: (month: string) => void
+  onChannelChange: (channel: string) => void
   showAllCompanies?: boolean
 }
 
@@ -25,14 +27,16 @@ export function DashboardFilters({
   selectedProduct,
   selectedYear,
   selectedMonth,
+  selectedChannel,
   onCompanyChange,
   onProductChange,
   onYearChange,
   onMonthChange,
+  onChannelChange,
   showAllCompanies = true,
 }: DashboardFiltersProps) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
       <div className="flex flex-col gap-2">
         <label className="text-sm font-medium text-white/90">Compañía</label>
         <select
@@ -98,6 +102,34 @@ export function DashboardFilters({
           <option value="10" className="bg-blue-900 text-white">Octubre</option>
           <option value="11" className="bg-blue-900 text-white">Noviembre</option>
           <option value="12" className="bg-blue-900 text-white">Diciembre</option>
+        </select>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label className="text-sm font-medium text-white/90">Canal</label>
+        <select
+          value={selectedChannel}
+          onChange={(e) => onChannelChange(e.target.value)}
+          className="w-full h-10 rounded-md border border-white/20 bg-white/10 backdrop-blur-sm px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/30 focus:ring-offset-2 focus:ring-offset-transparent disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <option value="Todos los canales" className="bg-blue-900 text-white">
+            Todos los canales
+          </option>
+          <option value="Paciente" className="bg-blue-900 text-white">
+            Paciente
+          </option>
+          <option value="Gobierno" className="bg-blue-900 text-white">
+            Gobierno
+          </option>
+          <option value="Instituciones SFL" className="bg-blue-900 text-white">
+            Instituciones SFL
+          </option>
+          <option value="Aseguradoras" className="bg-blue-900 text-white">
+            Aseguradoras
+          </option>
+          <option value="Distribuidores" className="bg-blue-900 text-white">
+            Distribuidores
+          </option>
         </select>
       </div>
     </div>

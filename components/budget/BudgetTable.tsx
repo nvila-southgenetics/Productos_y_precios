@@ -5,7 +5,7 @@ import Link from "next/link"
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
-import { formatCurrency, productNameSortKey } from "@/lib/utils"
+import { formatCurrency, productNameSortKey, displayProductName } from "@/lib/utils"
 
 interface BudgetRow {
   id: string
@@ -354,10 +354,10 @@ export function BudgetTable({ year, country, product, month, allowedCountryCodes
                         href={`/productos/${row.product_id}`}
                         className="text-blue-300 hover:text-blue-200 hover:underline text-sm font-medium"
                       >
-                        {row.product_name}
+                        {displayProductName(row.product_name)}
                       </Link>
                     ) : (
-                      <span className="text-white/70 text-sm">{row.product_name}</span>
+                      <span className="text-white/70 text-sm">{displayProductName(row.product_name)}</span>
                     )}
                   </td>
                   <td className="px-3 py-2 text-right font-medium text-sm text-white">

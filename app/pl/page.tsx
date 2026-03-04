@@ -6,15 +6,16 @@ import { supabase } from "@/lib/supabase"
 import { Select } from "@/components/ui/select"
 import { productNameSortKey } from "@/lib/utils"
 import { PLTable } from "@/components/pl/PLTable"
+import { ProductSearchFilter } from "@/components/dashboard/ProductSearchFilter"
 
-const COUNTRIES = [
+const BASE_COUNTRIES = [
   { code: "AR", name: "Argentina" },
   { code: "CL", name: "Chile" },
   { code: "CO", name: "Colombia" },
   { code: "MX", name: "México" },
   { code: "UY", name: "Uruguay" },
   { code: "VE", name: "Venezuela" },
-]
+] as const
 
 const CHANNELS = ["Gobierno", "Instituciones SFL", "Paciente", "Aseguradoras", "Distribuidores"]
 
@@ -39,6 +40,7 @@ export default function PLPage() {
   const [product, setProduct] = useState<string>("all")
   const [channel, setChannel] = useState<string>("all")
   const [products, setProducts] = useState<string[]>([])
+  const [ytdMonth, setYtdMonth] = useState<number>(new Date().getMonth() + 1)
   const year = 2026
 
   useEffect(() => {
@@ -92,9 +94,18 @@ export default function PLPage() {
     }
   }
 
-  const availableCountries = isAdmin
-    ? COUNTRIES
-    : COUNTRIES.filter((c) => allowedCountries.includes(c.code))
+  // Países disponibles, incluyendo opción de \"Todos\"
+  let availableCountries: { code: string; name: string }[]
+  if (isAdmin) {
+    availableCountries = [{ code: "all", name: "Todos los países" }, ...BASE_COUNTRIES]
+  } else if (allowedCountries.length > 1) {
+    availableCountries = [
+      { code: "all", name: "Todos (mis países)" },
+      ...BASE_COUNTRIES.filter((c) => allowedCountries.includes(c.code)),
+    ]
+  } else {
+    availableCountries = BASE_COUNTRIES.filter((c) => allowedCountries.includes(c.code))
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-r from-blue-900 via-blue-950 to-slate-900">
@@ -108,7 +119,7 @@ export default function PLPage() {
 
         {/* Filters */}
         <div className="mb-6 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4 shadow-sm">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
             {/* Modelo */}
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-white/90">Modelo</label>
@@ -163,21 +174,13 @@ export default function PLPage() {
 
             {/* Producto */}
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-white/90">Producto</label>
-              <Select
-                value={product}
-                onChange={(e) => setProduct(e.target.value)}
-                className={selectClass}
-              >
-                <option value="all" className="bg-blue-900 text-white">
-                  Todos los productos
-                </option>
-                {products.map((p) => (
-                  <option key={p} value={p} className="bg-blue-900 text-white">
-                    {p}
-                  </option>
-                ))}
-              </Select>
+              <ProductSearchFilter
+                products={products}
+                selectedProduct={product === "all" ? "all" : product}
+                onProductChange={(value) => setProduct(value)}
+                allValue="all"
+                allLabel="Todos los productos"
+              />
             </div>
 
             {/* Canal */}
@@ -198,6 +201,22 @@ export default function PLPage() {
                 ))}
               </Select>
             </div>
+
+            {/* Hasta mes (YTD) */}
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-white/90">Hasta mes (YTD)</label>
+              <Select
+                value={ytdMonth.toString()}
+                onChange={(e) => setYtdMonth(parseInt(e.target.value) || 12)}
+                className={selectClass}
+              >
+                {Array.from({ length: 12 }, (_, i) => (
+                  <option key={i + 1} value={i + 1} className="bg-blue-900 text-white">
+                    {new Date(2000, i, 1).toLocaleDateString("es-UY", { month: "long" }).replace(/^\w/, (c) => c.toUpperCase())}
+                  </option>
+                ))}
+              </Select>
+            </div>
           </div>
         </div>
 
@@ -210,6 +229,7 @@ export default function PLPage() {
           product={product}
           channel={channel}
           canEdit={canEdit}
+          ytdMonth={ytdMonth}
         />
       </div>
     </div>

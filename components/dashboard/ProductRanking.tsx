@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
-import { cn } from "@/lib/utils"
+import { cn, displayProductName } from "@/lib/utils"
 import { motion } from "framer-motion"
 import type { DashboardProduct } from "@/lib/supabase-mcp"
 
@@ -76,7 +76,7 @@ export function ProductRanking({
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-medium text-sm text-white group-hover:text-blue-200 transition-colors truncate">
-                {product.producto}
+                {displayProductName(product.producto)}
               </p>
               {product.category && (
                 <Badge

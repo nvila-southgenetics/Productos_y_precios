@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
-import { formatCurrency, formatPercentage, cn, productNameSortKey } from "@/lib/utils"
+import { formatCurrency, formatPercentage, cn, productNameSortKey, displayProductName } from "@/lib/utils"
 import type { ProductWithOverrides, ProductCountryOverride } from "@/lib/supabase-mcp"
 import { updateProductCountryOverride, getProductsWithOverrides, CHANNELS } from "@/lib/supabase-mcp"
 import { Info, AlertTriangle, GitCompare, ChevronDown, Search } from "lucide-react"
@@ -68,6 +68,7 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
   const params = useParams()
   const currentProductId = params.productId as string
   
+  // País por defecto para cálculo de costos: Argentina (o el que venga por query)
   const [selectedCountry, setSelectedCountry] = useState("AR")
   const [selectedChannel, setSelectedChannel] = useState("Paciente")
   const [overrides, setOverrides] = useState<ProductCountryOverride["overrides"]>({})
@@ -90,6 +91,29 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
   const displayCountries = allowedCountries?.length
     ? countries.filter((c) => allowedCountries.includes(c.code))
     : countries
+
+  // Inicializar país seleccionado según query param o defaults
+  const initializedCountryRef = useRef(false)
+  useEffect(() => {
+    if (initializedCountryRef.current) return
+    if (!displayCountries.length) return
+
+    let initial = "AR"
+    // Si hay query ?country=XX y está permitido, usarlo
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search)
+      const c = urlParams.get("country")
+      if (c && displayCountries.some((d) => d.code === c)) {
+        initial = c
+      }
+    }
+    // Si AR no está permitido, usar el primer país disponible
+    if (!displayCountries.some((d) => d.code === initial)) {
+      initial = displayCountries[0].code
+    }
+    setSelectedCountry(initial)
+    initializedCountryRef.current = true
+  }, [displayCountries])
 
   // Restaurar países seleccionados desde query params
   useEffect(() => {
@@ -851,7 +875,7 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
                     disabled={isLoadingProducts}
                   >
                     <span className="truncate">
-                      {product.name || (isLoadingProducts ? "Cargando..." : "Seleccionar producto")}
+                      {displayProductName(product.name) || (isLoadingProducts ? "Cargando..." : "Seleccionar producto")}
                     </span>
                     <ChevronDown className={cn("h-4 w-4 opacity-70 transition-transform", productSearchOpen && "rotate-180")} />
                   </button>
@@ -1275,7 +1299,7 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
           </div>
           <div>
             <label className="text-xs font-semibold text-white/70 uppercase tracking-wide">Nombre</label>
-            <p className="font-semibold mt-2 text-white">{product.name}</p>
+            <p className="font-semibold mt-2 text-white">{displayProductName(product.name)}</p>
           </div>
           <div>
             <label className="text-xs font-semibold text-white/70 uppercase tracking-wide">SKU</label>

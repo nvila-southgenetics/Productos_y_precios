@@ -808,7 +808,8 @@ async function getProductsWithMetrics(
   company: string,
   year?: string,
   month?: string,
-  productName?: string
+  productName?: string,
+  channel?: string
 ): Promise<DashboardProduct[]> {
   const normalizedCompany = company.trim()
   const isAllCompanies = normalizedCompany === "Todas las compañías"
@@ -888,9 +889,14 @@ async function getProductsWithMetrics(
       ? null 
       : (companyToCountry[company] || 'UY')
     
+    const matchesChannel = (o: ProductCountryOverride) => {
+      if (!channel || channel === 'Todos los canales') return true
+      return (o.channel || 'Paciente') === channel
+    }
+
     const productOverride = isAllCompanies
-      ? overrides?.find((o: ProductCountryOverride) => o.product_id === productInfo?.id)
-      : overrides?.find((o: ProductCountryOverride) => o.product_id === productInfo?.id && o.country_code === countryCode)
+      ? overrides?.find((o: ProductCountryOverride) => o.product_id === productInfo?.id && matchesChannel(o))
+      : overrides?.find((o: ProductCountryOverride) => o.product_id === productInfo?.id && o.country_code === countryCode && matchesChannel(o))
     
     const overrideData = productOverride?.overrides || {}
     const grossSalesUSD = overrideData.grossSalesUSD || 0
@@ -948,9 +954,10 @@ export async function getTopSellingProducts(
   year?: string,
   month?: string,
   productName?: string,
+  channel?: string,
   limit: number = 10
 ): Promise<DashboardProduct[]> {
-  const products = await getProductsWithMetrics(company, year, month, productName)
+  const products = await getProductsWithMetrics(company, year, month, productName, channel)
   
   // Ordenar por cantidad de ventas y limitar
   return products
@@ -966,9 +973,10 @@ export async function getTopMarginProducts(
   year?: string,
   month?: string,
   productName?: string,
+  channel?: string,
   limit: number = 10
 ): Promise<DashboardProduct[]> {
-  const products = await getProductsWithMetrics(company, year, month, productName)
+  const products = await getProductsWithMetrics(company, year, month, productName, channel)
   
   // Filtrar productos con margen válido (> 0) y ordenar por margen descendente
   return products
@@ -985,9 +993,10 @@ export async function getBottomMarginProducts(
   year?: string,
   month?: string,
   productName?: string,
+  channel?: string,
   limit: number = 10
 ): Promise<DashboardProduct[]> {
-  const products = await getProductsWithMetrics(company, year, month, productName)
+  const products = await getProductsWithMetrics(company, year, month, productName, channel)
   
   // Filtrar productos con margen válido (> 0) y ordenar por margen ascendente
   return products
@@ -1004,9 +1013,10 @@ export async function getMostExpensiveProducts(
   year?: string,
   month?: string,
   productName?: string,
+  channel?: string,
   limit: number = 10
 ): Promise<DashboardProduct[]> {
-  const products = await getProductsWithMetrics(company, year, month, productName)
+  const products = await getProductsWithMetrics(company, year, month, productName, channel)
   
   // Ordenar por grossSalesUSD (precio unitario) descendente
   return products

@@ -2,13 +2,17 @@
 
 import { useState, useRef, useEffect } from "react"
 import { ChevronDown, Search } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn, displayProductName } from "@/lib/utils"
 
 interface ProductSearchFilterProps {
   products: string[]
   selectedProduct: string
   onProductChange: (product: string) => void
   disabled?: boolean
+  /** Valor que representa \"todos\" en el estado externo (por defecto \"Todos\") */
+  allValue?: string
+  /** Etiqueta que se muestra para la opción de \"todos\" (por defecto \"Todos\") */
+  allLabel?: string
 }
 
 export function ProductSearchFilter({
@@ -16,6 +20,8 @@ export function ProductSearchFilter({
   selectedProduct,
   onProductChange,
   disabled = false,
+  allValue = "Todos",
+  allLabel = "Todos",
 }: ProductSearchFilterProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
@@ -37,12 +43,13 @@ export function ProductSearchFilter({
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  const displayValue = selectedProduct === "Todos" ? "Todos" : selectedProduct
+  const isAllSelected = selectedProduct === allValue
+  const displayValue = isAllSelected ? allLabel : selectedProduct ? displayProductName(selectedProduct) : allLabel
 
   return (
     <div className="flex flex-col gap-2">
       <label className="text-sm font-medium text-white/90">Producto</label>
-      <div className="relative w-full" ref={ref}>
+      <div className="w-full" ref={ref}>
         <button
           type="button"
           onClick={() => !disabled && setOpen((o) => !o)}
@@ -59,7 +66,7 @@ export function ProductSearchFilter({
           <ChevronDown className={cn("h-4 w-4 opacity-70 shrink-0 transition-transform", open && "rotate-180")} />
         </button>
         {open && (
-          <div className="absolute z-50 mt-1 w-full rounded-md border border-white/20 bg-blue-950/95 backdrop-blur-sm py-2 shadow-lg max-h-64 overflow-hidden flex flex-col">
+          <div className="mt-1 w-full rounded-md border border-white/20 bg-blue-950/95 backdrop-blur-sm py-2 shadow-lg max-h-64 overflow-hidden flex flex-col">
             <div className="px-3 pb-2 border-b border-white/10">
               <div className="relative">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-white/50" />
@@ -77,18 +84,18 @@ export function ProductSearchFilter({
               <button
                 type="button"
                 onClick={() => {
-                  onProductChange("Todos")
+                  onProductChange(allValue)
                   setOpen(false)
                   setQuery("")
                 }}
                 className={cn(
                   "flex w-full items-center px-3 py-2 text-sm text-left transition-colors",
-                  selectedProduct === "Todos"
+                  isAllSelected
                     ? "bg-white/15 text-white font-medium"
                     : "text-white/90 hover:bg-white/10"
                 )}
               >
-                Todos
+                {allLabel}
               </button>
               {filtered.map((product) => (
                 <button
@@ -106,7 +113,7 @@ export function ProductSearchFilter({
                       : "text-white/90 hover:bg-white/10"
                   )}
                 >
-                  {product}
+                  {displayProductName(product)}
                 </button>
               ))}
               {filtered.length === 0 && (

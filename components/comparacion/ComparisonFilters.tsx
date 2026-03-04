@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ProductSearchFilter } from '@/components/dashboard/ProductSearchFilter';
 
 interface ComparisonFiltersProps {
   selectedMonth: string;
@@ -201,19 +202,13 @@ export function ComparisonFilters({
 
       {/* Filtro de Producto */}
       <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium text-white/90">Producto</label>
-        <Select
-          value={selectedProduct}
-          onChange={(e) => onProductChange(e.target.value)}
-          className="w-full bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-white/30"
-        >
-          <option value="all" className="bg-blue-900 text-white">Todos los productos</option>
-          {products.map((product) => (
-            <option key={product} value={product} className="bg-blue-900 text-white">
-              {product}
-            </option>
-          ))}
-        </Select>
+        <ProductSearchFilter
+          products={products}
+          selectedProduct={selectedProduct === 'all' ? 'all' : selectedProduct}
+          onProductChange={(value) => onProductChange(value)}
+          allValue="all"
+          allLabel="Todos los productos"
+        />
       </div>
     </div>
   );
