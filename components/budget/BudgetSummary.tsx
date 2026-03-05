@@ -233,7 +233,7 @@ export function BudgetSummary({ year, country, product, month, allowedCountryCod
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-white/70">
-                {isMonthFiltered ? "Unidades del Mes" : "Total Unidades"}
+                {isMonthFiltered ? "Total de unidades del mes" : "Total de unidades del año"}
               </p>
               <p className="text-2xl font-bold mt-1 text-white">
                 {summary.totalUnits.toLocaleString("es-UY")}

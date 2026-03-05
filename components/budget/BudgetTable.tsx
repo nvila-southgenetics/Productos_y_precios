@@ -179,10 +179,19 @@ export function BudgetTable({ year, country, product, month, allowedCountryCodes
 
           let totalGrossSale = 0
           let totalGrossProfit = 0
-          let monthlyUnits = row.total_units || 0
+          // Unidades del mes / año:
+          // - Si hay filtro de mes: usar la columna del mes (ej: jan, feb, ...), aunque el producto no tenga overrides.
+          // - Si no hay filtro de mes: usar total_units.
+          let monthlyUnits = 0
           let monthlyGrossSale = 0
           let monthlyGrossProfit = 0
           let commercialDiscountUSD = 0
+
+          if (isMonthFiltered && monthKey) {
+            monthlyUnits = Number(row[monthKey as keyof RawRow] ?? 0)
+          } else {
+            monthlyUnits = Number(row.total_units ?? 0)
+          }
 
           if (productId) {
             // CRÍTICO: Buscar el override ESPECÍFICO para este producto Y este país
@@ -218,7 +227,6 @@ export function BudgetTable({ year, country, product, month, allowedCountryCodes
 
             // Calcular valores específicos del mes si está filtrado
             if (isMonthFiltered && monthKey) {
-              monthlyUnits = Number(row[monthKey as keyof RawRow] ?? 0)
               monthlyGrossSale = grossSaleUSD * monthlyUnits
               monthlyGrossProfit = grossProfitUSD * monthlyUnits
             }

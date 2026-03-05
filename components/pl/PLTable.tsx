@@ -256,19 +256,26 @@ export function PLTable({ modelo, year, country, category, product, channel, can
       if (!name) continue
       if (category !== "all" && idToCat[row.product_id] !== category) continue
       if (product !== "all" && name !== product) continue
+
       const o = row.overrides || {}
+
+      // Cuando el filtro de canal es \"Todos los canales\" (o país = \"all\"),
+      // es posible que existan múltiples overrides para el mismo producto.
+      // En ese caso, acumulamos (sumamos) los costos por unidad de todos los canales/países.
+      const prev = ovs[name] || emptyOverride()
+
       ovs[name] = {
-        grossSalesUSD: o.grossSalesUSD || 0,
-        commercialDiscountUSD: o.commercialDiscountUSD || 0,
-        productCostUSD: o.productCostUSD || 0,
-        kitCostUSD: o.kitCostUSD || 0,
-        paymentFeeUSD: o.paymentFeeUSD || 0,
-        bloodDrawSampleUSD: o.bloodDrawSampleUSD || 0,
-        sanitaryPermitsUSD: o.sanitaryPermitsUSD || 0,
-        externalCourierUSD: o.externalCourierUSD || 0,
-        internalCourierUSD: o.internalCourierUSD || 0,
-        physiciansFeesUSD: o.physiciansFeesUSD || 0,
-        salesCommissionUSD: o.salesCommissionUSD || 0,
+        grossSalesUSD: prev.grossSalesUSD + (o.grossSalesUSD || 0),
+        commercialDiscountUSD: prev.commercialDiscountUSD + (o.commercialDiscountUSD || 0),
+        productCostUSD: prev.productCostUSD + (o.productCostUSD || 0),
+        kitCostUSD: prev.kitCostUSD + (o.kitCostUSD || 0),
+        paymentFeeUSD: prev.paymentFeeUSD + (o.paymentFeeUSD || 0),
+        bloodDrawSampleUSD: prev.bloodDrawSampleUSD + (o.bloodDrawSampleUSD || 0),
+        sanitaryPermitsUSD: prev.sanitaryPermitsUSD + (o.sanitaryPermitsUSD || 0),
+        externalCourierUSD: prev.externalCourierUSD + (o.externalCourierUSD || 0),
+        internalCourierUSD: prev.internalCourierUSD + (o.internalCourierUSD || 0),
+        physiciansFeesUSD: prev.physiciansFeesUSD + (o.physiciansFeesUSD || 0),
+        salesCommissionUSD: prev.salesCommissionUSD + (o.salesCommissionUSD || 0),
       }
     }
     setOverrides(ovs)
