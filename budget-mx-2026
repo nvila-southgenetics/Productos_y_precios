@@ -1,0 +1,735 @@
+{
+  "JAN": {
+    "ONCOTYPE DX MAMA": {
+      "total_unidades": 46.1778,
+      "desglose": {
+        "Aseguradoras": 15.0,
+        "Instituciones SFL": 4.0,
+        "Gobierno": 4.1778,
+        "Paciente": 4.0,
+        "Paciente con Descuento": 4.0,
+        "Distribuidores": 15.0
+      }
+    }
+  },
+  "FEB": {
+    "ONCOTYPE DX MAMA": {
+      "total_unidades": 54.9301,
+      "desglose": {
+        "Aseguradoras": 18.0,
+        "Instituciones SFL": 5.0,
+        "Gobierno": 4.9301,
+        "Paciente": 5.0,
+        "Paciente con Descuento": 5.0,
+        "Distribuidores": 17.0
+      }
+    },
+    "Sentis Cancer + Discovery (T)": {
+      "total_unidades": 6.0,
+      "desglose": {
+        "Paciente": 5.0,
+        "Paciente con Descuento": 1.0
+      }
+    },
+    "Sentis Cancer + Discovery (B)": {
+      "total_unidades": 3.0,
+      "desglose": {
+        "Paciente": 2.0,
+        "Paciente con Descuento": 1.0
+      }
+    },
+    "Invitae Canceres Hereditarios BGI": {
+      "total_unidades": 8.0,
+      "desglose": {
+        "Paciente": 8.0
+      }
+    },
+    "Invitae Canceres Hereditarios Invitae": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    }
+  },
+  "MAR": {
+    "ONCOTYPE DX MAMA": {
+      "total_unidades": 59.3745,
+      "desglose": {
+        "Aseguradoras": 19.0,
+        "Instituciones SFL": 5.0,
+        "Gobierno": 7.3745,
+        "Paciente": 5.0,
+        "Paciente con Descuento": 5.0,
+        "Distribuidores": 18.0
+      }
+    },
+    "Tempus XT + XR Tejido": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "Invitae Canceres Hereditarios BGI": {
+      "total_unidades": 8.0,
+      "desglose": {
+        "Paciente": 8.0
+      }
+    },
+    "Invitae Canceres Hereditarios Invitae": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    }
+  },
+  "APR": {
+    "ONCOTYPE DX MAMA": {
+      "total_unidades": 45.9111,
+      "desglose": {
+        "Aseguradoras": 14.0,
+        "Instituciones SFL": 4.0,
+        "Gobierno": 6.9111,
+        "Paciente": 4.0,
+        "Paciente con Descuento": 4.0,
+        "Distribuidores": 13.0
+      }
+    },
+    "Sentis Cancer + Discovery (T)": {
+      "total_unidades": 4.0,
+      "desglose": {
+        "Paciente": 3.0,
+        "Paciente con Descuento": 1.0
+      }
+    },
+    "Sentis Cancer + Discovery (B)": {
+      "total_unidades": 2.0,
+      "desglose": {
+        "Paciente": 1.0,
+        "Paciente con Descuento": 1.0
+      }
+    },
+    "Invitae Canceres Hereditarios BGI": {
+      "total_unidades": 8.0,
+      "desglose": {
+        "Paciente": 8.0
+      }
+    },
+    "Invitae Canceres Hereditarios Invitae": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "AFIRMA GSC": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    }
+  },
+  "MAY": {
+    "ONCOTYPE DX MAMA": {
+      "total_unidades": 55.7935,
+      "desglose": {
+        "Aseguradoras": 16.0,
+        "Instituciones SFL": 5.0,
+        "Gobierno": 7.7935,
+        "Paciente": 5.0,
+        "Paciente con Descuento": 6.0,
+        "Distribuidores": 16.0
+      }
+    },
+    "Tempus XT + XR Tejido": {
+      "total_unidades": 6.0,
+      "desglose": {
+        "Paciente": 5.0,
+        "Paciente con Descuento": 1.0
+      }
+    },
+    "Invitae Canceres Hereditarios BGI": {
+      "total_unidades": 8.0,
+      "desglose": {
+        "Paciente": 8.0
+      }
+    },
+    "Invitae Canceres Hereditarios Invitae": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "AFIRMA GSC": {
+      "total_unidades": 2.0,
+      "desglose": {
+        "Paciente": 2.0
+      }
+    },
+    "Mirthype Full": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "MPS": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "UNITY": {
+      "total_unidades": 5.0,
+      "desglose": {
+        "Paciente": 5.0
+      }
+    },
+    "Genomind ProfessionalPGX": {
+      "total_unidades": 4.0,
+      "desglose": {
+        "Paciente": 4.0
+      }
+    }
+  },
+  "JUN": {
+    "ONCOTYPE DX MAMA": {
+      "total_unidades": 60.4363,
+      "desglose": {
+        "Aseguradoras": 18.0,
+        "Instituciones SFL": 5.0,
+        "Gobierno": 9.4363,
+        "Paciente": 5.0,
+        "Paciente con Descuento": 5.0,
+        "Distribuidores": 18.0
+      }
+    },
+    "Sentis Cancer + Discovery (T)": {
+      "total_unidades": 6.0,
+      "desglose": {
+        "Paciente": 5.0,
+        "Paciente con Descuento": 1.0
+      }
+    },
+    "Sentis Cancer + Discovery (B)": {
+      "total_unidades": 3.0,
+      "desglose": {
+        "Paciente": 2.0,
+        "Paciente con Descuento": 1.0
+      }
+    },
+    "Invitae Canceres Hereditarios BGI": {
+      "total_unidades": 8.0,
+      "desglose": {
+        "Paciente": 8.0
+      }
+    },
+    "Invitae Canceres Hereditarios Invitae": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "AFIRMA GSC": {
+      "total_unidades": 2.0,
+      "desglose": {
+        "Paciente": 2.0
+      }
+    },
+    "Mirthype Full": {
+      "total_unidades": 2.0,
+      "desglose": {
+        "Paciente": 2.0
+      }
+    },
+    "MPS": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "CX Bladder": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "UNITY": {
+      "total_unidades": 10.0,
+      "desglose": {
+        "Paciente": 10.0
+      }
+    },
+    "Genomind ProfessionalPGX": {
+      "total_unidades": 4.0,
+      "desglose": {
+        "Paciente": 4.0
+      }
+    }
+  },
+  "JUL": {
+    "ONCOTYPE DX MAMA": {
+      "total_unidades": 63.6,
+      "desglose": {
+        "Aseguradoras": 19.0,
+        "Instituciones SFL": 6.0,
+        "Gobierno": 10.6,
+        "Paciente": 6.0,
+        "Paciente con Descuento": 5.0,
+        "Distribuidores": 17.0
+      }
+    },
+    "Tempus XT + XR Tejido": {
+      "total_unidades": 4.0,
+      "desglose": {
+        "Paciente": 3.0,
+        "Paciente con Descuento": 1.0
+      }
+    },
+    "Invitae Canceres Hereditarios BGI": {
+      "total_unidades": 8.0,
+      "desglose": {
+        "Paciente": 8.0
+      }
+    },
+    "Invitae Canceres Hereditarios Invitae": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "AFIRMA GSC": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "Mirthype Full": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "MPS": {
+      "total_unidades": 2.0,
+      "desglose": {
+        "Paciente": 2.0
+      }
+    },
+    "GPS": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "CX Bladder": {
+      "total_unidades": 2.0,
+      "desglose": {
+        "Paciente": 2.0
+      }
+    },
+    "UNITY": {
+      "total_unidades": 15.0,
+      "desglose": {
+        "Paciente": 15.0
+      }
+    },
+    "Genomind ProfessionalPGX": {
+      "total_unidades": 4.0,
+      "desglose": {
+        "Paciente": 4.0
+      }
+    }
+  },
+  "AUG": {
+    "ONCOTYPE DX MAMA": {
+      "total_unidades": 65.6,
+      "desglose": {
+        "Aseguradoras": 18.0,
+        "Instituciones SFL": 6.0,
+        "Gobierno": 12.6,
+        "Paciente": 6.0,
+        "Paciente con Descuento": 5.0,
+        "Distribuidores": 18.0
+      }
+    },
+    "Sentis Cancer + Discovery (T)": {
+      "total_unidades": 4.0,
+      "desglose": {
+        "Paciente": 3.0,
+        "Paciente con Descuento": 1.0
+      }
+    },
+    "Sentis Cancer + Discovery (B)": {
+      "total_unidades": 2.0,
+      "desglose": {
+        "Paciente": 1.0,
+        "Paciente con Descuento": 1.0
+      }
+    },
+    "Invitae Canceres Hereditarios BGI": {
+      "total_unidades": 8.0,
+      "desglose": {
+        "Paciente": 8.0
+      }
+    },
+    "Invitae Canceres Hereditarios Invitae": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "AFIRMA GSC": {
+      "total_unidades": 2.0,
+      "desglose": {
+        "Paciente": 2.0
+      }
+    },
+    "Mirthype Full": {
+      "total_unidades": 2.0,
+      "desglose": {
+        "Paciente": 2.0
+      }
+    },
+    "MPS": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "GPS": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "CX Bladder": {
+      "total_unidades": 2.0,
+      "desglose": {
+        "Paciente": 2.0
+      }
+    },
+    "UNITY": {
+      "total_unidades": 15.0,
+      "desglose": {
+        "Paciente": 15.0
+      }
+    },
+    "Genomind ProfessionalPGX": {
+      "total_unidades": 4.0,
+      "desglose": {
+        "Paciente": 4.0
+      }
+    }
+  },
+  "SEP": {
+    "ONCOTYPE DX MAMA": {
+      "total_unidades": 61.6,
+      "desglose": {
+        "Aseguradoras": 18.0,
+        "Instituciones SFL": 5.0,
+        "Gobierno": 8.6,
+        "Paciente": 6.0,
+        "Paciente con Descuento": 6.0,
+        "Distribuidores": 18.0
+      }
+    },
+    "Tempus XT + XR Tejido": {
+      "total_unidades": 7.0,
+      "desglose": {
+        "Paciente": 5.0,
+        "Paciente con Descuento": 2.0
+      }
+    },
+    "Invitae Canceres Hereditarios BGI": {
+      "total_unidades": 9.0,
+      "desglose": {
+        "Paciente": 9.0
+      }
+    },
+    "Invitae Canceres Hereditarios Invitae": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "AFIRMA GSC": {
+      "total_unidades": 2.0,
+      "desglose": {
+        "Paciente": 2.0
+      }
+    },
+    "Mirthype Full": {
+      "total_unidades": 2.0,
+      "desglose": {
+        "Paciente": 2.0
+      }
+    },
+    "MPS": {
+      "total_unidades": 2.0,
+      "desglose": {
+        "Paciente": 2.0
+      }
+    },
+    "GPS": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "DECISION DX (MELANOMAS)": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "CX Bladder": {
+      "total_unidades": 2.0,
+      "desglose": {
+        "Paciente": 2.0
+      }
+    },
+    "UNITY": {
+      "total_unidades": 15.0,
+      "desglose": {
+        "Paciente": 15.0
+      }
+    },
+    "Genomind ProfessionalPGX": {
+      "total_unidades": 4.0,
+      "desglose": {
+        "Paciente": 4.0
+      }
+    }
+  },
+  "OCT": {
+    "ONCOTYPE DX MAMA": {
+      "total_unidades": 61.5111,
+      "desglose": {
+        "Aseguradoras": 18.0,
+        "Instituciones SFL": 6.0,
+        "Gobierno": 8.5111,
+        "Paciente": 5.0,
+        "Paciente con Descuento": 6.0,
+        "Distribuidores": 18.0
+      }
+    },
+    "Sentis Cancer + Discovery (T)": {
+      "total_unidades": 5.0,
+      "desglose": {
+        "Paciente": 4.0,
+        "Paciente con Descuento": 1.0
+      }
+    },
+    "Sentis Cancer + Discovery (B)": {
+      "total_unidades": 3.0,
+      "desglose": {
+        "Paciente": 2.0,
+        "Paciente con Descuento": 1.0
+      }
+    },
+    "Invitae Canceres Hereditarios BGI": {
+      "total_unidades": 8.0,
+      "desglose": {
+        "Paciente": 8.0
+      }
+    },
+    "Invitae Canceres Hereditarios Invitae": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "AFIRMA GSC": {
+      "total_unidades": 2.0,
+      "desglose": {
+        "Paciente": 2.0
+      }
+    },
+    "Mirthype Full": {
+      "total_unidades": 2.0,
+      "desglose": {
+        "Paciente": 2.0
+      }
+    },
+    "MPS": {
+      "total_unidades": 2.0,
+      "desglose": {
+        "Paciente": 2.0
+      }
+    },
+    "GPS": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "CX Bladder": {
+      "total_unidades": 2.0,
+      "desglose": {
+        "Paciente": 2.0
+      }
+    },
+    "UNITY": {
+      "total_unidades": 15.0,
+      "desglose": {
+        "Paciente": 15.0
+      }
+    },
+    "Genomind ProfessionalPGX": {
+      "total_unidades": 4.0,
+      "desglose": {
+        "Paciente": 4.0
+      }
+    }
+  },
+  "NOV": {
+    "ONCOTYPE DX MAMA": {
+      "total_unidades": 53.8889,
+      "desglose": {
+        "Aseguradoras": 17.0,
+        "Instituciones SFL": 5.0,
+        "Gobierno": 4.8889,
+        "Paciente": 5.0,
+        "Paciente con Descuento": 5.0,
+        "Distribuidores": 17.0
+      }
+    },
+    "Tempus XT + XR Tejido": {
+      "total_unidades": 2.0,
+      "desglose": {
+        "Paciente": 2.0
+      }
+    },
+    "Invitae Canceres Hereditarios BGI": {
+      "total_unidades": 8.0,
+      "desglose": {
+        "Paciente": 8.0
+      }
+    },
+    "Invitae Canceres Hereditarios Invitae": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "AFIRMA GSC": {
+      "total_unidades": 2.0,
+      "desglose": {
+        "Paciente": 2.0
+      }
+    },
+    "Mirthype Full": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "MPS": {
+      "total_unidades": 2.0,
+      "desglose": {
+        "Paciente": 2.0
+      }
+    },
+    "GPS": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "DECISION DX (MELANOMAS)": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "CX Bladder": {
+      "total_unidades": 2.0,
+      "desglose": {
+        "Paciente": 2.0
+      }
+    },
+    "UNITY": {
+      "total_unidades": 20.0,
+      "desglose": {
+        "Paciente": 20.0
+      }
+    },
+    "Genomind ProfessionalPGX": {
+      "total_unidades": 5.0,
+      "desglose": {
+        "Paciente": 5.0
+      }
+    }
+  },
+  "DEC": {
+    "ONCOTYPE DX MAMA": {
+      "total_unidades": 46.3079,
+      "desglose": {
+        "Aseguradoras": 15.0,
+        "Instituciones SFL": 4.0,
+        "Gobierno": 4.3079,
+        "Paciente": 4.0,
+        "Paciente con Descuento": 4.0,
+        "Distribuidores": 15.0
+      }
+    },
+    "Sentis Cancer + Discovery (T)": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "Sentis Cancer + Discovery (B)": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "Invitae Canceres Hereditarios BGI": {
+      "total_unidades": 8.0,
+      "desglose": {
+        "Paciente": 8.0
+      }
+    },
+    "Invitae Canceres Hereditarios Invitae": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "AFIRMA GSC": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "Mirthype Full": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "MPS": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "CX Bladder": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    },
+    "UNITY": {
+      "total_unidades": 5.0,
+      "desglose": {
+        "Paciente": 5.0
+      }
+    },
+    "Genomind ProfessionalPGX": {
+      "total_unidades": 1.0,
+      "desglose": {
+        "Paciente": 1.0
+      }
+    }
+  }
+}

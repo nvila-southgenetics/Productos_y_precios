@@ -8,15 +8,27 @@ interface BudgetFiltersProps {
   selectedCountry: string
   selectedProduct: string
   selectedMonth: string
+  selectedChannel: string
   onYearChange: (year: number) => void
   onCountryChange: (country: string) => void
   onProductChange: (product: string) => void
   onMonthChange: (month: string) => void
+  onChannelChange: (channel: string) => void
   countries?: string[]
   products?: string[]
   allowedCountries?: string[]
   showAllCountries?: boolean
 }
+
+const CHANNELS = [
+  { value: "all", label: "Todos los canales" },
+  { value: "Paciente", label: "Paciente" },
+  { value: "Pacientes desc", label: "Pacientes desc" },
+  { value: "Aseguradoras", label: "Aseguradoras" },
+  { value: "Instituciones SFL", label: "Instituciones SFL" },
+  { value: "Gobierno", label: "Gobierno" },
+  { value: "Distribuidores", label: "Distribuidores" },
+]
 
 const MONTHS = [
   { value: "all", label: "Todos los meses" },
@@ -56,10 +68,12 @@ export function BudgetFilters({
   selectedCountry,
   selectedProduct,
   selectedMonth,
+  selectedChannel,
   onYearChange,
   onCountryChange,
   onProductChange,
   onMonthChange,
+  onChannelChange,
   products = [],
   allowedCountries,
   showAllCountries = true,
@@ -76,7 +90,7 @@ export function BudgetFilters({
       : countries.filter((c) => c.code !== "all")
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
       <div className="flex flex-col gap-2">
         <label className="text-sm font-medium text-white/90">Año</label>
         <Select
@@ -117,6 +131,21 @@ export function BudgetFilters({
               {country.code === "all" && !showAllCountries && allowedCountries?.length
                 ? "Todos (mis países)"
                 : country.name}
+            </option>
+          ))}
+        </Select>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label className="text-sm font-medium text-white/90">Canal</label>
+        <Select
+          value={selectedChannel}
+          onChange={(e) => onChannelChange(e.target.value)}
+          className="w-full bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-white/30"
+        >
+          {CHANNELS.map((ch) => (
+            <option key={ch.value} value={ch.value} className="bg-blue-900 text-white">
+              {ch.label}
             </option>
           ))}
         </Select>

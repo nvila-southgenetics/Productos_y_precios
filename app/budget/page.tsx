@@ -17,6 +17,7 @@ export default function BudgetPage() {
   const [selectedCountry, setSelectedCountry] = useState<string>("all")
   const [selectedProduct, setSelectedProduct] = useState<string>("all")
   const [selectedMonth, setSelectedMonth] = useState<string>("all")
+  const [selectedChannel, setSelectedChannel] = useState<string>("all")
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [products, setProducts] = useState<string[]>([])
 
@@ -93,10 +94,12 @@ export default function BudgetPage() {
             selectedCountry={selectedCountry}
             selectedProduct={selectedProduct}
             selectedMonth={selectedMonth}
+            selectedChannel={selectedChannel}
             onYearChange={setSelectedYear}
             onCountryChange={setSelectedCountry}
             onProductChange={setSelectedProduct}
             onMonthChange={setSelectedMonth}
+            onChannelChange={setSelectedChannel}
             products={products}
             allowedCountries={allowedCountries}
             showAllCountries={isAdmin}
@@ -110,6 +113,7 @@ export default function BudgetPage() {
             country={selectedCountry}
             product={selectedProduct}
             month={selectedMonth}
+            channel={selectedChannel}
             allowedCountryCodes={!isAdmin ? allowedCountries : undefined}
           />
         </div>
@@ -120,6 +124,7 @@ export default function BudgetPage() {
           country={selectedCountry}
           product={selectedProduct}
           month={selectedMonth}
+          channel={selectedChannel}
           allowedCountryCodes={!isAdmin ? allowedCountries : undefined}
         />
 

@@ -10,6 +10,7 @@ interface BudgetSummaryProps {
   country: string
   product: string
   month: string
+  channel: string
   /** Cuando country === "all" y hay varios países permitidos (no-admin), filtrar por estos. */
   allowedCountryCodes?: string[]
 }
@@ -70,7 +71,7 @@ function calculateGrossProfit(overrides: any): number {
   return salesRevenueUSD - totalCosts
 }
 
-export function BudgetSummary({ year, country, product, month, allowedCountryCodes }: BudgetSummaryProps) {
+export function BudgetSummary({ year, country, product, month, channel, allowedCountryCodes }: BudgetSummaryProps) {
   const [summary, setSummary] = useState<SummaryData>({
     totalUnits: 0,
     totalGrossSale: 0,
@@ -81,7 +82,7 @@ export function BudgetSummary({ year, country, product, month, allowedCountryCod
 
   useEffect(() => {
     fetchSummary()
-  }, [year, country, product, month, allowedCountryCodes])
+  }, [year, country, product, month, channel, allowedCountryCodes])
 
   const fetchSummary = async () => {
     setLoading(true)
@@ -96,6 +97,10 @@ export function BudgetSummary({ year, country, product, month, allowedCountryCod
 
       if (product !== "all") {
         query = query.eq("product_name", product)
+      }
+
+      if (channel !== "all") {
+        query = query.eq("channel", channel)
       }
 
       const { data: budgetData, error } = await query
@@ -157,21 +162,33 @@ export function BudgetSummary({ year, country, product, month, allowedCountryCod
           const productId = row.product_id || productMap.get(row.product_name)
           if (!productId) return
 
-          // CRÍTICO: Buscar el override ESPECÍFICO para este producto Y este país
-          // Priorizar el override "default" si hay múltiples
-          const { data: overrideData } = await supabase
+          // Buscar el override para este producto, país y canal específico (o fallback)
+          const channelToQuery = channel !== "all" ? channel : (row as SummaryRow & { channel?: string }).channel || "Paciente"
+          let overrideDataObj: Record<string, number> = {}
+
+          const { data: channelOverride } = await supabase
             .from("product_country_overrides")
             .select("overrides")
             .eq("product_id", productId)
             .eq("country_code", row.country_code)
-            .order("cl_config_type", { ascending: true }) // "default" viene primero
-            .order("mx_config_type", { ascending: true })
-            .order("col_config_type", { ascending: true })
-            .limit(1)
+            .eq("channel", channelToQuery)
             .maybeSingle()
 
-          const override = overrideData || null
-          const overrideDataObj = override?.overrides || {}
+          if (channelOverride?.overrides) {
+            overrideDataObj = channelOverride.overrides
+          } else {
+            const { data: fallbackOverride } = await supabase
+              .from("product_country_overrides")
+              .select("overrides")
+              .eq("product_id", productId)
+              .eq("country_code", row.country_code)
+              .order("cl_config_type", { ascending: true })
+              .order("mx_config_type", { ascending: true })
+              .order("col_config_type", { ascending: true })
+              .limit(1)
+              .maybeSingle()
+            overrideDataObj = fallbackOverride?.overrides || {}
+          }
 
           const grossSaleUSD = overrideDataObj.grossSalesUSD || 0
           const commercialDiscountUSD = overrideDataObj.commercialDiscountUSD || 0

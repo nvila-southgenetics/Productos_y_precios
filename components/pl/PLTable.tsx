@@ -133,6 +133,10 @@ export function PLTable({ modelo, year, country, category, product, channel, can
   const [quantities, setQuantities] = useState<Record<string, number[]>>({})
   const [productCategories, setProductCategories] = useState<Record<string, string>>({})
   const [overrides, setOverrides] = useState<Record<string, OverrideData>>({})
+  // Budget-mode raw rows (product_id, product_name, channel, months) to compute precio * unidades por canal
+  const [budgetRows, setBudgetRows] = useState<Record<string, unknown>[]>([])
+  // Budget-mode overrides por producto(+canal). Claves típicas: `${product_id}|${channel}` o `${product_id}|`.
+  const [budgetOverrides, setBudgetOverrides] = useState<Record<string, OverrideData>>({})
   // SGA per month (summed if viewing "all", specific if product+channel selected)
   const [sga, setSga] = useState<SGAData[]>(Array.from({ length: 12 }, emptySGA))
   // Tax rates: country-level, stored with product_name='' and channel=''
@@ -158,7 +162,11 @@ export function PLTable({ modelo, year, country, category, product, channel, can
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      await Promise.all([fetchQuantities(), fetchOverrides(), fetchSGA()])
+      if (modelo === "budget") {
+        await Promise.all([fetchQuantities(), fetchBudgetOverrides(), fetchSGA()])
+      } else {
+        await Promise.all([fetchQuantities(), fetchOverrides(), fetchSGA()])
+      }
     } finally {
       setLoading(false)
     }
@@ -176,25 +184,42 @@ export function PLTable({ modelo, year, country, category, product, channel, can
     if (modelo === "budget") {
       let q = supabase
         .from("budget")
-        .select("product_name, jan,feb,mar,apr,may,jun,jul,aug,sep,oct,nov,dec")
+        .select("product_id, product_name, jan,feb,mar,apr,may,jun,jul,aug,sep,oct,nov,dec, channel, country_code")
         .eq("year", year)
-      if (country !== "all") q = q.eq("country_code", country)
-      if (product !== "all") q = q.eq("product_name", product)
+
+      if (country !== "all") {
+        q = q.eq("country_code", country)
+      }
+      if (product !== "all") {
+        q = q.eq("product_name", product)
+      }
+      // Si se selecciona un canal específico, las unidades deben provenir solo de ese canal.
+      // Si el canal es "all", sumamos las unidades de todos los canales.
+      if (channel !== "all") {
+        q = q.eq("channel", channel)
+      }
 
       const { data } = await q
-      if (!data) { setProductCategories(cats); return }
+      if (!data) { setProductCategories(cats); setBudgetRows([]); return }
 
       const allowedProds = category !== "all"
         ? new Set(Object.entries(cats).filter(([, c]) => c === category).map(([n]) => n))
         : null
 
+      const rowsForBudget: Record<string, unknown>[] = []
+
       for (const row of data as Record<string, unknown>[]) {
         const name = row.product_name as string
         if (allowedProds && !allowedProds.has(name)) continue
+        rowsForBudget.push(row)
         const arr = MONTH_KEYS.map((k) => Number(row[k] || 0))
         qtys[name] = qtys[name] ? qtys[name].map((v, i) => v + arr[i]) : arr
       }
+
+      setBudgetRows(rowsForBudget)
     } else {
+      // Modo REAL: no usamos budgetRows
+      setBudgetRows([])
       const companies = COUNTRY_TO_COMPANIES[country] || []
       if (!companies.length) { setQuantities({}); setProductCategories(cats); return }
 
@@ -225,6 +250,71 @@ export function PLTable({ modelo, year, country, category, product, channel, can
     setProductCategories(cats)
   }
 
+  // Overrides específicos para modo Budget (por producto+canal) para poder hacer precio * unidades por canal
+  const fetchBudgetOverrides = async () => {
+    const ovs: Record<string, OverrideData> = {}
+
+    let q = supabase
+      .from("product_country_overrides")
+      .select("overrides, product_id, country_code, channel")
+
+    if (country !== "all") {
+      q = q.eq("country_code", country)
+    }
+
+    const { data: overrideRows } = await q
+    if (!overrideRows || overrideRows.length === 0) {
+      setBudgetOverrides({})
+      return
+    }
+
+    const productIds = overrideRows.map((r: { product_id: string }) => r.product_id).filter(Boolean)
+    if (!productIds.length) {
+      setBudgetOverrides({})
+      return
+    }
+
+    const { data: productRows } = await supabase
+      .from("products")
+      .select("id, name, category")
+      .in("id", productIds)
+
+    const idToName: Record<string, string> = {}
+    const idToCat: Record<string, string> = {}
+    for (const p of productRows || []) {
+      idToName[p.id] = p.name
+      idToCat[p.id] = p.category || ""
+    }
+
+    for (const row of overrideRows as { product_id: string; overrides: Record<string, number>; channel?: string }[]) {
+      const prodId = row.product_id
+      const name = idToName[prodId]
+      if (!name) continue
+      if (category !== "all" && idToCat[prodId] !== category) continue
+      if (product !== "all" && name !== product) continue
+
+      const o = row.overrides || {}
+      const key = `${prodId}|${row.channel || ""}`
+      const prev = ovs[key] || emptyOverride()
+
+      ovs[key] = {
+        grossSalesUSD: prev.grossSalesUSD + (o.grossSalesUSD || 0),
+        commercialDiscountUSD: prev.commercialDiscountUSD + (o.commercialDiscountUSD || 0),
+        productCostUSD: prev.productCostUSD + (o.productCostUSD || 0),
+        kitCostUSD: prev.kitCostUSD + (o.kitCostUSD || 0),
+        paymentFeeUSD: prev.paymentFeeUSD + (o.paymentFeeUSD || 0),
+        bloodDrawSampleUSD: prev.bloodDrawSampleUSD + (o.bloodDrawSampleUSD || 0),
+        sanitaryPermitsUSD: prev.sanitaryPermitsUSD + (o.sanitaryPermitsUSD || 0),
+        externalCourierUSD: prev.externalCourierUSD + (o.externalCourierUSD || 0),
+        internalCourierUSD: prev.internalCourierUSD + (o.internalCourierUSD || 0),
+        physiciansFeesUSD: prev.physiciansFeesUSD + (o.physiciansFeesUSD || 0),
+        salesCommissionUSD: prev.salesCommissionUSD + (o.salesCommissionUSD || 0),
+      }
+    }
+
+    setBudgetOverrides(ovs)
+  }
+
   const fetchOverrides = async () => {
     const ovs: Record<string, OverrideData> = {}
 
@@ -237,10 +327,18 @@ export function PLTable({ modelo, year, country, category, product, channel, can
     if (channel !== "all") q = q.eq("channel", channel)
 
     const { data: overrideRows } = await q
-    if (!overrideRows) return
+    // Si no hay overrides para este filtro (por país/canal), limpiamos el estado
+    // para que los canales sin configuración aparezcan con valores 0.
+    if (!overrideRows || overrideRows.length === 0) {
+      setOverrides({})
+      return
+    }
 
     const productIds = overrideRows.map((r: { product_id: string }) => r.product_id).filter(Boolean)
-    if (!productIds.length) return
+    if (!productIds.length) {
+      setOverrides({})
+      return
+    }
 
     const { data: productRows } = await supabase
       .from("products")
@@ -336,17 +434,61 @@ export function PLTable({ modelo, year, country, category, product, channel, can
 
   // ── P&L calculations ──────────────────────────────────────────────────────
 
-  const computeMonthly = (field: keyof OverrideData): number[] =>
-    Array.from({ length: 12 }, (_, mIdx) =>
+  const computeMonthly = (field: keyof OverrideData): number[] => {
+    if (modelo === "budget") {
+      // Budget: sumar por fila de budget (producto+canal) usando su override específico.
+      // Prioridad de búsqueda:
+      // 1) override por product_id + canal exacto
+      // 2) override por product_id + canal 'Paciente' (canal por defecto)
+      // 3) override por product_id sin canal
+      // 4) override por nombre + canal (compatibilidad)
+      return Array.from({ length: 12 }, (_, mIdx) =>
+        (budgetRows || []).reduce((sum, row) => {
+          const prodId = (row.product_id as string | null) || ""
+          const name = row.product_name as string
+          const rowChannel = (row.channel as string) || ""
+
+          const idChannelKey = prodId ? `${prodId}|${rowChannel}` : ""
+          const idPacienteKey = prodId ? `${prodId}|Paciente` : ""
+          const idBaseKey = prodId ? `${prodId}|` : ""
+          const nameChannelKey = `${name}|${rowChannel}`
+          const namePacienteKey = `${name}|Paciente`
+          const nameBaseKey = `${name}|`
+
+          const ov =
+            (idChannelKey && budgetOverrides[idChannelKey]) ||
+            (idPacienteKey && budgetOverrides[idPacienteKey]) ||
+            (idBaseKey && budgetOverrides[idBaseKey]) ||
+            budgetOverrides[nameChannelKey] ||
+            budgetOverrides[namePacienteKey] ||
+            budgetOverrides[nameBaseKey] ||
+            emptyOverride()
+
+          const units = Number(row[MONTH_KEYS[mIdx] as string] || 0)
+          return sum + ov[field] * units
+        }, 0)
+      )
+    }
+
+    // Real: usar cantidades agregadas por producto y overrides por producto
+    return Array.from({ length: 12 }, (_, mIdx) =>
       Object.entries(quantities).reduce((sum, [name, qtArr]) => {
         const ov = overrides[name] || emptyOverride()
         return sum + ov[field] * (qtArr[mIdx] || 0)
       }, 0)
     )
+  }
 
-  const totalUnits = Array.from({ length: 12 }, (_, i) =>
-    Object.values(quantities).reduce((s, arr) => s + (arr[i] || 0), 0)
-  )
+  const totalUnits = Array.from({ length: 12 }, (_, i) => {
+    if (modelo === "budget") {
+      // Unidades directas desde la tabla budget (respetando canal seleccionado o todos)
+      return (budgetRows || []).reduce(
+        (s, row) => s + Number(row[MONTH_KEYS[i] as string] || 0),
+        0
+      )
+    }
+    return Object.values(quantities).reduce((s, arr) => s + (arr[i] || 0), 0)
+  })
 
   const grossSales = computeMonthly("grossSalesUSD")
   const commercialDiscount = computeMonthly("commercialDiscountUSD")

@@ -13,6 +13,7 @@ interface BudgetRow {
   country_code: string
   product_name: string
   product_id: string | null
+  channel?: string
   jan: number
   feb: number
   mar: number
@@ -40,6 +41,7 @@ interface BudgetTableProps {
   country: string
   product: string
   month: string
+  channel: string
   /** Cuando country === "all" y hay varios países permitidos (no-admin), filtrar por estos. */
   allowedCountryCodes?: string[]
 }
@@ -113,14 +115,14 @@ function getMarginColor(margin: number): string {
   return "text-red-300"
 }
 
-export function BudgetTable({ year, country, product, month, allowedCountryCodes }: BudgetTableProps) {
+export function BudgetTable({ year, country, product, month, channel, allowedCountryCodes }: BudgetTableProps) {
   const [data, setData] = useState<BudgetRow[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     fetchBudgetData()
-  }, [year, country, product, month, allowedCountryCodes])
+  }, [year, country, product, month, channel, allowedCountryCodes])
 
   const fetchBudgetData = async () => {
     setLoading(true)
@@ -137,6 +139,11 @@ export function BudgetTable({ year, country, product, month, allowedCountryCodes
         query = query.eq("product_name", product)
       }
 
+      // Filtrar por canal si no es "all"
+      if (channel !== "all") {
+        query = query.eq("channel", channel)
+      }
+
       const { data: budgetData, error } = await query
 
       if (error) throw error
@@ -147,11 +154,10 @@ export function BudgetTable({ year, country, product, month, allowedCountryCodes
       }
 
       // Obtener productos únicos para hacer join con overrides
-      type RawBudgetRow = { product_id: string | null; product_name: string }
+      type RawBudgetRow = { product_id: string | null; product_name: string; channel: string }
       const productIds = budgetData
         .map((b: RawBudgetRow) => b.product_id)
         .filter((id: string | null): id is string => id !== null)
-      const productNames = [...new Set(budgetData.map((b: RawBudgetRow) => b.product_name))]
 
       // Obtener productos
       const { data: products } = await supabase
@@ -170,98 +176,193 @@ export function BudgetTable({ year, country, product, month, allowedCountryCodes
       const monthIndex = isMonthFiltered ? parseInt(month) - 1 : -1
       const monthKey = isMonthFiltered ? MONTH_KEYS[monthIndex] : null
 
+      type RawRow = { id: string; country: string; country_code: string; product_id: string | null; product_name: string; channel: string; total_units?: number } & Record<string, unknown>
+
+      // Cuando channel = "all", agrupar por (country_code, product_name) y sumar unidades
+      // Cuando channel es específico, mostrar cada fila directamente
+      let rowsToProcess: RawRow[]
+
+      if (channel === "all") {
+        // Agrupar por (country_code, product_name) - usar la primera fila como base y sumar meses
+        const grouped = new Map<string, RawRow>()
+        for (const row of budgetData as RawRow[]) {
+          const key = `${row.country_code}|${row.product_name}`
+          if (!grouped.has(key)) {
+            grouped.set(key, { ...row })
+          } else {
+            const existing = grouped.get(key)!
+            for (const mk of MONTH_KEYS) {
+              (existing as Record<string, unknown>)[mk as string] = (Number(existing[mk as string] ?? 0) + Number(row[mk as string] ?? 0))
+            }
+          }
+        }
+        rowsToProcess = Array.from(grouped.values())
+      } else {
+        rowsToProcess = budgetData as RawRow[]
+      }
+
       // Procesar datos y calcular financieros
-      // IMPORTANTE: Hacer query individual para cada override para asegurar el país correcto
-      type RawRow = { product_id: string | null; product_name: string; country_code: string; total_units?: number } & Record<string, unknown>
       const processedData: BudgetRow[] = await Promise.all(
-        budgetData.map(async (row: RawRow) => {
+        rowsToProcess.map(async (row: RawRow) => {
           const productId = row.product_id || productMap.get(row.product_name) || null
 
           let totalGrossSale = 0
           let totalGrossProfit = 0
-          // Unidades del mes / año:
-          // - Si hay filtro de mes: usar la columna del mes (ej: jan, feb, ...), aunque el producto no tenga overrides.
-          // - Si no hay filtro de mes: usar total_units.
           let monthlyUnits = 0
           let monthlyGrossSale = 0
           let monthlyGrossProfit = 0
-          let commercialDiscountUSD = 0
+          let rowTotalUnits = MONTH_KEYS.reduce((sum, mk) => sum + Number(row[mk as string] ?? 0), 0)
 
           if (isMonthFiltered && monthKey) {
             monthlyUnits = Number(row[monthKey as keyof RawRow] ?? 0)
           } else {
-            monthlyUnits = Number(row.total_units ?? 0)
+            monthlyUnits = rowTotalUnits
           }
 
           if (productId) {
-            // CRÍTICO: Buscar el override ESPECÍFICO para este producto Y este país
-            // Priorizar el override "default" si hay múltiples
-            const { data: overrideData } = await supabase
+            // Buscar override para este producto, país y canal específico (o Paciente como fallback)
+            const channelToQuery = channel !== "all" ? channel : "Paciente"
+            let overrideQuery = supabase
               .from("product_country_overrides")
-              .select("overrides, cl_config_type, mx_config_type, col_config_type")
+              .select("overrides, channel")
               .eq("product_id", productId)
               .eq("country_code", row.country_code)
-              .order("cl_config_type", { ascending: true }) // "default" viene primero alfabéticamente
-              .order("mx_config_type", { ascending: true })
-              .order("col_config_type", { ascending: true })
-              .limit(1)
+
+            // Intentar canal específico primero, si no hay fallback a cualquiera
+            const { data: channelOverride } = await overrideQuery
+              .eq("channel", channelToQuery)
               .maybeSingle()
 
-            // Si no hay override "default", tomar el primero disponible
-            const override = overrideData || null
-            const overrideDataObj = override?.overrides || {}
-
-            const grossSaleUSD = overrideDataObj.grossSalesUSD || 0
-            commercialDiscountUSD = overrideDataObj.commercialDiscountUSD || 0
-            const grossProfitUSD = calculateGrossProfit(overrideDataObj)
-
-            // Debug log (solo en desarrollo)
-            if (process.env.NODE_ENV === "development" && grossSaleUSD === 0) {
-              console.warn(
-                `⚠️ No se encontró override para ${row.product_name} en ${row.country_code} (product_id: ${productId})`
-              )
+            let overrideDataObj: Record<string, number> = {}
+            if (channelOverride?.overrides) {
+              overrideDataObj = channelOverride.overrides
+            } else {
+              // Fallback: tomar el primero disponible para este país
+              const { data: fallbackOverride } = await supabase
+                .from("product_country_overrides")
+                .select("overrides")
+                .eq("product_id", productId)
+                .eq("country_code", row.country_code)
+                .order("cl_config_type", { ascending: true })
+                .order("mx_config_type", { ascending: true })
+                .order("col_config_type", { ascending: true })
+                .limit(1)
+                .maybeSingle()
+              overrideDataObj = fallbackOverride?.overrides || {}
             }
 
-            totalGrossSale = grossSaleUSD * (row.total_units ?? 0)
-            totalGrossProfit = grossProfitUSD * (row.total_units ?? 0)
+            const grossSaleUSD = overrideDataObj.grossSalesUSD || 0
+            const commercialDiscountUSDPerUnit = overrideDataObj.commercialDiscountUSD || 0
+            const grossProfitUSD = calculateGrossProfit(overrideDataObj)
 
-            // Calcular valores específicos del mes si está filtrado
+            if (channel === "all") {
+              // Para "todos los canales", calcular la contribución de cada canal por separado
+              // Buscamos todos los registros de budget para este producto/país y multiplicamos por sus overrides
+              const channelRows = (budgetData as RawRow[]).filter(
+                r => r.country_code === row.country_code && r.product_name === row.product_name
+              )
+              let sumGrossSale = 0
+              let sumGrossProfit = 0
+              let sumCommercialDiscount = 0
+
+              await Promise.all(channelRows.map(async (cr) => {
+                const crProductId = cr.product_id || productMap.get(cr.product_name) || null
+                if (!crProductId) return
+                const crUnits = isMonthFiltered && monthKey
+                  ? Number(cr[monthKey as string] ?? 0)
+                  : MONTH_KEYS.reduce((s, mk) => s + Number(cr[mk as string] ?? 0), 0)
+
+                const { data: crOverride } = await supabase
+                  .from("product_country_overrides")
+                  .select("overrides")
+                  .eq("product_id", crProductId)
+                  .eq("country_code", cr.country_code)
+                  .eq("channel", cr.channel)
+                  .maybeSingle()
+
+                const crOverrideObj = crOverride?.overrides || overrideDataObj
+                sumGrossSale += (crOverrideObj.grossSalesUSD || 0) * crUnits
+                sumGrossProfit += calculateGrossProfit(crOverrideObj) * crUnits
+                sumCommercialDiscount += (crOverrideObj.commercialDiscountUSD || 0) * crUnits
+              }))
+
+              totalGrossSale = sumGrossSale
+              totalGrossProfit = sumGrossProfit
+              if (isMonthFiltered) {
+                monthlyGrossSale = sumGrossSale
+                monthlyGrossProfit = sumGrossProfit
+              }
+              return {
+                id: row.id,
+                country: row.country as string,
+                country_code: row.country_code,
+                product_name: row.product_name,
+                product_id: productId,
+                jan: Number(row.jan ?? 0), feb: Number(row.feb ?? 0), mar: Number(row.mar ?? 0),
+                apr: Number(row.apr ?? 0), may: Number(row.may ?? 0), jun: Number(row.jun ?? 0),
+                jul: Number(row.jul ?? 0), aug: Number(row.aug ?? 0), sep: Number(row.sep ?? 0),
+                oct: Number(row.oct ?? 0), nov: Number(row.nov ?? 0), dec: Number(row.dec ?? 0),
+                total_units: rowTotalUnits,
+                total_gross_sale: totalGrossSale,
+                total_gross_profit: totalGrossProfit,
+                monthly_units: monthlyUnits,
+                monthly_gross_sale: monthlyGrossSale,
+                monthly_gross_profit: monthlyGrossProfit,
+                commercial_discount: sumCommercialDiscount,
+                monthly_commercial_discount: isMonthFiltered ? sumCommercialDiscount : 0,
+              }
+            }
+
+            totalGrossSale = grossSaleUSD * rowTotalUnits
+            totalGrossProfit = grossProfitUSD * rowTotalUnits
+
             if (isMonthFiltered && monthKey) {
               monthlyGrossSale = grossSaleUSD * monthlyUnits
               monthlyGrossProfit = grossProfitUSD * monthlyUnits
             }
+
+            return {
+              id: row.id,
+              country: row.country as string,
+              country_code: row.country_code,
+              product_name: row.product_name,
+              product_id: productId,
+              jan: Number(row.jan ?? 0), feb: Number(row.feb ?? 0), mar: Number(row.mar ?? 0),
+              apr: Number(row.apr ?? 0), may: Number(row.may ?? 0), jun: Number(row.jun ?? 0),
+              jul: Number(row.jul ?? 0), aug: Number(row.aug ?? 0), sep: Number(row.sep ?? 0),
+              oct: Number(row.oct ?? 0), nov: Number(row.nov ?? 0), dec: Number(row.dec ?? 0),
+              total_units: rowTotalUnits,
+              total_gross_sale: totalGrossSale,
+              total_gross_profit: totalGrossProfit,
+              monthly_units: monthlyUnits,
+              monthly_gross_sale: monthlyGrossSale,
+              monthly_gross_profit: monthlyGrossProfit,
+              commercial_discount: commercialDiscountUSDPerUnit * rowTotalUnits,
+              monthly_commercial_discount: isMonthFiltered && monthKey
+                ? commercialDiscountUSDPerUnit * monthlyUnits
+                : 0,
+            }
           }
 
-        return {
-          id: row.id,
-          country: row.country,
-          country_code: row.country_code,
-          product_name: row.product_name,
-          product_id: productId,
-          jan: row.jan || 0,
-          feb: row.feb || 0,
-          mar: row.mar || 0,
-          apr: row.apr || 0,
-          may: row.may || 0,
-          jun: row.jun || 0,
-          jul: row.jul || 0,
-          aug: row.aug || 0,
-          sep: row.sep || 0,
-          oct: row.oct || 0,
-          nov: row.nov || 0,
-          dec: row.dec || 0,
-          total_units: row.total_units || 0,
-          total_gross_sale: totalGrossSale,
-          total_gross_profit: totalGrossProfit,
-          monthly_units: monthlyUnits,
-          monthly_gross_sale: monthlyGrossSale,
-          monthly_gross_profit: monthlyGrossProfit,
-          // Guardar commercialDiscount para el cálculo del margen
-          commercial_discount: commercialDiscountUSD * (row.total_units ?? 0),
-          monthly_commercial_discount: isMonthFiltered && monthKey
-            ? commercialDiscountUSD * Number(row[monthKey as keyof RawRow] ?? 0)
-            : 0,
-        }
+          return {
+            id: row.id,
+            country: row.country as string,
+            country_code: row.country_code,
+            product_name: row.product_name,
+            product_id: null,
+            jan: Number(row.jan ?? 0), feb: Number(row.feb ?? 0), mar: Number(row.mar ?? 0),
+            apr: Number(row.apr ?? 0), may: Number(row.may ?? 0), jun: Number(row.jun ?? 0),
+            jul: Number(row.jul ?? 0), aug: Number(row.aug ?? 0), sep: Number(row.sep ?? 0),
+            oct: Number(row.oct ?? 0), nov: Number(row.nov ?? 0), dec: Number(row.dec ?? 0),
+            total_units: rowTotalUnits,
+            total_gross_sale: 0,
+            total_gross_profit: 0,
+            monthly_units: monthlyUnits,
+            monthly_gross_sale: 0,
+            monthly_gross_profit: 0,
+            commercial_discount: 0,
+            monthly_commercial_discount: 0,
+          }
         })
       )
 

@@ -17,7 +17,7 @@ const BASE_COUNTRIES = [
   { code: "VE", name: "Venezuela" },
 ] as const
 
-const CHANNELS = ["Gobierno", "Instituciones SFL", "Paciente", "Aseguradoras", "Distribuidores"]
+const CHANNELS = ["Gobierno", "Instituciones SFL", "Paciente", "Pacientes desc", "Aseguradoras", "Distribuidores"]
 
 const CATEGORIES = [
   "Anualidades",
