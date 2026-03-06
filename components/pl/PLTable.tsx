@@ -432,7 +432,11 @@ export function PLTable({ modelo, year, country, category, product, channel, can
     for (const row of taxData || []) {
       const idx = row.month - 1
       if (idx >= 0 && idx < 12) {
-        taxArr[idx] = { iibb_pct: Number(row.iibb_pct || 0), income_tax_pct: Number(row.income_tax_pct || 0) }
+        // Normalizamos tasas como positivas para evitar que un valor negativo "sume" en los cálculos
+        taxArr[idx] = {
+          iibb_pct: Math.abs(Number(row.iibb_pct || 0)),
+          income_tax_pct: Math.abs(Number(row.income_tax_pct || 0)),
+        }
       }
     }
     setTaxRates(taxArr)
@@ -459,7 +463,8 @@ export function PLTable({ modelo, year, country, category, product, channel, can
       const idx = row.month - 1
       if (idx < 0 || idx >= 12) continue
       for (const f of SGA_FIELDS) {
-        sgaArr[idx][f.key] += Number(row[f.key] || 0)
+        // Normalizamos SG&A como costos positivos (se muestran en negativo, y deben restar en Net Income)
+        sgaArr[idx][f.key] += Math.abs(Number(row[f.key] || 0))
       }
     }
     setSga(sgaArr)
@@ -584,15 +589,17 @@ export function PLTable({ modelo, year, country, category, product, channel, can
     const isTaxField = field === "iibb_pct" || field === "income_tax_pct"
 
     if (isTaxField) {
-      setTaxRates((prev) => prev.map((r, i) => i === month ? { ...r, [field]: newVal } : r))
+      const normalized = Math.abs(newVal)
+      setTaxRates((prev) => prev.map((r, i) => i === month ? { ...r, [field]: normalized } : r))
       await supabase.from("pl_sga").upsert(
-        { year, country_code: country, month: month + 1, product_name: "", channel: "", [field]: newVal },
+        { year, country_code: country, month: month + 1, product_name: "", channel: "", [field]: normalized },
         { onConflict: "year,country_code,month,product_name,channel" }
       )
     } else {
-      setSga((prev) => prev.map((s, i) => i === month ? { ...s, [field]: newVal } : s))
+      const normalized = Math.abs(newVal)
+      setSga((prev) => prev.map((s, i) => i === month ? { ...s, [field]: normalized } : s))
       await supabase.from("pl_sga").upsert(
-        { year, country_code: country, month: month + 1, product_name: product, channel: channel, [field]: newVal },
+        { year, country_code: country, month: month + 1, product_name: product, channel: channel, [field]: normalized },
         { onConflict: "year,country_code,month,product_name,channel" }
       )
     }
@@ -604,12 +611,12 @@ export function PLTable({ modelo, year, country, category, product, channel, can
   // ── Render helpers ────────────────────────────────────────────────────────
 
   const cellCls = "text-right px-2 py-1.5 text-xs whitespace-nowrap tabular-nums"
-  const stickyLabel = (bold = false, section = false) =>
-    `sticky left-0 px-3 py-1.5 text-xs whitespace-nowrap z-10 min-w-[220px] ${
+  const stickyLabel = (bold = false, section = false, prominent = false) =>
+    `sticky left-0 px-3 ${prominent ? "py-2.5 text-sm" : "py-1.5 text-xs"} whitespace-nowrap z-10 min-w-[220px] ${
       section
         ? "bg-slate-600/95 font-semibold text-white/60 uppercase tracking-wider"
         : bold
-        ? "bg-slate-700/95 font-bold text-white"
+        ? `bg-slate-700/95 ${prominent ? "font-extrabold tracking-wide text-white" : "font-bold text-white"}`
         : "bg-slate-800/95 text-white/80"
     }`
 
@@ -622,6 +629,7 @@ export function PLTable({ modelo, year, country, category, product, channel, can
     negative = false,
     indent = false,
     colorClass,
+    prominent = false,
   }: {
     label: string
     values: number[]
@@ -630,11 +638,14 @@ export function PLTable({ modelo, year, country, category, product, channel, can
     negative?: boolean
     indent?: boolean
     colorClass?: string
+    prominent?: boolean
   }) => {
     const ytdVal = ytd(values)
     const totalVal = sum(values)
     const rowCls = section
       ? "bg-slate-600/30 border-t border-white/20"
+      : prominent
+      ? "bg-slate-900/45 border-y border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
       : bold
       ? "bg-slate-700/40 border-t border-white/10"
       : "hover:bg-white/5"
@@ -646,24 +657,29 @@ export function PLTable({ modelo, year, country, category, product, channel, can
       ? "text-white"
       : "text-white/80"
     const fmtFn = negative ? fmtNeg : fmt
+    const cellSizeCls = prominent ? "py-2.5 text-sm" : ""
+    const labelSizeCls = prominent ? "text-sm" : ""
+    const labelWeightCls = prominent ? "font-extrabold tracking-wide" : (bold ? "font-bold" : "")
 
     return (
       <tr className={`${rowCls} transition-colors`}>
-        <td className={stickyLabel(bold, section)}>
-          {indent ? <span className="ml-4">{label}</span> : label}
+        <td className={stickyLabel(bold, section, prominent)}>
+          <span className={`${labelSizeCls} ${labelWeightCls}`}>
+            {indent ? <span className="ml-4">{label}</span> : label}
+          </span>
         </td>
         {monthIndices.map((i) => {
           const v = values[i] ?? 0
           return (
-            <td key={i} className={`${cellCls} ${numColor} ${bold ? "font-semibold" : ""}`}>
+            <td key={i} className={`${cellCls} ${cellSizeCls} ${numColor} ${bold || prominent ? "font-semibold" : ""}`}>
               {fmtFn(v)}
             </td>
           )
         })}
-        <td className={`${cellCls} ${numColor} ${bold ? "font-semibold" : ""} border-l border-white/10`}>
+        <td className={`${cellCls} ${cellSizeCls} ${numColor} ${bold || prominent ? "font-semibold" : ""} border-l border-white/10`}>
           {fmtFn(ytdVal)}
         </td>
-        <td className={`${cellCls} ${numColor} ${bold ? "font-semibold" : ""}`}>
+        <td className={`${cellCls} ${cellSizeCls} ${numColor} ${bold || prominent ? "font-semibold" : ""}`}>
           {fmtFn(totalVal)}
         </td>
       </tr>
@@ -869,6 +885,7 @@ export function PLTable({ modelo, year, country, category, product, channel, can
                 label="Gross Profit"
                 values={grossProfit}
                 bold
+                prominent
                 colorClass={sum(grossProfit) >= 0 ? "text-emerald-300" : "text-red-400"}
               />
 
@@ -877,7 +894,7 @@ export function PLTable({ modelo, year, country, category, product, channel, can
               {SGA_FIELDS.map(({ key, label }) => (
                 <SGARow key={key} field={key} label={label} />
               ))}
-              <Row label="SG&A" values={totalSGA} bold negative />
+              <Row label="SG&A" values={totalSGA} bold negative prominent />
 
               {/* ─ Taxes ──────────────────────────────────────────────── */}
               <SectionHeader label="Impuestos" />
@@ -887,7 +904,7 @@ export function PLTable({ modelo, year, country, category, product, channel, can
               <Row label="Income tax (% sobre ganancia)" values={incomeTax} negative indent />
 
               {/* ─ Net Income ─────────────────────────────────────────── */}
-              <Row label="Net Income" values={netIncome} bold colorClass={netColor} />
+              <Row label="Net Income" values={netIncome} bold prominent colorClass={netColor} />
             </tbody>
           </table>
         </div>
