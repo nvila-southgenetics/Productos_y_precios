@@ -18,6 +18,8 @@ interface PLTableProps {
   canEdit: boolean
   /** Mes hasta el cual calcular el YTD (1-12) */
   ytdMonth: number
+  /** Modo test: permite simular unidades manualmente */
+  testMode?: boolean
 }
 
 interface OverrideData {
@@ -128,7 +130,7 @@ function fmtNeg(val: number): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function PLTable({ modelo, year, country, category, product, channel, canEdit, ytdMonth }: PLTableProps) {
+export function PLTable({ modelo, year, country, category, product, channel, canEdit, ytdMonth, testMode }: PLTableProps) {
   const [loading, setLoading] = useState(true)
   const [quantities, setQuantities] = useState<Record<string, number[]>>({})
   const [productCategories, setProductCategories] = useState<Record<string, string>>({})
@@ -147,6 +149,8 @@ export function PLTable({ modelo, year, country, category, product, channel, can
   // Detail panel
   const [showDetail, setShowDetail] = useState(false)
   const [detailMonth, setDetailMonth] = useState<number | null>(null)
+  // Test mode: unidades simuladas por producto y mes
+  const [testQuantities, setTestQuantities] = useState<Record<string, number[]> | null>(null)
 
   // Can edit SGA amounts only when both product AND channel are specific
   const canEditSGA = canEdit && product !== "all" && channel !== "all"
@@ -157,20 +161,49 @@ export function PLTable({ modelo, year, country, category, product, channel, can
   const ytdIndex = Math.min(Math.max(ytdMonth - 1, 0), 11)
   const monthIndices = Array.from({ length: ytdIndex + 1 }, (_, i) => i)
 
+  // Inicializar cantidades de test cuando se activa el modo o cambian cantidades base
+  useEffect(() => {
+    if (!testMode) {
+      setTestQuantities(null)
+      return
+    }
+    setTestQuantities((prev) => {
+      const next: Record<string, number[]> = {}
+      // Copiar cantidades base y preservar ediciones previas cuando existan
+      for (const [name, arr] of Object.entries(quantities)) {
+        next[name] = prev?.[name] ? [...prev[name]] : [...arr]
+      }
+      // Mantener productos agregados manualmente que no están en quantities
+      if (prev) {
+        for (const [name, arr] of Object.entries(prev)) {
+          if (!next[name]) next[name] = [...arr]
+        }
+      }
+      return next
+    })
+  }, [testMode, quantities])
+
+  const activeQuantities: Record<string, number[]> = (testMode && testQuantities) ? testQuantities : quantities
+
   // ── Data fetching ─────────────────────────────────────────────────────────
 
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
       if (modelo === "budget") {
-        await Promise.all([fetchQuantities(), fetchBudgetOverrides(), fetchSGA()])
+        if (testMode) {
+          // En modo Test usamos overrides agregados por producto, igual que en REAL
+          await Promise.all([fetchQuantities(), fetchOverrides(), fetchSGA()])
+        } else {
+          await Promise.all([fetchQuantities(), fetchBudgetOverrides(), fetchSGA()])
+        }
       } else {
         await Promise.all([fetchQuantities(), fetchOverrides(), fetchSGA()])
       }
     } finally {
       setLoading(false)
     }
-  }, [modelo, year, country, category, product, channel])
+  }, [modelo, year, country, category, product, channel, testMode])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -435,7 +468,7 @@ export function PLTable({ modelo, year, country, category, product, channel, can
   // ── P&L calculations ──────────────────────────────────────────────────────
 
   const computeMonthly = (field: keyof OverrideData): number[] => {
-    if (modelo === "budget") {
+    if (modelo === "budget" && !testMode) {
       // Budget: sumar por fila de budget (producto+canal) usando su override específico.
       // Prioridad de búsqueda:
       // 1) override por product_id + canal exacto
@@ -470,16 +503,22 @@ export function PLTable({ modelo, year, country, category, product, channel, can
       )
     }
 
-    // Real: usar cantidades agregadas por producto y overrides por producto
+    // Real (y Budget en modo Test): usar cantidades agregadas por producto y overrides por producto
     return Array.from({ length: 12 }, (_, mIdx) =>
-      Object.entries(quantities).reduce((sum, [name, qtArr]) => {
+      Object.entries(activeQuantities).reduce((sum, [name, qtArr]) => {
         const ov = overrides[name] || emptyOverride()
-        return sum + ov[field] * (qtArr[mIdx] || 0)
+        const units = qtArr[mIdx] || 0
+        return sum + ov[field] * units
       }, 0)
     )
   }
 
   const totalUnits = Array.from({ length: 12 }, (_, i) => {
+    // En modo Test, siempre usamos las cantidades activas simuladas
+    if (testMode) {
+      return Object.values(activeQuantities).reduce((s, arr) => s + (arr[i] || 0), 0)
+    }
+
     if (modelo === "budget") {
       // Unidades directas desde la tabla budget (respetando canal seleccionado o todos)
       return (budgetRows || []).reduce(
@@ -487,6 +526,8 @@ export function PLTable({ modelo, year, country, category, product, channel, can
         0
       )
     }
+
+    // Modelo real sin test
     return Object.values(quantities).reduce((s, arr) => s + (arr[i] || 0), 0)
   })
 
@@ -899,6 +940,13 @@ export function PLTable({ modelo, year, country, category, product, channel, can
                 </button>
               ))}
             </div>
+            {testMode && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-emerald-300/80">
+                  Edita unidades de prueba por producto y mes
+                </span>
+              </div>
+            )}
           </div>
 
           {Object.keys(quantities).length === 0 ? (
@@ -940,7 +988,7 @@ export function PLTable({ modelo, year, country, category, product, channel, can
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {Object.entries(quantities)
+                  {Object.entries(activeQuantities)
                     .sort(([a], [b]) => a.localeCompare(b, "es", { sensitivity: "base" }))
                     .map(([name, qtArr]) => {
                       const cat = productCategories[name] || ""
@@ -955,13 +1003,51 @@ export function PLTable({ modelo, year, country, category, product, channel, can
                           <td className="px-2 py-2 text-xs text-white/50 whitespace-nowrap">{cat}</td>
                           {detailMonth !== null ? (
                             <td className="px-2 py-2 text-right text-xs font-semibold text-white tabular-nums">
-                              {qtArr[detailMonth] || 0}
+                              {testMode ? (
+                                <input
+                                  type="number"
+                                  className="w-16 bg-white/10 border border-white/30 text-white text-right text-xs px-1 rounded focus:outline-none"
+                                  value={qtArr[detailMonth] || 0}
+                                  onChange={(e) => {
+                                    const val = parseFloat(e.target.value)
+                                    setTestQuantities((prev) => {
+                                      if (!prev) return prev
+                                      const next = { ...prev }
+                                      const arr = [...(next[name] || Array(12).fill(0))]
+                                      arr[detailMonth] = isNaN(val) ? 0 : Math.max(0, val)
+                                      next[name] = arr
+                                      return next
+                                    })
+                                  }}
+                                />
+                              ) : (
+                                qtArr[detailMonth] || 0
+                              )}
                             </td>
                           ) : (
                             <>
                               {qtArr.map((v, i) => (
                                 <td key={i} className={`px-2 py-2 text-right text-xs tabular-nums ${v > 0 ? "text-white/80 font-medium" : "text-white/25"}`}>
-                                  {v > 0 ? v : "-"}
+                                  {testMode ? (
+                                    <input
+                                      type="number"
+                                      className="w-12 bg-white/10 border border-white/30 text-white text-right text-[11px] px-1 rounded focus:outline-none"
+                                      value={v || 0}
+                                      onChange={(e) => {
+                                        const val = parseFloat(e.target.value)
+                                        setTestQuantities((prev) => {
+                                          if (!prev) return prev
+                                          const next = { ...prev }
+                                          const arr = [...(next[name] || Array(12).fill(0))]
+                                          arr[i] = isNaN(val) ? 0 : Math.max(0, val)
+                                          next[name] = arr
+                                          return next
+                                        })
+                                      }}
+                                    />
+                                  ) : (
+                                    v > 0 ? v : "-"
+                                  )}
                                 </td>
                               ))}
                               <td className="px-2 py-2 text-right text-xs font-bold text-white tabular-nums border-l border-white/10">
@@ -988,17 +1074,20 @@ export function PLTable({ modelo, year, country, category, product, channel, can
                     </td>
                     {detailMonth !== null ? (
                       <td className="px-2 py-2 text-right text-xs font-bold text-white tabular-nums">
-                        {Object.values(quantities).reduce((s, arr) => s + (arr[detailMonth] || 0), 0)}
+                        {Object.values(activeQuantities).reduce((s, arr) => s + (arr[detailMonth] || 0), 0)}
                       </td>
                     ) : (
                       <>
                         {Array.from({ length: 12 }, (_, i) => (
                           <td key={i} className="px-2 py-2 text-right text-xs font-bold text-white tabular-nums">
-                            {Object.values(quantities).reduce((s, arr) => s + (arr[i] || 0), 0) || "-"}
+                            {Object.values(activeQuantities).reduce((s, arr) => s + (arr[i] || 0), 0) || "-"}
                           </td>
                         ))}
                         <td className="px-2 py-2 text-right text-xs font-bold text-white tabular-nums border-l border-white/10">
-                          {Object.values(quantities).reduce((s, arr) => s + arr.reduce((a, b) => a + b, 0), 0)}
+                          {Object.values(activeQuantities).reduce(
+                            (s, arr) => s + arr.reduce((a, b) => a + b, 0),
+                            0
+                          )}
                         </td>
                       </>
                     )}

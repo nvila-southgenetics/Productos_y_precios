@@ -40,7 +40,9 @@ export default function PLPage() {
   const [product, setProduct] = useState<string>("all")
   const [channel, setChannel] = useState<string>("all")
   const [products, setProducts] = useState<string[]>([])
-  const [ytdMonth, setYtdMonth] = useState<number>(new Date().getMonth() + 1)
+  // YTD por defecto: hasta diciembre
+  const [ytdMonth, setYtdMonth] = useState<number>(12)
+  const [testMode, setTestMode] = useState<boolean>(false)
   const year = 2026
 
   useEffect(() => {
@@ -119,7 +121,7 @@ export default function PLPage() {
 
         {/* Filters */}
         <div className="mb-6 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4 shadow-sm">
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-7 gap-4">
             {/* Modelo */}
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-white/90">Modelo</label>
@@ -217,6 +219,29 @@ export default function PLPage() {
                 ))}
               </Select>
             </div>
+
+            {/* Test toggle */}
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-white/90">Test</label>
+              <button
+                type="button"
+                onClick={() => setTestMode((v) => !v)}
+                className={`inline-flex items-center justify-center rounded-md px-3 py-2 text-xs font-semibold border transition-colors ${
+                  testMode
+                    ? "bg-emerald-500/20 border-emerald-400/60 text-emerald-200"
+                    : "bg-white/5 border-white/30 text-white/70 hover:bg-white/10"
+                }`}
+              >
+                <span className="mr-2">Test</span>
+                <span
+                  className={`inline-flex h-4 w-8 items-center rounded-full px-0.5 text-[10px] ${
+                    testMode ? "bg-emerald-500/80 justify-end" : "bg-slate-500/70 justify-start"
+                  }`}
+                >
+                  <span className="h-3 w-3 rounded-full bg-white" />
+                </span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -230,6 +255,7 @@ export default function PLPage() {
           channel={channel}
           canEdit={canEdit}
           ytdMonth={ytdMonth}
+          testMode={testMode}
         />
       </div>
     </div>
