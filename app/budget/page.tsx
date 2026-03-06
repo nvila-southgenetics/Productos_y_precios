@@ -126,6 +126,7 @@ export default function BudgetPage() {
           month={selectedMonth}
           channel={selectedChannel}
           allowedCountryCodes={!isAdmin ? allowedCountries : undefined}
+          canEdit={canEdit}
         />
 
         {/* Dialog de importación */}

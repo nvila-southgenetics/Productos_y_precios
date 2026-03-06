@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { ChevronDown, ChevronRight } from "lucide-react"
+import { ChevronDown, ChevronRight, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
 import { formatCurrency, productNameSortKey, displayProductName } from "@/lib/utils"
+import { createProduct } from "@/lib/supabase-mcp"
 
 interface BudgetRow {
   id: string
@@ -44,6 +45,8 @@ interface BudgetTableProps {
   channel: string
   /** Cuando country === "all" y hay varios países permitidos (no-admin), filtrar por estos. */
   allowedCountryCodes?: string[]
+  /** Permite crear productos desde el budget cuando no existen. */
+  canEdit?: boolean
 }
 
 const MONTH_NAMES = [
@@ -115,10 +118,12 @@ function getMarginColor(margin: number): string {
   return "text-red-300"
 }
 
-export function BudgetTable({ year, country, product, month, channel, allowedCountryCodes }: BudgetTableProps) {
+export function BudgetTable({ year, country, product, month, channel, allowedCountryCodes, canEdit }: BudgetTableProps) {
   const [data, setData] = useState<BudgetRow[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  const [creatingProductFor, setCreatingProductFor] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
 
   useEffect(() => {
     fetchBudgetData()
@@ -392,6 +397,27 @@ export function BudgetTable({ year, country, product, month, channel, allowedCou
     setExpandedRows(newExpanded)
   }
 
+  const handleCreateProductFromBudget = async (row: BudgetRow) => {
+    if (!canEdit || !row.product_name || creating) return
+    setCreating(true)
+    setCreatingProductFor(row.id)
+    try {
+      const product = await createProduct({ name: row.product_name })
+      await supabase
+        .from("budget")
+        .update({ product_id: product.id })
+        .eq("year", year)
+        .eq("product_name", row.product_name)
+      await fetchBudgetData()
+    } catch (error) {
+      console.error("Error al crear producto desde budget:", error)
+      alert("No se pudo crear el producto desde el budget. Intenta nuevamente.")
+    } finally {
+      setCreating(false)
+      setCreatingProductFor(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="text-center py-12 text-white/80 text-sm">
@@ -458,16 +484,34 @@ export function BudgetTable({ year, country, product, month, channel, allowedCou
                 <tr key={row.id} className="hover:bg-white/5 transition-colors">
                   <td className="px-3 py-2 text-sm text-white/90">{row.country}</td>
                   <td className="px-3 py-2">
-                    {row.product_id ? (
-                      <Link
-                        href={`/productos/${row.product_id}`}
-                        className="text-blue-300 hover:text-blue-200 hover:underline text-sm font-medium"
-                      >
-                        {displayProductName(row.product_name)}
-                      </Link>
-                    ) : (
-                      <span className="text-white/70 text-sm">{displayProductName(row.product_name)}</span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {row.product_id ? (
+                        <Link
+                          href={`/productos/${row.product_id}`}
+                          className="text-blue-300 hover:text-blue-200 hover:underline text-sm font-medium"
+                        >
+                          {displayProductName(row.product_name)}
+                        </Link>
+                      ) : (
+                        <>
+                          <span className="text-white/70 text-sm">
+                            {displayProductName(row.product_name)}
+                          </span>
+                          {canEdit && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-6 w-6 text-green-300 hover:text-green-200 hover:bg-white/10"
+                              title="Crear producto y vincular"
+                              onClick={() => handleCreateProductFromBudget(row)}
+                              disabled={creating && creatingProductFor === row.id}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </td>
                   <td className="px-3 py-2 text-right font-medium text-sm text-white">
                     {isMonthFiltered

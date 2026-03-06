@@ -223,6 +223,54 @@ export async function getProductById(productId: string): Promise<ProductWithOver
 }
 
 /**
+ * Crea un producto nuevo con la información mínima necesaria.
+ * Si no se especifica SKU, se genera uno simple a partir del nombre.
+ */
+export async function createProduct(input: {
+  name: string
+  sku?: string
+  description?: string | null
+  category?: string | null
+  tipo?: string | null
+}): Promise<ProductWithOverrides> {
+  const baseName = input.name.trim()
+  if (!baseName) {
+    throw new Error('El nombre del producto es obligatorio')
+  }
+
+  const generatedSku = (input.sku && input.sku.trim())
+    ? input.sku.trim()
+    : baseName
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .toUpperCase() || `SKU-${Date.now()}`
+
+  const { data, error } = await supabase
+    .from('products')
+    .insert({
+      name: baseName,
+      sku: generatedSku,
+      description: input.description ?? null,
+      category: input.category ?? null,
+      tipo: input.tipo ?? null,
+    })
+    .select('*')
+    .single()
+
+  if (error || !data) {
+    console.error('Error creating product:', error)
+    throw error || new Error('No se pudo crear el producto')
+  }
+
+  return {
+    ...(data as Product),
+    country_overrides: [],
+  }
+}
+
+/**
  * Actualiza los overrides de un producto para un país y canal
  */
 export async function updateProductCountryOverride(
