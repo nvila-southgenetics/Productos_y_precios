@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { ProductTable } from "@/components/products/ProductTable"
 import { ProductFilters } from "@/components/products/ProductFilters"
 import { CountryPills } from "@/components/products/CountryPills"
+import { ProductMergeDialog } from "@/components/products/ProductMergeDialog"
 import { getProductsWithOverrides, deleteProductFromCountry, deleteProductFromAllCountries, getTotalSalesByProductIds, type ProductWithOverrides, createProduct } from "@/lib/supabase-mcp"
 import { usePermissions } from "@/lib/use-permissions"
 import { productNameSortKey } from "@/lib/utils"
@@ -35,6 +36,9 @@ function ProductosContent() {
   const [newProductName, setNewProductName] = useState("")
   const [newProductSku, setNewProductSku] = useState("")
   const [isCreating, setIsCreating] = useState(false)
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false)
+  const [productsToMerge, setProductsToMerge] = useState<ProductWithOverrides[]>([])
+  const [isMerging, setIsMerging] = useState(false)
 
   // Restaurar filtros desde la URL
   useEffect(() => {
@@ -219,6 +223,86 @@ function ProductosContent() {
     }
   }
 
+  const handleRequestMerge = (productsToMergeInput: ProductWithOverrides[]) => {
+    if (productsToMergeInput.length < 2) return
+    setProductsToMerge(productsToMergeInput)
+    setMergeDialogOpen(true)
+  }
+
+  const handleConfirmMergePreview = async (
+    mergedFrom: ProductWithOverrides[],
+    chosenFields: {
+      name: string
+      sku?: string
+      category?: string | null
+      tipo?: string | null
+      costBaseProductId?: string
+    }
+  ) => {
+    if (isMerging) return
+    setIsMerging(true)
+    try {
+      const response = await fetch("/api/products/merge", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          productIds: mergedFrom.map((p) => p.id),
+          name: chosenFields.name,
+          sku: chosenFields.sku,
+          category: chosenFields.category,
+          tipo: chosenFields.tipo,
+          costBaseProductId: chosenFields.costBaseProductId,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        const message = errorData?.error || "No se pudo fusionar los productos."
+        alert(message)
+        return
+      }
+
+      const result = await response.json()
+      const { newProductId, mergedProduct, stats } = result
+
+      // Mostrar un pequeño resumen antes de navegar
+      const resumenLineas: string[] = []
+      if (mergedProduct?.name) {
+        resumenLineas.push(`Nuevo producto: ${mergedProduct.name} (${mergedProduct.sku || "sin SKU"})`)
+      }
+      if (stats) {
+        if (typeof stats.ventasReasignadas === "number") {
+          resumenLineas.push(`Ventas reasignadas: ${stats.ventasReasignadas}`)
+        }
+        if (typeof stats.budgetsReasignados === "number") {
+          resumenLineas.push(`Budgets reasignados: ${stats.budgetsReasignados}`)
+        }
+      }
+      if (resumenLineas.length) {
+        alert(resumenLineas.join("\n"))
+      }
+
+      // Recargar lista de productos
+      const data = await getProductsWithOverrides(selectedCountry)
+      const sortedData = data.sort((a, b) =>
+        productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), "es", { sensitivity: "base" })
+      )
+      setProducts(sortedData)
+
+      // Navegar al nuevo producto fusionado
+      if (newProductId) {
+        router.push(`/productos/${newProductId}?country=${selectedCountry}`)
+      }
+    } catch (error) {
+      console.error("Error al fusionar productos:", error)
+      alert("Ocurrió un error inesperado al fusionar los productos.")
+    } finally {
+      setIsMerging(false)
+    }
+  }
+
   const handleOpenCreateDialog = () => {
     setNewProductName("")
     setNewProductSku("")
@@ -316,6 +400,7 @@ function ProductosContent() {
             onDeleteProduct={handleDeleteProduct}
             onReviewToggle={handleReviewToggle}
             canEdit={canEdit}
+            onRequestMerge={handleRequestMerge}
           />
         )}
 
@@ -367,6 +452,13 @@ function ProductosContent() {
             </div>
           </DialogContent>
         </Dialog>
+
+        <ProductMergeDialog
+          open={mergeDialogOpen}
+          onOpenChange={setMergeDialogOpen}
+          products={productsToMerge}
+          onConfirm={handleConfirmMergePreview}
+        />
       </div>
     </div>
   )

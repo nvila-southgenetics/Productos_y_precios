@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { createPortal } from "react-dom"
 import { useRouter } from "next/navigation"
 import { Eye, Edit, Trash2 } from "lucide-react"
@@ -22,6 +22,8 @@ interface ProductTableProps {
   onReviewToggle?: (productId: string, countryCode: string, checked: boolean) => Promise<void>
   /** Si false, se ocultan botones de editar/eliminar/revisado. */
   canEdit?: boolean
+  /** Callback para iniciar el flujo de fusión con los productos seleccionados. */
+  onRequestMerge?: (products: ProductWithOverrides[]) => void
 }
 
 const categoryColors: Record<string, string> = {
@@ -55,6 +57,7 @@ export function ProductTable({
   onDeleteProduct,
   onReviewToggle,
   canEdit = true,
+  onRequestMerge,
 }: ProductTableProps) {
   const router = useRouter()
   const [reviewedStates, setReviewedStates] = useState<Record<string, boolean>>({})
@@ -62,6 +65,7 @@ export function ProductTable({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [productToDelete, setProductToDelete] = useState<ProductWithOverrides | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [mergeSelection, setMergeSelection] = useState<Set<string>>(new Set())
 
   // Inicializar estados de revisión desde los productos
   useEffect(() => {
@@ -161,8 +165,47 @@ export function ProductTable({
     }
   }
 
+  const toggleMergeSelection = (productId: string, checked: boolean) => {
+    setMergeSelection(prev => {
+      const next = new Set(prev)
+      if (checked) {
+        next.add(productId)
+      } else {
+        next.delete(productId)
+      }
+      return next
+    })
+  }
+
+  const selectedForMerge = useMemo(
+    () => products.filter(p => mergeSelection.has(p.id)),
+    [products, mergeSelection]
+  )
+
+  const handleMergeClick = () => {
+    if (!onRequestMerge) return
+    if (selectedForMerge.length < 2) return
+    onRequestMerge(selectedForMerge)
+  }
+
   return (
     <div className="rounded-lg border border-white/20 overflow-x-auto shadow-sm bg-white/10 backdrop-blur-sm">
+      <div className="flex items-center justify-between px-4 pt-4 pb-2 gap-2">
+        <p className="text-sm text-white/70">
+          {products.length} productos
+          {mergeSelection.size > 0 && ` · ${mergeSelection.size} seleccionados para fusionar`}
+        </p>
+        {canEdit && (
+          <Button
+            size="sm"
+            className="bg-emerald-500 hover:bg-emerald-600 text-white disabled:bg-white/10 disabled:text-white/40 disabled:cursor-not-allowed"
+            disabled={mergeSelection.size < 2 || !onRequestMerge}
+            onClick={handleMergeClick}
+          >
+            Fusionar seleccionados
+          </Button>
+        )}
+      </div>
       <table className="w-full">
         <thead>
           <tr className="border-b border-white/20 bg-white/10">
@@ -186,12 +229,17 @@ export function ProductTable({
             <th className="h-12 px-4 text-left align-middle font-semibold text-white">
               Acciones
             </th>
+            {canEdit && (
+              <th className="h-12 px-4 text-center align-middle font-semibold text-white w-24">
+                Fusionar
+              </th>
+            )}
           </tr>
         </thead>
         <tbody>
           {products.length === 0 ? (
             <tr>
-              <td colSpan={6} className="h-24 text-center text-white/60">
+              <td colSpan={7} className="h-24 text-center text-white/60">
                 No se encontraron productos
               </td>
             </tr>
@@ -290,6 +338,15 @@ export function ProductTable({
                     )}
                   </div>
                   </td>
+                  {canEdit && (
+                    <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={mergeSelection.has(product.id)}
+                        onChange={(checked) => toggleMergeSelection(product.id, checked)}
+                        className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500 border-white/30"
+                      />
+                    </td>
+                  )}
                 </tr>
               )
             })
