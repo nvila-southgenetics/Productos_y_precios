@@ -15,7 +15,7 @@ export default function BudgetPage() {
   const { allowedCountries, canEdit, isAdmin, loading: permLoading } = usePermissions()
   const [selectedYear, setSelectedYear] = useState(2026)
   const [selectedCountry, setSelectedCountry] = useState<string>("all")
-  const [selectedProduct, setSelectedProduct] = useState<string>("all")
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [selectedMonth, setSelectedMonth] = useState<string>("all")
   const [selectedChannel, setSelectedChannel] = useState<string>("all")
   const [showImportDialog, setShowImportDialog] = useState(false)
@@ -92,12 +92,12 @@ export default function BudgetPage() {
           <BudgetFilters
             selectedYear={selectedYear}
             selectedCountry={selectedCountry}
-            selectedProduct={selectedProduct}
+            selectedProducts={selectedProducts}
             selectedMonth={selectedMonth}
             selectedChannel={selectedChannel}
             onYearChange={setSelectedYear}
             onCountryChange={setSelectedCountry}
-            onProductChange={setSelectedProduct}
+            onProductsChange={setSelectedProducts}
             onMonthChange={setSelectedMonth}
             onChannelChange={setSelectedChannel}
             products={products}
@@ -111,7 +111,7 @@ export default function BudgetPage() {
           <BudgetSummary
             year={selectedYear}
             country={selectedCountry}
-            product={selectedProduct}
+            products={selectedProducts}
             month={selectedMonth}
             channel={selectedChannel}
             allowedCountryCodes={!isAdmin ? allowedCountries : undefined}
@@ -122,7 +122,7 @@ export default function BudgetPage() {
         <BudgetTable
           year={selectedYear}
           country={selectedCountry}
-          product={selectedProduct}
+          products={selectedProducts}
           month={selectedMonth}
           channel={selectedChannel}
           allowedCountryCodes={!isAdmin ? allowedCountries : undefined}

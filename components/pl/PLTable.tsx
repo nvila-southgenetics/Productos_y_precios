@@ -13,7 +13,8 @@ interface PLTableProps {
   year: number
   country: string
   category: string
-  product: string
+  /** Array vacío = todos. */
+  products: string[]
   channel: string
   canEdit: boolean
   /** Mes hasta el cual calcular el YTD (1-12) */
@@ -130,7 +131,7 @@ function fmtNeg(val: number): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function PLTable({ modelo, year, country, category, product, channel, canEdit, ytdMonth, testMode }: PLTableProps) {
+export function PLTable({ modelo, year, country, category, products, channel, canEdit, ytdMonth, testMode }: PLTableProps) {
   const [loading, setLoading] = useState(true)
   const [quantities, setQuantities] = useState<Record<string, number[]>>({})
   const [productCategories, setProductCategories] = useState<Record<string, string>>({})
@@ -152,8 +153,9 @@ export function PLTable({ modelo, year, country, category, product, channel, can
   // Test mode: unidades simuladas por producto y mes
   const [testQuantities, setTestQuantities] = useState<Record<string, number[]> | null>(null)
 
-  // Can edit SGA amounts only when both product AND channel are specific
-  const canEditSGA = canEdit && product !== "all" && channel !== "all"
+  const product = products.length === 1 ? products[0] : "all"
+  // Can edit SGA amounts only when both product AND channel are specific (exactly one product)
+  const canEditSGA = canEdit && products.length === 1 && channel !== "all"
   // Can always edit tax rates (country-level)
   const canEditTax = canEdit
 
@@ -203,7 +205,7 @@ export function PLTable({ modelo, year, country, category, product, channel, can
     } finally {
       setLoading(false)
     }
-  }, [modelo, year, country, category, product, channel, testMode])
+  }, [modelo, year, country, category, products, channel, testMode])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -223,8 +225,8 @@ export function PLTable({ modelo, year, country, category, product, channel, can
       if (country !== "all") {
         q = q.eq("country_code", country)
       }
-      if (product !== "all") {
-        q = q.eq("product_name", product)
+      if (products.length > 0) {
+        q = q.in("product_name", products)
       }
       // Si se selecciona un canal específico, las unidades deben provenir solo de ese canal.
       // Si el canal es "all", sumamos las unidades de todos los canales.
@@ -261,7 +263,7 @@ export function PLTable({ modelo, year, country, category, product, channel, can
         .select("producto, mes, cantidad_ventas")
         .eq("año", year)
         .in("compañia", companies)
-      if (product !== "all") q = q.eq("producto", product)
+      if (products.length > 0) q = q.in("producto", products)
 
       const { data } = await q
       if (!data) { setProductCategories(cats); return }
@@ -324,7 +326,7 @@ export function PLTable({ modelo, year, country, category, product, channel, can
       const name = idToName[prodId]
       if (!name) continue
       if (category !== "all" && idToCat[prodId] !== category) continue
-      if (product !== "all" && name !== product) continue
+      if (products.length > 0 && !products.includes(name)) continue
 
       const o = row.overrides || {}
       const key = `${prodId}|${row.channel || ""}`
@@ -386,7 +388,7 @@ export function PLTable({ modelo, year, country, category, product, channel, can
       const name = idToName[row.product_id]
       if (!name) continue
       if (category !== "all" && idToCat[row.product_id] !== category) continue
-      if (product !== "all" && name !== product) continue
+      if (products.length > 0 && !products.includes(name)) continue
 
       const o = row.overrides || {}
 
@@ -450,7 +452,7 @@ export function PLTable({ modelo, year, country, category, product, channel, can
       sgaQuery = sgaQuery.eq("country_code", country)
     }
 
-    if (product !== "all" && channel !== "all") {
+    if (products.length === 1 && channel !== "all") {
       // Specific product+channel → load that specific row
       sgaQuery = sgaQuery.eq("product_name", product).eq("channel", channel)
     } else {

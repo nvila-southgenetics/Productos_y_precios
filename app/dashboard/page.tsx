@@ -39,7 +39,7 @@ export default function DashboardPage() {
   const [companies, setCompanies] = useState<string[]>([])
   const [products, setProducts] = useState<string[]>([])
   const [selectedCompany, setSelectedCompany] = useState("Todas las compañías")
-  const [selectedProduct, setSelectedProduct] = useState("Todos")
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [selectedYear, setSelectedYear] = useState("Todos")
   const [selectedMonth, setSelectedMonth] = useState("Todos")
   const [selectedChannel, setSelectedChannel] = useState<string>("Todos los canales")
@@ -50,7 +50,7 @@ export default function DashboardPage() {
   const [mostExpensive, setMostExpensive] = useState<DashboardProduct[]>([])
   const [monthlyEvolution2025, setMonthlyEvolution2025] = useState<MonthlyEvolutionPoint[]>([])
   const [monthlyEvolution2026, setMonthlyEvolution2026] = useState<MonthlyEvolutionPoint[]>([])
-  const [chartProductFilter, setChartProductFilter] = useState("Todos")
+  const [chartSelectedProducts, setChartSelectedProducts] = useState<string[]>([])
   const [isEvolutionLoading, setIsEvolutionLoading] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -111,7 +111,7 @@ export default function DashboardPage() {
               selectedCompany,
               selectedYear !== "Todos" ? selectedYear : undefined,
               selectedMonth !== "Todos" ? selectedMonth : undefined,
-              selectedProduct !== "Todos" ? selectedProduct : undefined,
+              selectedProducts.length ? selectedProducts : undefined,
               channelParam,
               10
             ),
@@ -119,7 +119,7 @@ export default function DashboardPage() {
               selectedCompany,
               selectedYear !== "Todos" ? selectedYear : undefined,
               selectedMonth !== "Todos" ? selectedMonth : undefined,
-              selectedProduct !== "Todos" ? selectedProduct : undefined,
+              selectedProducts.length ? selectedProducts : undefined,
               channelParam,
               10
             ),
@@ -127,7 +127,7 @@ export default function DashboardPage() {
               selectedCompany,
               selectedYear !== "Todos" ? selectedYear : undefined,
               selectedMonth !== "Todos" ? selectedMonth : undefined,
-              selectedProduct !== "Todos" ? selectedProduct : undefined,
+              selectedProducts.length ? selectedProducts : undefined,
               channelParam,
               10
             ),
@@ -135,7 +135,7 @@ export default function DashboardPage() {
               selectedCompany,
               selectedYear !== "Todos" ? selectedYear : undefined,
               selectedMonth !== "Todos" ? selectedMonth : undefined,
-              selectedProduct !== "Todos" ? selectedProduct : undefined,
+              selectedProducts.length ? selectedProducts : undefined,
               channelParam,
               10
             ),
@@ -151,7 +151,7 @@ export default function DashboardPage() {
       }
     }
     loadDashboardData()
-  }, [selectedCompany, selectedYear, selectedMonth, selectedProduct, selectedChannel])
+  }, [selectedCompany, selectedYear, selectedMonth, selectedProducts, selectedChannel])
 
   // Cargar evolución mensual 2025 vs 2026 (usa el filtro de producto de la gráfica)
   useEffect(() => {
@@ -160,7 +160,7 @@ export default function DashboardPage() {
       try {
         const company =
           selectedCompany === "Todas las compañías" ? undefined : selectedCompany
-        const product = chartProductFilter === "Todos" ? undefined : chartProductFilter
+        const product = chartSelectedProducts.length ? chartSelectedProducts : undefined
         const { year2025, year2026 } = await getMonthlySalesEvolution(company, product)
         setMonthlyEvolution2025(year2025)
         setMonthlyEvolution2026(year2026)
@@ -171,7 +171,7 @@ export default function DashboardPage() {
       }
     }
     loadEvolution()
-  }, [selectedCompany, chartProductFilter])
+  }, [selectedCompany, chartSelectedProducts])
 
   // Calcular métricas agregadas
   const metrics = useMemo(() => {
@@ -236,12 +236,12 @@ export default function DashboardPage() {
             products={products}
             availableYears={availableYears}
             selectedCompany={selectedCompany}
-            selectedProduct={selectedProduct}
+            selectedProducts={selectedProducts}
             selectedYear={selectedYear}
             selectedMonth={selectedMonth}
             selectedChannel={selectedChannel}
             onCompanyChange={setSelectedCompany}
-            onProductChange={setSelectedProduct}
+            onProductsChange={setSelectedProducts}
             onYearChange={setSelectedYear}
             onMonthChange={setSelectedMonth}
             onChannelChange={setSelectedChannel}
@@ -315,8 +315,8 @@ export default function DashboardPage() {
                 year2025={monthlyEvolution2025}
                 year2026={monthlyEvolution2026}
                 products={products}
-                selectedProduct={chartProductFilter}
-                onProductChange={setChartProductFilter}
+                selectedProducts={chartSelectedProducts}
+                onProductsChange={setChartSelectedProducts}
                 isLoading={isEvolutionLoading}
               />
             </motion.div>

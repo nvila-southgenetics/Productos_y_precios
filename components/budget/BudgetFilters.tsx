@@ -1,17 +1,17 @@
 "use client"
 
 import { Select } from "@/components/ui/select"
-import { ProductSearchFilter } from "@/components/dashboard/ProductSearchFilter"
+import { ProductMultiSearchFilter } from "@/components/dashboard/ProductMultiSearchFilter"
 
 interface BudgetFiltersProps {
   selectedYear: number
   selectedCountry: string
-  selectedProduct: string
+  selectedProducts: string[]
   selectedMonth: string
   selectedChannel: string
   onYearChange: (year: number) => void
   onCountryChange: (country: string) => void
-  onProductChange: (product: string) => void
+  onProductsChange: (products: string[]) => void
   onMonthChange: (month: string) => void
   onChannelChange: (channel: string) => void
   countries?: string[]
@@ -66,12 +66,12 @@ const countries = [
 export function BudgetFilters({
   selectedYear,
   selectedCountry,
-  selectedProduct,
+  selectedProducts,
   selectedMonth,
   selectedChannel,
   onYearChange,
   onCountryChange,
-  onProductChange,
+  onProductsChange,
   onMonthChange,
   onChannelChange,
   products = [],
@@ -152,11 +152,10 @@ export function BudgetFilters({
       </div>
 
       <div className="flex flex-col gap-2">
-        <ProductSearchFilter
+        <ProductMultiSearchFilter
           products={products}
-          selectedProduct={selectedProduct === "all" ? "all" : selectedProduct}
-          onProductChange={(value) => onProductChange(value)}
-          allValue="all"
+          selectedProducts={selectedProducts}
+          onSelectedProductsChange={onProductsChange}
           allLabel="Todos los productos"
         />
       </div>

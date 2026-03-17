@@ -12,7 +12,7 @@ export default function ComparacionPage() {
   const { allowedCountries, isAdmin, loading: permLoading } = usePermissions();
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
   const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
-  const [selectedProduct, setSelectedProduct] = useState<string>('all');
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
 
   // Para no-admins, pre-seleccionar automáticamente sus países permitidos
   useEffect(() => {
@@ -68,10 +68,10 @@ export default function ComparacionPage() {
       <ComparisonFilters
         selectedMonth={selectedMonth}
         selectedCountries={selectedCountries}
-        selectedProduct={selectedProduct}
+        selectedProducts={selectedProducts}
         onMonthChange={setSelectedMonth}
         onCountriesChange={setSelectedCountries}
-        onProductChange={setSelectedProduct}
+        onProductsChange={setSelectedProducts}
         allowedCountries={allowedCountries}
         showAllCountries={isAdmin}
       />
@@ -80,14 +80,14 @@ export default function ComparacionPage() {
       <ComparisonSummary
         month={selectedMonth}
         countries={selectedCountries}
-        product={selectedProduct}
+        products={selectedProducts}
       />
 
       {/* Tabla comparativa */}
       <ComparisonTable
         month={selectedMonth}
         countries={selectedCountries}
-        product={selectedProduct}
+        products={selectedProducts}
       />
       </div>
     </div>

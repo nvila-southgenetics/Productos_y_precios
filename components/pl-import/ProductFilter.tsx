@@ -1,20 +1,20 @@
 "use client"
 
-import { ProductSearchFilter } from "@/components/dashboard/ProductSearchFilter"
+import { ProductMultiSearchFilter } from "@/components/dashboard/ProductMultiSearchFilter"
 
 interface ProductFilterProps {
   products: string[]
-  selectedProduct: string
-  onProductChange: (product: string) => void
+  /** Array vacío = todos. */
+  selectedProducts: string[]
+  onProductsChange: (products: string[]) => void
 }
 
-export function ProductFilter({ products, selectedProduct, onProductChange }: ProductFilterProps) {
+export function ProductFilter({ products, selectedProducts, onProductsChange }: ProductFilterProps) {
   return (
-    <ProductSearchFilter
+    <ProductMultiSearchFilter
       products={products}
-      selectedProduct={selectedProduct}
-      onProductChange={onProductChange}
-      allValue="Todos"
+      selectedProducts={selectedProducts}
+      onSelectedProductsChange={onProductsChange}
       allLabel="Todos"
     />
   )

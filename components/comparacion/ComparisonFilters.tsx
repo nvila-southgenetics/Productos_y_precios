@@ -6,15 +6,16 @@ import { supabase } from '@/lib/supabase';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { ProductSearchFilter } from '@/components/dashboard/ProductSearchFilter';
+import { ProductMultiSearchFilter } from '@/components/dashboard/ProductMultiSearchFilter';
 
 interface ComparisonFiltersProps {
   selectedMonth: string;
   selectedCountries: string[];
-  selectedProduct: string;
+  /** Array vacío = todos. */
+  selectedProducts: string[];
   onMonthChange: (month: string) => void;
   onCountriesChange: (countries: string[]) => void;
-  onProductChange: (product: string) => void;
+  onProductsChange: (products: string[]) => void;
   allowedCountries?: string[];
   showAllCountries?: boolean;
 }
@@ -57,10 +58,10 @@ const COUNTRIES = [
 export function ComparisonFilters({
   selectedMonth,
   selectedCountries,
-  selectedProduct,
+  selectedProducts,
   onMonthChange,
   onCountriesChange,
-  onProductChange,
+  onProductsChange,
   allowedCountries,
   showAllCountries = true,
 }: ComparisonFiltersProps) {
@@ -202,11 +203,10 @@ export function ComparisonFilters({
 
       {/* Filtro de Producto */}
       <div className="flex flex-col gap-2">
-        <ProductSearchFilter
+        <ProductMultiSearchFilter
           products={products}
-          selectedProduct={selectedProduct === 'all' ? 'all' : selectedProduct}
-          onProductChange={(value) => onProductChange(value)}
-          allValue="all"
+          selectedProducts={selectedProducts}
+          onSelectedProductsChange={onProductsChange}
           allLabel="Todos los productos"
         />
       </div>

@@ -28,7 +28,7 @@ export default function PLImportPage() {
   const [companies, setCompanies] = useState<string[]>([])
   const [products, setProducts] = useState<string[]>([])
   const [selectedCompany, setSelectedCompany] = useState("Todas las compañías")
-  const [selectedProduct, setSelectedProduct] = useState("Todos")
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [selectedYear, setSelectedYear] = useState("Todos")
   const [periods, setPeriods] = useState<string[]>([])
   const [availableYears, setAvailableYears] = useState<string[]>([])
@@ -88,7 +88,7 @@ export default function PLImportPage() {
     setLoadingPeriods((prev) => new Set(prev).add(periodo))
 
     try {
-      const data = await getMonthlySales(selectedCompany, periodo, selectedProduct)
+      const data = await getMonthlySales(selectedCompany, periodo, selectedProducts.length ? selectedProducts : undefined)
       setMonthlyData((prev) => {
         // Solo actualizar si no existe
         if (prev[periodo] && prev[periodo].length > 0) {
@@ -107,7 +107,7 @@ export default function PLImportPage() {
         return newSet
       })
     }
-  }, [selectedCompany, selectedProduct])
+  }, [selectedCompany, selectedProducts])
 
   // Cargar períodos cuando cambia la compañía
   useEffect(() => {
@@ -156,28 +156,28 @@ export default function PLImportPage() {
       }, index * 50)
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [periods, selectedProduct])
+  }, [periods, selectedProducts])
 
   // Cargar total anual cuando cambian los filtros
   useEffect(() => {
     async function loadTotal() {
       if (!selectedCompany) return
       try {
-        const total = await getAnnualTotal(selectedCompany, selectedProduct)
+        const total = await getAnnualTotal(selectedCompany, selectedProducts.length ? selectedProducts : undefined)
         setTotalData(total)
       } catch (error) {
         console.error("Error loading total:", error)
       }
     }
     loadTotal()
-  }, [selectedCompany, selectedProduct])
+  }, [selectedCompany, selectedProducts])
   
   // Limpiar datos cuando cambia el producto
   useEffect(() => {
     setMonthlyData({})
     loadingRef.current.clear() // Limpiar ref también
     setLoadingPeriods(new Set())
-  }, [selectedProduct])
+  }, [selectedProducts])
 
   // Cargar ventas al seleccionar una fecha en el calendario
   useEffect(() => {
@@ -281,8 +281,8 @@ export default function PLImportPage() {
         />
         <ProductFilter
           products={products}
-          selectedProduct={selectedProduct}
-          onProductChange={setSelectedProduct}
+          selectedProducts={selectedProducts}
+          onProductsChange={setSelectedProducts}
         />
             <YearFilter
               years={availableYears}

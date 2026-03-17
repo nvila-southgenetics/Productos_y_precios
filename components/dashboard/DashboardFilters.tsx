@@ -1,18 +1,19 @@
 "use client"
 
-import { ProductSearchFilter } from "@/components/dashboard/ProductSearchFilter"
+import { ProductMultiSearchFilter } from "@/components/dashboard/ProductMultiSearchFilter"
 
 interface DashboardFiltersProps {
   companies: string[]
   products: string[]
   availableYears: string[]
   selectedCompany: string
-  selectedProduct: string
+  /** Array vacío = todos. */
+  selectedProducts: string[]
   selectedYear: string
   selectedMonth: string
   selectedChannel: string
   onCompanyChange: (company: string) => void
-  onProductChange: (product: string) => void
+  onProductsChange: (products: string[]) => void
   onYearChange: (year: string) => void
   onMonthChange: (month: string) => void
   onChannelChange: (channel: string) => void
@@ -24,12 +25,12 @@ export function DashboardFilters({
   products,
   availableYears,
   selectedCompany,
-  selectedProduct,
+  selectedProducts,
   selectedYear,
   selectedMonth,
   selectedChannel,
   onCompanyChange,
-  onProductChange,
+  onProductsChange,
   onYearChange,
   onMonthChange,
   onChannelChange,
@@ -57,11 +58,12 @@ export function DashboardFilters({
         </select>
       </div>
 
-      <ProductSearchFilter
+      <ProductMultiSearchFilter
         products={products}
-        selectedProduct={selectedProduct}
-        onProductChange={onProductChange}
+        selectedProducts={selectedProducts}
+        onSelectedProductsChange={onProductsChange}
         disabled={products.length === 0}
+        allLabel="Todos los productos"
       />
 
       <div className="flex flex-col gap-2">

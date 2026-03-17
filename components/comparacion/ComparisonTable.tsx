@@ -30,7 +30,8 @@ interface ComparisonRow {
 interface ComparisonTableProps {
   month: string;
   countries: string[];
-  product: string;
+  /** Array vacío = todos. */
+  products: string[];
 }
 
 const MONTH_KEYS = [
@@ -149,7 +150,7 @@ const productNamesMatch = (name1: string, name2: string): boolean => {
   return false;
 };
 
-export function ComparisonTable({ month, countries, product }: ComparisonTableProps) {
+export function ComparisonTable({ month, countries, products }: ComparisonTableProps) {
   const [data, setData] = useState<ComparisonRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<'deltaBudgetVsReal2026' | 'deltaReal2026VsReal2025'>('deltaBudgetVsReal2026');
@@ -171,7 +172,7 @@ export function ComparisonTable({ month, countries, product }: ComparisonTablePr
 
   useEffect(() => {
     fetchComparisonData();
-  }, [month, countries, product]);
+  }, [month, countries, products]);
 
   const fetchComparisonData = async () => {
     setLoading(true);
@@ -186,8 +187,8 @@ export function ComparisonTable({ month, countries, product }: ComparisonTablePr
         budgetQuery = budgetQuery.in('country_code', countries);
       }
 
-      if (product !== 'all') {
-        budgetQuery = budgetQuery.eq('product_name', product);
+      if (products.length > 0) {
+        budgetQuery = budgetQuery.in('product_name', products);
       }
 
       const { data: budgetData, error: budgetError } = await budgetQuery;
@@ -266,8 +267,9 @@ export function ComparisonTable({ month, countries, product }: ComparisonTablePr
 
         // Aplicar filtros
         const matchesCountry = countries.length === 0 || countries.includes(countryCodeFromCompany);
-        const matchesProduct = product === 'all' || 
-                             productNamesMatch(product, row.producto);
+        const matchesProduct =
+          products.length === 0 ||
+          products.some((p) => productNamesMatch(p, row.producto));
         const matchesMonth = !isMonthFiltered || row.mes === parseInt(month);
 
         if (matchesCountry && matchesProduct && matchesMonth) {
@@ -295,8 +297,9 @@ export function ComparisonTable({ month, countries, product }: ComparisonTablePr
 
         // Aplicar filtros
         const matchesCountry = countries.length === 0 || countries.includes(countryCodeFromCompany);
-        const matchesProduct = product === 'all' || 
-                             productNamesMatch(product, row.producto);
+        const matchesProduct =
+          products.length === 0 ||
+          products.some((p) => productNamesMatch(p, row.producto));
         const matchesMonth = !isMonthFiltered || row.mes === parseInt(month);
 
         if (matchesCountry && matchesProduct && matchesMonth) {
@@ -469,7 +472,7 @@ export function ComparisonTable({ month, countries, product }: ComparisonTablePr
             }
 
             // Verificar filtro de producto
-            if (product !== 'all' && !productNamesMatch(product, productName)) {
+            if (products.length > 0 && !products.some((p) => productNamesMatch(p, productName))) {
               return;
             }
 

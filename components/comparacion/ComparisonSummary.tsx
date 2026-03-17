@@ -8,7 +8,8 @@ import { getCountryForCompany } from '@/lib/auth-constants';
 interface ComparisonSummaryProps {
   month: string;
   countries: string[];
-  product: string;
+  /** Array vacío = todos. */
+  products: string[];
 }
 
 interface SummaryData {
@@ -106,7 +107,7 @@ const productNamesMatch = (name1: string, name2: string): boolean => {
   return false;
 };
 
-export function ComparisonSummary({ month, countries, product }: ComparisonSummaryProps) {
+export function ComparisonSummary({ month, countries, products }: ComparisonSummaryProps) {
   const [summary, setSummary] = useState<SummaryData>({
     budget2026: 0,
     real2026: 0,
@@ -120,7 +121,7 @@ export function ComparisonSummary({ month, countries, product }: ComparisonSumma
 
   useEffect(() => {
     fetchSummary();
-  }, [month, countries, product]);
+  }, [month, countries, products]);
 
   const fetchSummary = async () => {
     setLoading(true);
@@ -135,8 +136,8 @@ export function ComparisonSummary({ month, countries, product }: ComparisonSumma
         budgetQuery = budgetQuery.in('country_code', countries);
       }
 
-      if (product !== 'all') {
-        budgetQuery = budgetQuery.eq('product_name', product);
+      if (products.length > 0) {
+        budgetQuery = budgetQuery.in('product_name', products);
       }
 
       const { data: budgetData, error: budgetError } = await budgetQuery;
@@ -200,8 +201,9 @@ export function ComparisonSummary({ month, countries, product }: ComparisonSumma
         const key = `${countryCodeFromCompany}-${normalizedProduct}`;
 
         const matchesCountry = countries.length === 0 || countries.includes(countryCodeFromCompany);
-        const matchesProduct = product === 'all' || 
-                             productNamesMatch(product, row.producto);
+        const matchesProduct =
+          products.length === 0 ||
+          products.some((p) => productNamesMatch(p, row.producto));
         const matchesMonth = !isMonthFiltered || row.mes === parseInt(month);
 
         if (matchesCountry && matchesProduct && matchesMonth) {
@@ -218,8 +220,9 @@ export function ComparisonSummary({ month, countries, product }: ComparisonSumma
         const key = `${countryCodeFromCompany}-${normalizedProduct}`;
 
         const matchesCountry = countries.length === 0 || countries.includes(countryCodeFromCompany);
-        const matchesProduct = product === 'all' || 
-                             productNamesMatch(product, row.producto);
+        const matchesProduct =
+          products.length === 0 ||
+          products.some((p) => productNamesMatch(p, row.producto));
         const matchesMonth = !isMonthFiltered || row.mes === parseInt(month);
 
         if (matchesCountry && matchesProduct && matchesMonth) {

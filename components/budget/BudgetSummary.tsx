@@ -8,7 +8,8 @@ import { formatCurrency } from "@/lib/utils"
 interface BudgetSummaryProps {
   year: number
   country: string
-  product: string
+  /** Array vacío = todos. */
+  products: string[]
   month: string
   channel: string
   /** Cuando country === "all" y hay varios países permitidos (no-admin), filtrar por estos. */
@@ -71,7 +72,7 @@ function calculateGrossProfit(overrides: any): number {
   return salesRevenueUSD - totalCosts
 }
 
-export function BudgetSummary({ year, country, product, month, channel, allowedCountryCodes }: BudgetSummaryProps) {
+export function BudgetSummary({ year, country, products, month, channel, allowedCountryCodes }: BudgetSummaryProps) {
   const [summary, setSummary] = useState<SummaryData>({
     totalUnits: 0,
     totalGrossSale: 0,
@@ -82,7 +83,7 @@ export function BudgetSummary({ year, country, product, month, channel, allowedC
 
   useEffect(() => {
     fetchSummary()
-  }, [year, country, product, month, channel, allowedCountryCodes])
+  }, [year, country, products, month, channel, allowedCountryCodes])
 
   const fetchSummary = async () => {
     setLoading(true)
@@ -95,8 +96,8 @@ export function BudgetSummary({ year, country, product, month, channel, allowedC
         query = query.in("country_code", allowedCountryCodes)
       }
 
-      if (product !== "all") {
-        query = query.eq("product_name", product)
+      if (products.length > 0) {
+        query = query.in("product_name", products)
       }
 
       if (channel !== "all") {

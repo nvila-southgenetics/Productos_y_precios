@@ -40,7 +40,8 @@ interface BudgetRow {
 interface BudgetTableProps {
   year: number
   country: string
-  product: string
+  /** Array vacío = todos. */
+  products: string[]
   month: string
   channel: string
   /** Cuando country === "all" y hay varios países permitidos (no-admin), filtrar por estos. */
@@ -118,7 +119,7 @@ function getMarginColor(margin: number): string {
   return "text-red-300"
 }
 
-export function BudgetTable({ year, country, product, month, channel, allowedCountryCodes, canEdit }: BudgetTableProps) {
+export function BudgetTable({ year, country, products, month, channel, allowedCountryCodes, canEdit }: BudgetTableProps) {
   const [data, setData] = useState<BudgetRow[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
@@ -127,7 +128,7 @@ export function BudgetTable({ year, country, product, month, channel, allowedCou
 
   useEffect(() => {
     fetchBudgetData()
-  }, [year, country, product, month, channel, allowedCountryCodes])
+  }, [year, country, products, month, channel, allowedCountryCodes])
 
   const fetchBudgetData = async () => {
     setLoading(true)
@@ -140,8 +141,8 @@ export function BudgetTable({ year, country, product, month, channel, allowedCou
         query = query.in("country_code", allowedCountryCodes)
       }
 
-      if (product !== "all") {
-        query = query.eq("product_name", product)
+      if (products.length > 0) {
+        query = query.in("product_name", products)
       }
 
       // Filtrar por canal si no es "all"

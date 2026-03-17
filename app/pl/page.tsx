@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { Select } from "@/components/ui/select"
 import { productNameSortKey } from "@/lib/utils"
 import { PLTable } from "@/components/pl/PLTable"
-import { ProductSearchFilter } from "@/components/dashboard/ProductSearchFilter"
+import { ProductMultiSearchFilter } from "@/components/dashboard/ProductMultiSearchFilter"
 
 const BASE_COUNTRIES = [
   { code: "AR", name: "Argentina" },
@@ -37,7 +37,7 @@ export default function PLPage() {
   const [modelo, setModelo] = useState<"budget" | "real">("budget")
   const [country, setCountry] = useState<string>("AR")
   const [category, setCategory] = useState<string>("all")
-  const [product, setProduct] = useState<string>("all")
+  const [productsSelected, setProductsSelected] = useState<string[]>([])
   const [channel, setChannel] = useState<string>("all")
   const [products, setProducts] = useState<string[]>([])
   // YTD por defecto: hasta diciembre
@@ -53,7 +53,7 @@ export default function PLPage() {
 
   useEffect(() => {
     fetchProducts()
-    setProduct("all")
+    setProductsSelected([])
   }, [country, category, modelo, year])
 
   const fetchProducts = async () => {
@@ -176,11 +176,10 @@ export default function PLPage() {
 
             {/* Producto */}
             <div className="flex flex-col gap-2">
-              <ProductSearchFilter
+              <ProductMultiSearchFilter
                 products={products}
-                selectedProduct={product === "all" ? "all" : product}
-                onProductChange={(value) => setProduct(value)}
-                allValue="all"
+                selectedProducts={productsSelected}
+                onSelectedProductsChange={setProductsSelected}
                 allLabel="Todos los productos"
               />
             </div>
@@ -251,7 +250,7 @@ export default function PLPage() {
           year={year}
           country={country}
           category={category}
-          product={product}
+          products={productsSelected}
           channel={channel}
           canEdit={canEdit}
           ytdMonth={ytdMonth}

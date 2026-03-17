@@ -126,10 +126,11 @@ export async function POST(request: Request) {
 
     const newProductId = newProduct.id
 
-    // 2) Reasignar ventas (tabla ventas.id_producto)
+    // 2) Reasignar ventas (tabla ventas.id_producto) y normalizar el nombre textual (ventas.test)
+    // Nota: ventas_mensuales_view agrupa por `test`, por eso es importante mantenerlo consistente.
     const { data: updatedVentas, error: ventasError } = await supabase
       .from('ventas')
-      .update({ id_producto: newProductId })
+      .update({ id_producto: newProductId, test: trimmedName })
       .in('id_producto', productIds)
       .select('id')
 

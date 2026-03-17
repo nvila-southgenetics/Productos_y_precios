@@ -480,7 +480,7 @@ const MES_LABELS: Record<number, string> = {
  */
 export async function getMonthlySalesEvolution(
   company?: string,
-  productName?: string
+  productName?: string | string[]
 ): Promise<{ year2025: MonthlyEvolutionPoint[]; year2026: MonthlyEvolutionPoint[] }> {
   let query = supabase
     .from('ventas_mensuales_view')
@@ -508,11 +508,18 @@ export async function getMonthlySalesEvolution(
   }
 
   const normalizedCompany = company?.trim()
-  const normalizedProduct = productName?.trim()
+  const normalizedProduct =
+    typeof productName === 'string' ? productName.trim() : undefined
+  const normalizedProducts =
+    Array.isArray(productName) ? productName.map((p) => p.trim()).filter(Boolean) : undefined
 
   const filtered = (data as any[]).filter((row) => {
     if (normalizedCompany && normalizedCompany !== 'Todas las compañías' && row.compañia !== normalizedCompany) return false
-    if (normalizedProduct && normalizedProduct !== 'Todos' && row.producto !== normalizedProduct) return false
+    if (normalizedProducts && normalizedProducts.length > 0) {
+      if (!normalizedProducts.includes(row.producto)) return false
+    } else if (normalizedProduct && normalizedProduct !== 'Todos' && row.producto !== normalizedProduct) {
+      return false
+    }
     return row.año === 2025 || row.año === 2026
   })
 
@@ -552,7 +559,7 @@ export async function getMonthlySalesEvolution(
 export async function getMonthlySales(
   company: string,
   periodo?: string,
-  productName?: string
+  productName?: string | string[]
 ): Promise<MonthlySalesWithProduct[]> {
   // Normalizar nombre de compañía (trim espacios)
   const normalizedCompany = company.trim()
@@ -574,7 +581,9 @@ export async function getMonthlySales(
     query = query.eq('periodo', formattedPeriodo)
   }
 
-  if (productName && productName !== 'Todos') {
+  if (Array.isArray(productName) && productName.length > 0) {
+    query = query.in('producto', productName)
+  } else if (typeof productName === 'string' && productName !== 'Todos') {
     query = query.eq('producto', productName)
   }
 
@@ -742,7 +751,7 @@ export async function getAvailablePeriods(company: string): Promise<string[]> {
  */
 export async function getAnnualTotal(
   company: string,
-  productName?: string
+  productName?: string | string[]
 ): Promise<MonthlySalesWithProduct[]> {
   // Normalizar nombre de compañía
   const normalizedCompany = company.trim()
@@ -756,7 +765,9 @@ export async function getAnnualTotal(
     query = query.eq('compañia', normalizedCompany) // ✅ Usar compañía normalizada
   }
 
-  if (productName && productName !== 'Todos') {
+  if (Array.isArray(productName) && productName.length > 0) {
+    query = query.in('producto', productName)
+  } else if (typeof productName === 'string' && productName !== 'Todos') {
     query = query.eq('producto', productName)
   }
 
@@ -856,7 +867,7 @@ async function getProductsWithMetrics(
   company: string,
   year?: string,
   month?: string,
-  productName?: string,
+  productName?: string | string[],
   channel?: string
 ): Promise<DashboardProduct[]> {
   const normalizedCompany = company.trim()
@@ -878,7 +889,9 @@ async function getProductsWithMetrics(
     query = query.eq('mes', parseInt(month))
   }
   
-  if (productName && productName !== 'Todos') {
+  if (Array.isArray(productName) && productName.length > 0) {
+    query = query.in('producto', productName)
+  } else if (typeof productName === 'string' && productName !== 'Todos') {
     query = query.eq('producto', productName)
   }
   

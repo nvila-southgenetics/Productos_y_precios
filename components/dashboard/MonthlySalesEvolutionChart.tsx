@@ -14,7 +14,7 @@ import {
 import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
 import type { MonthlyEvolutionPoint } from "@/lib/supabase-mcp"
-import { ProductSearchFilter } from "@/components/dashboard/ProductSearchFilter"
+import { ProductMultiSearchFilter } from "@/components/dashboard/ProductMultiSearchFilter"
 
 type YearFilter = "both" | "2025" | "2026"
 
@@ -22,8 +22,9 @@ interface MonthlySalesEvolutionChartProps {
   year2025: MonthlyEvolutionPoint[]
   year2026: MonthlyEvolutionPoint[]
   products: string[]
-  selectedProduct: string
-  onProductChange: (product: string) => void
+  /** Array vacío = todos. */
+  selectedProducts: string[]
+  onProductsChange: (products: string[]) => void
   isLoading?: boolean
 }
 
@@ -31,8 +32,8 @@ export function MonthlySalesEvolutionChart({
   year2025,
   year2026,
   products,
-  selectedProduct,
-  onProductChange,
+  selectedProducts,
+  onProductsChange,
   isLoading = false,
 }: MonthlySalesEvolutionChartProps) {
   const [yearFilter, setYearFilter] = useState<YearFilter>("both")
@@ -52,11 +53,12 @@ export function MonthlySalesEvolutionChart({
         <div className="flex flex-wrap items-end justify-between gap-4 mb-4">
           <h3 className="text-lg font-semibold text-white">Evolución mensual de ventas</h3>
           <div className="w-[220px] shrink-0">
-            <ProductSearchFilter
+            <ProductMultiSearchFilter
               products={products}
-              selectedProduct={selectedProduct}
-              onProductChange={onProductChange}
+              selectedProducts={selectedProducts}
+              onSelectedProductsChange={onProductsChange}
               disabled={products.length === 0}
+              allLabel="Todos los productos"
             />
           </div>
         </div>
@@ -74,11 +76,12 @@ export function MonthlySalesEvolutionChart({
           <h3 className="text-lg font-semibold text-white">Evolución mensual de ventas</h3>
           <div className="flex flex-wrap items-end gap-3">
             <div className="w-[220px] shrink-0">
-              <ProductSearchFilter
+              <ProductMultiSearchFilter
                 products={products}
-                selectedProduct={selectedProduct}
-                onProductChange={onProductChange}
+                selectedProducts={selectedProducts}
+                onSelectedProductsChange={onProductsChange}
                 disabled={products.length === 0}
+                allLabel="Todos los productos"
               />
             </div>
             <div className="flex items-center gap-1 rounded-lg bg-white/5 p-1 border border-white/10">
@@ -109,11 +112,12 @@ export function MonthlySalesEvolutionChart({
         </h3>
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-[220px] shrink-0">
-            <ProductSearchFilter
+            <ProductMultiSearchFilter
               products={products}
-              selectedProduct={selectedProduct}
-              onProductChange={onProductChange}
+              selectedProducts={selectedProducts}
+              onSelectedProductsChange={onProductsChange}
               disabled={isLoading || products.length === 0}
+              allLabel="Todos los productos"
             />
           </div>
           <div className="flex items-center gap-1 rounded-lg bg-white/5 p-1 border border-white/10">
