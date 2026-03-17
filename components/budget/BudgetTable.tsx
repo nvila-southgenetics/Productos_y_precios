@@ -166,14 +166,14 @@ export function BudgetTable({ year, country, products, month, channel, allowedCo
         .filter((id: string | null): id is string => id !== null)
 
       // Obtener productos
-      const { data: products } = await supabase
+      const { data: productRows } = await supabase
         .from("products")
         .select("id, name")
         .in("id", productIds.length > 0 ? productIds : [null])
 
       // Mapear productos por nombre e ID
       const productMap = new Map<string, string>()
-      products?.forEach((p: { name: string; id: string }) => {
+      productRows?.forEach((p: { name: string; id: string }) => {
         productMap.set(p.name, p.id)
       })
 

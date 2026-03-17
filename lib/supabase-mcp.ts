@@ -1014,7 +1014,7 @@ export async function getTopSellingProducts(
   company: string,
   year?: string,
   month?: string,
-  productName?: string,
+  productName?: string | string[],
   channel?: string,
   limit: number = 10
 ): Promise<DashboardProduct[]> {
@@ -1033,7 +1033,7 @@ export async function getTopMarginProducts(
   company: string,
   year?: string,
   month?: string,
-  productName?: string,
+  productName?: string | string[],
   channel?: string,
   limit: number = 10
 ): Promise<DashboardProduct[]> {
@@ -1053,7 +1053,7 @@ export async function getBottomMarginProducts(
   company: string,
   year?: string,
   month?: string,
-  productName?: string,
+  productName?: string | string[],
   channel?: string,
   limit: number = 10
 ): Promise<DashboardProduct[]> {
@@ -1073,7 +1073,7 @@ export async function getMostExpensiveProducts(
   company: string,
   year?: string,
   month?: string,
-  productName?: string,
+  productName?: string | string[],
   channel?: string,
   limit: number = 10
 ): Promise<DashboardProduct[]> {
