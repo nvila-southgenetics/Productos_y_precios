@@ -232,6 +232,8 @@ export async function createProduct(input: {
   category?: string | null
   tipo?: string | null
 }): Promise<ProductWithOverrides> {
+  const ALL_COUNTRIES = ["UY", "AR", "MX", "CL", "VE", "CO"] as const
+
   const baseName = input.name.trim()
   if (!baseName) {
     throw new Error('El nombre del producto es obligatorio')
@@ -255,6 +257,33 @@ export async function createProduct(input: {
     throw new Error('No hay usuario autenticado para crear el producto.')
   }
 
+  const ensureOverridesForAllCountries = async (productId: string) => {
+    // La UI muestra productos en cada país solo si existen overrides para ese país.
+    // Creamos overrides “vacíos” (pero existentes) para asegurar visibilidad.
+    const { data: existingRows, error: ensureError } = await supabase
+      .from("product_country_overrides")
+      .select("country_code")
+      .eq("product_id", productId)
+      .eq("channel", "Paciente")
+
+    if (ensureError) throw ensureError
+
+    const existingCountries = new Set((existingRows || []).map((r: any) => r.country_code))
+    const missingCountries = ALL_COUNTRIES.filter((c) => !existingCountries.has(c))
+
+    if (!missingCountries.length) return
+
+    const insertRows = missingCountries.map((country_code) => ({
+      product_id: productId,
+      country_code,
+      channel: "Paciente",
+      overrides: {},
+    }))
+
+    const { error: insertError } = await supabase.from("product_country_overrides").insert(insertRows)
+    if (insertError) throw insertError
+  }
+
   // Evitar errores por duplicados: si ya existe el producto con el mismo nombre, lo devolvemos.
   const { data: existing, error: existingError } = await supabase
     .from('products')
@@ -264,6 +293,12 @@ export async function createProduct(input: {
 
   if (existingError) throw existingError
   if (existing) {
+    const productId = (existing as Product).id
+    await ensureOverridesForAllCountries(productId)
+
+    const productWithOverrides = await getProductById(productId)
+    if (productWithOverrides) return productWithOverrides
+
     return {
       ...(existing as Product),
       country_overrides: [],
@@ -288,6 +323,12 @@ export async function createProduct(input: {
     console.error('Error creating product:', error)
     throw error || new Error('No se pudo crear el producto')
   }
+
+  const productId = (data as Product).id
+  await ensureOverridesForAllCountries(productId)
+
+  const productWithOverrides = await getProductById(productId)
+  if (productWithOverrides) return productWithOverrides
 
   return {
     ...(data as Product),
