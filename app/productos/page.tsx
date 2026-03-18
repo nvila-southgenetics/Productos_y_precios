@@ -4,15 +4,14 @@ import { useState, useEffect, useMemo, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
 import { ProductTable } from "@/components/products/ProductTable"
 import { ProductFilters } from "@/components/products/ProductFilters"
 import { CountryPills } from "@/components/products/CountryPills"
 import { ProductMergeDialog } from "@/components/products/ProductMergeDialog"
-import { getProductsWithOverrides, deleteProductFromCountry, deleteProductFromAllCountries, getTotalSalesByProductIds, type ProductWithOverrides, createProduct } from "@/lib/supabase-mcp"
+import { getProductsWithOverrides, deleteProductFromCountry, deleteProductFromAllCountries, getTotalSalesByProductIds, type ProductWithOverrides } from "@/lib/supabase-mcp"
 import { usePermissions } from "@/lib/use-permissions"
 import { productNameSortKey } from "@/lib/utils"
+import { useProductCreateDialog } from "@/components/products/ProductCreateDialogProvider"
 
 const VALID_COUNTRIES = new Set(["UY", "AR", "MX", "CL", "VE", "CO"])
 
@@ -20,6 +19,7 @@ function ProductosContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const { allowedCountries, canEdit } = usePermissions()
+  const { openCreateProductDialog } = useProductCreateDialog()
   const [products, setProducts] = useState<ProductWithOverrides[]>([])
   const [filteredProducts, setFilteredProducts] = useState<ProductWithOverrides[]>([])
   // País por defecto: Argentina
@@ -32,10 +32,6 @@ function ProductosContent() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [salesCountByProductId, setSalesCountByProductId] = useState<Record<string, number>>({})
-  const [createDialogOpen, setCreateDialogOpen] = useState(false)
-  const [newProductName, setNewProductName] = useState("")
-  const [newProductSku, setNewProductSku] = useState("")
-  const [isCreating, setIsCreating] = useState(false)
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false)
   const [productsToMerge, setProductsToMerge] = useState<ProductWithOverrides[]>([])
   const [isMerging, setIsMerging] = useState(false)
@@ -304,32 +300,13 @@ function ProductosContent() {
   }
 
   const handleOpenCreateDialog = () => {
-    setNewProductName("")
-    setNewProductSku("")
-    setCreateDialogOpen(true)
-  }
-
-  const handleCreateProduct = async () => {
-    if (!newProductName.trim()) {
-      alert("El nombre del producto es obligatorio.")
-      return
-    }
-    setIsCreating(true)
-    try {
-      const product = await createProduct({
-        name: newProductName.trim(),
-        sku: newProductSku.trim() || undefined,
-      })
-      setCreateDialogOpen(false)
-      setNewProductName("")
-      setNewProductSku("")
-      router.push(`/productos/${product.id}?country=${selectedCountry}`)
-    } catch (err) {
-      console.error("Error al crear producto:", err)
-      alert("No se pudo crear el producto. Revisa los datos e intenta nuevamente.")
-    } finally {
-      setIsCreating(false)
-    }
+    if (!canEdit) return
+    openCreateProductDialog({
+      defaultName: "",
+      onCreated: async (product) => {
+        router.push(`/productos/${product.id}?country=${selectedCountry}`)
+      },
+    })
   }
 
   return (
@@ -403,55 +380,6 @@ function ProductosContent() {
             onRequestMerge={handleRequestMerge}
           />
         )}
-
-        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          <DialogContent className="bg-slate-900 border border-white/20 text-white max-w-md">
-            <DialogHeader>
-              <DialogTitle>Nuevo producto</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 mt-2">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Nombre del producto <span className="text-red-400">*</span>
-                </label>
-                <Input
-                  value={newProductName}
-                  onChange={(e) => setNewProductName(e.target.value)}
-                  placeholder="Ej: ONCOTYPE DX MAMA"
-                  className="bg-white/10 border-white/20 text-white placeholder:text-white/40"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  SKU (opcional)
-                </label>
-                <Input
-                  value={newProductSku}
-                  onChange={(e) => setNewProductSku(e.target.value)}
-                  placeholder="Se generará uno si lo dejas vacío"
-                  className="bg-white/10 border-white/20 text-white placeholder:text-white/40"
-                />
-              </div>
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <Button
-                variant="outline"
-                className="bg-transparent border-white/30 text-white hover:bg-white/10"
-                onClick={() => setCreateDialogOpen(false)}
-                disabled={isCreating}
-              >
-                Cancelar
-              </Button>
-              <Button
-                className="bg-blue-500 hover:bg-blue-600 text-white"
-                onClick={handleCreateProduct}
-                disabled={isCreating}
-              >
-                {isCreating ? "Creando..." : "Crear producto"}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
 
         <ProductMergeDialog
           open={mergeDialogOpen}

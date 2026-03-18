@@ -15,12 +15,17 @@ export function formatDate(date: string | Date): string {
 }
 
 export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('es-ES', {
-    style: 'currency',
-    currency: 'USD',
+  // Nota: en este entorno, `Intl.NumberFormat` con `style: 'currency'` para `USD`
+  // no está poniendo separadores de miles (ej: 5700 -> "5700 US$").
+  // Por eso formateamos como `decimal` (con agrupación) y luego agregamos el sufijo.
+  const formatted = new Intl.NumberFormat("es-ES", {
+    style: "decimal",
+    useGrouping: true,
     minimumFractionDigits: 0,
-    maximumFractionDigits: 2
+    maximumFractionDigits: 0,
   }).format(amount)
+
+  return `${formatted} US$`
 }
 
 export function formatPercentage(value: number): string {
@@ -33,8 +38,8 @@ export function productNameSortKey(name: string): string {
 }
 
 /** Nombre a mostrar para productos en el frontend (alias legibles). */
-export function displayProductName(name: string): string {
-  const trimmed = name.trim()
+export function displayProductName(name: string | null | undefined): string {
+  const trimmed = (name ?? "").trim()
   const lower = trimmed.toLowerCase()
 
   // Unificar \"Unity Básico\" (como se guarda en BD) a \"Unity\" en toda la UI

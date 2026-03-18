@@ -228,7 +228,6 @@ export async function getProductById(productId: string): Promise<ProductWithOver
  */
 export async function createProduct(input: {
   name: string
-  sku?: string
   description?: string | null
   category?: string | null
   tipo?: string | null
@@ -238,20 +237,46 @@ export async function createProduct(input: {
     throw new Error('El nombre del producto es obligatorio')
   }
 
-  const generatedSku = (input.sku && input.sku.trim())
-    ? input.sku.trim()
-    : baseName
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-zA-Z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-        .toUpperCase() || `SKU-${Date.now()}`
+  // SKU requerido por DB: lo generamos a partir del nombre (sin necesidad de input del usuario).
+  const generatedSku = baseName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toUpperCase() || `SKU-${Date.now()}`
+
+  // productos.user_id y productos.base_price son NOT NULL, así que deben setearse al insertar.
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    throw new Error('No hay usuario autenticado para crear el producto.')
+  }
+
+  // Evitar errores por duplicados: si ya existe el producto con el mismo nombre, lo devolvemos.
+  const { data: existing, error: existingError } = await supabase
+    .from('products')
+    .select('*')
+    .eq('name', baseName)
+    .maybeSingle()
+
+  if (existingError) throw existingError
+  if (existing) {
+    return {
+      ...(existing as Product),
+      country_overrides: [],
+    }
+  }
 
   const { data, error } = await supabase
     .from('products')
     .insert({
       name: baseName,
       sku: generatedSku,
+      base_price: 0,
+      user_id: user.id,
       description: input.description ?? null,
       category: input.category ?? null,
       tipo: input.tipo ?? null,
@@ -474,6 +499,19 @@ const MES_LABELS: Record<number, string> = {
   7: 'Jul', 8: 'Ago', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dic',
 }
 
+function isAllCompaniesLabel(company: string): boolean {
+  // Normaliza para que el "modo todas las compañías" sea robusto ante acentos/espaciado.
+  const normalized = (company ?? "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+
+  // Ej: "todas las companias"
+  return normalized === "todas las companias" || normalized.startsWith("todas las compan")
+}
+
 /**
  * Obtiene la evolución mensual de ventas para 2025 y 2026 (agregado por mes).
  * Opcionalmente filtra por compañía y producto.
@@ -514,7 +552,7 @@ export async function getMonthlySalesEvolution(
     Array.isArray(productName) ? productName.map((p) => p.trim()).filter(Boolean) : undefined
 
   const filtered = (data as any[]).filter((row) => {
-    if (normalizedCompany && normalizedCompany !== 'Todas las compañías' && row.compañia !== normalizedCompany) return false
+    if (normalizedCompany && !isAllCompaniesLabel(normalizedCompany) && row.compañia !== normalizedCompany) return false
     if (normalizedProducts && normalizedProducts.length > 0) {
       if (!normalizedProducts.includes(row.producto)) return false
     } else if (normalizedProduct && normalizedProduct !== 'Todos' && row.producto !== normalizedProduct) {
@@ -570,7 +608,7 @@ export async function getMonthlySales(
     .order('cantidad_ventas', { ascending: false })
   
   // Solo filtrar por compañía si no es "Todas las compañías"
-  if (normalizedCompany !== "Todas las compañías") {
+  if (!isAllCompaniesLabel(normalizedCompany)) {
     query = query.eq('compañia', normalizedCompany) // ✅ Usar compañía normalizada
   }
 
@@ -622,7 +660,7 @@ export async function getMonthlySales(
   }
 
   // Si es "Todas las compañías", agrupar por producto y crear desglose por compañía
-  const isAllCompanies = normalizedCompany === "Todas las compañías"
+  const isAllCompanies = isAllCompaniesLabel(normalizedCompany)
   
   if (isAllCompanies) {
     // Agrupar por producto
@@ -716,7 +754,7 @@ export async function getAvailablePeriods(company: string): Promise<string[]> {
     .order('periodo', { ascending: true }) // ✅ Cambiado a true para orden ascendente
   
   // Solo filtrar por compañía si no es "Todas las compañías"
-  if (normalizedCompany !== "Todas las compañías") {
+  if (!isAllCompaniesLabel(normalizedCompany)) {
     query = query.eq('compañia', normalizedCompany) // ✅ Usar compañía normalizada
   }
   
@@ -731,7 +769,13 @@ export async function getAvailablePeriods(company: string): Promise<string[]> {
     return []
   }
 
-  const uniquePeriods: string[] = Array.from(new Set(data.map((item: { periodo: string }) => item.periodo)))
+  const uniquePeriods: string[] = Array.from(
+    new Set(
+      (data as any[])
+        .map((item: any) => item?.periodo)
+        .filter((p: any) => typeof p === "string" && p.trim().length > 0)
+    )
+  )
   
   // Debug: mostrar períodos encontrados
   console.log(`📅 Períodos encontrados para ${normalizedCompany}:`, uniquePeriods)
@@ -761,7 +805,7 @@ export async function getAnnualTotal(
     .select('producto, compañia, cantidad_ventas, monto_total')
   
   // Solo filtrar por compañía si no es "Todas las compañías"
-  if (normalizedCompany !== "Todas las compañías") {
+  if (!isAllCompaniesLabel(normalizedCompany)) {
     query = query.eq('compañia', normalizedCompany) // ✅ Usar compañía normalizada
   }
 
@@ -776,7 +820,7 @@ export async function getAnnualTotal(
   if (error) throw error
   if (!sales) return []
 
-  const isAllCompanies = normalizedCompany === "Todas las compañías"
+  const isAllCompanies = isAllCompaniesLabel(normalizedCompany)
   type SaleRow = { producto: string; compañia: string; cantidad_ventas: number; monto_total: number | null }
   type CompanyBreakdownItem = { compañia: string; cantidad_ventas: number; monto_total: number | null }
 
@@ -871,7 +915,7 @@ async function getProductsWithMetrics(
   channel?: string
 ): Promise<DashboardProduct[]> {
   const normalizedCompany = company.trim()
-  const isAllCompanies = normalizedCompany === "Todas las compañías"
+  const isAllCompanies = isAllCompaniesLabel(normalizedCompany)
   
   let query = supabase
     .from('ventas_mensuales_view')

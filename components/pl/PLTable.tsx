@@ -2,9 +2,10 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
-import { ChevronDown, ChevronRight, Table2 } from "lucide-react"
+import { ChevronDown, ChevronRight, Plus, Table2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { displayProductName } from "@/lib/utils"
+import { useProductCreateDialog } from "@/components/products/ProductCreateDialogProvider"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -154,6 +155,7 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
   const [testQuantities, setTestQuantities] = useState<Record<string, number[]> | null>(null)
 
   const product = products.length === 1 ? products[0] : "all"
+  const { openCreateProductDialog } = useProductCreateDialog()
   // Can edit SGA amounts only when both product AND channel are specific (exactly one product)
   const canEditSGA = canEdit && products.length === 1 && channel !== "all"
   // Can always edit tax rates (country-level)
@@ -268,13 +270,19 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
       const { data } = await q
       if (!data) { setProductCategories(cats); return }
 
-      const allowedProds = category !== "all"
-        ? new Set(Object.entries(cats).filter(([, c]) => c === category).map(([n]) => n))
-        : null
+      // IMPORTANTE (Real):
+      // Si el producto no existe en `public.products` (no está en `cats`),
+      // NO lo descartamos. Así mostramos las ventas aunque falte el match.
+      const filterCategory = category !== "all"
 
       for (const row of data as { producto: string; mes: number; cantidad_ventas: number }[]) {
         const name = row.producto
-        if (allowedProds && !allowedProds.has(name)) continue
+        if (filterCategory) {
+          const knownCategory = cats[name]
+          // Solo excluimos si es un producto CON categoría conocida y NO coincide.
+          // Si `knownCategory` es undefined/"" (producto faltante), lo dejamos pasar.
+          if (knownCategory && knownCategory !== category) continue
+        }
         if (!qtys[name]) qtys[name] = Array(12).fill(0)
         const mIdx = row.mes - 1
         if (mIdx >= 0 && mIdx < 12) qtys[name][mIdx] += row.cantidad_ventas
@@ -1011,13 +1019,35 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
                     .sort(([a], [b]) => a.localeCompare(b, "es", { sensitivity: "base" }))
                     .map(([name, qtArr]) => {
                       const cat = productCategories[name] || ""
+                      const isKnownProduct = Object.prototype.hasOwnProperty.call(productCategories, name)
                       const rowTotal = qtArr.reduce((s, v) => s + v, 0)
                       const ov = overrides[name]
                       const totalGS = rowTotal * (ov?.grossSalesUSD || 0)
                       return (
                       <tr key={name} className="hover:bg-white/5 transition-colors">
                           <td className="sticky left-0 bg-slate-800/95 px-3 py-2 text-xs text-white/90 whitespace-nowrap z-10">
-                          {displayProductName(name)}
+                          <div className="flex items-center gap-2">
+                            <span>{displayProductName(name)}</span>
+                            {!isKnownProduct && canEdit && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6 p-0 text-green-300 hover:text-green-200 hover:bg-white/10"
+                                title="Crear producto"
+                                onClick={() =>
+                                  openCreateProductDialog({
+                                    defaultName: name,
+                                    onCreated: async () => {
+                                      // Refresca para que el nuevo producto aparezca en `products`.
+                                      await fetchData()
+                                    },
+                                  })
+                                }
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
                           </td>
                           <td className="px-2 py-2 text-xs text-white/50 whitespace-nowrap">{cat}</td>
                           {detailMonth !== null ? (

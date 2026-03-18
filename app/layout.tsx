@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { Header } from "@/components/layout/Header"
+import { ProductCreateDialogProvider } from "@/components/products/ProductCreateDialogProvider"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -19,7 +20,7 @@ export default function RootLayout({
     <html lang="es">
       <body className={inter.className}>
         <Header />
-        {children}
+        <ProductCreateDialogProvider>{children}</ProductCreateDialogProvider>
       </body>
     </html>
   )

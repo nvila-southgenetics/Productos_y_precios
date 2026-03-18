@@ -6,7 +6,7 @@ import { ChevronDown, ChevronRight, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
 import { formatCurrency, productNameSortKey, displayProductName } from "@/lib/utils"
-import { createProduct } from "@/lib/supabase-mcp"
+import { useProductCreateDialog } from "@/components/products/ProductCreateDialogProvider"
 
 interface BudgetRow {
   id: string
@@ -125,6 +125,7 @@ export function BudgetTable({ year, country, products, month, channel, allowedCo
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [creatingProductFor, setCreatingProductFor] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const { openCreateProductDialog } = useProductCreateDialog()
 
   useEffect(() => {
     fetchBudgetData()
@@ -402,21 +403,30 @@ export function BudgetTable({ year, country, products, month, channel, allowedCo
     if (!canEdit || !row.product_name || creating) return
     setCreating(true)
     setCreatingProductFor(row.id)
-    try {
-      const product = await createProduct({ name: row.product_name })
-      await supabase
-        .from("budget")
-        .update({ product_id: product.id })
-        .eq("year", year)
-        .eq("product_name", row.product_name)
-      await fetchBudgetData()
-    } catch (error) {
-      console.error("Error al crear producto desde budget:", error)
-      alert("No se pudo crear el producto desde el budget. Intenta nuevamente.")
-    } finally {
-      setCreating(false)
-      setCreatingProductFor(null)
-    }
+
+    openCreateProductDialog({
+      defaultName: row.product_name,
+      onCreated: async (product) => {
+        try {
+          await supabase
+            .from("budget")
+            .update({ product_id: product.id })
+            .eq("year", year)
+            .eq("product_name", row.product_name)
+          await fetchBudgetData()
+        } catch (error) {
+          console.error("Error al vincular producto creado a budget:", error)
+          alert("No se pudo vincular el producto al budget. Intenta nuevamente.")
+        } finally {
+          setCreating(false)
+          setCreatingProductFor(null)
+        }
+      },
+      onCancel: () => {
+        setCreating(false)
+        setCreatingProductFor(null)
+      },
+    })
   }
 
   if (loading) {
