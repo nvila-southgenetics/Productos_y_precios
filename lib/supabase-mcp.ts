@@ -337,6 +337,37 @@ export async function createProduct(input: {
 }
 
 /**
+ * Actualiza los metadatos principales del producto (category y tipo).
+ * Estos campos impactan en filtros y en el etiquetado del frontend.
+ */
+export async function updateProductMeta(
+  productId: string,
+  input: {
+    category?: string | null
+    tipo?: string | null
+  }
+): Promise<ProductWithOverrides | null> {
+  const { data, error } = await supabase
+    .from("products")
+    .update({
+      category: input.category ?? null,
+      tipo: input.tipo ?? null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", productId)
+    .select("*")
+    .single()
+
+  if (error) {
+    console.error("Error updating product meta:", error)
+    throw error
+  }
+
+  if (!data) return null
+  return getProductById(productId)
+}
+
+/**
  * Actualiza los overrides de un producto para un país y canal
  */
 export async function updateProductCountryOverride(
@@ -843,7 +874,7 @@ export async function getAnnualTotal(
   
   let query = supabase
     .from('ventas_mensuales_view')
-    .select('producto, compañia, cantidad_ventas, monto_total')
+    .select('producto, compañia, cantidad_ventas, monto_total, año')
   
   // Solo filtrar por compañía si no es "Todas las compañías"
   if (!isAllCompaniesLabel(normalizedCompany)) {
@@ -862,12 +893,12 @@ export async function getAnnualTotal(
   if (!sales) return []
 
   const isAllCompanies = isAllCompaniesLabel(normalizedCompany)
-  type SaleRow = { producto: string; compañia: string; cantidad_ventas: number; monto_total: number | null }
+  type SaleRow = { producto: string; compañia: string; cantidad_ventas: number; monto_total: number | null; año: number }
   type CompanyBreakdownItem = { compañia: string; cantidad_ventas: number; monto_total: number | null }
 
-  // Agregar por producto
+  // Agregar por producto y año (para mostrar totales correctos por caja anual)
   const aggregated = sales.reduce((acc: MonthlySalesWithProduct[], sale: SaleRow) => {
-    const existing = acc.find((item: MonthlySalesWithProduct) => item.producto === sale.producto)
+    const existing = acc.find((item: MonthlySalesWithProduct) => item.producto === sale.producto && item.año === sale.año)
     if (existing) {
       existing.cantidad_ventas += sale.cantidad_ventas
       existing.monto_total = (existing.monto_total || 0) + (sale.monto_total || 0)
@@ -893,8 +924,8 @@ export async function getAnnualTotal(
       const newItem: MonthlySalesWithProduct = {
         ...sale,
         mes: 0,
-        año: 0,
-        periodo: 'Total',
+        año: sale.año,
+        periodo: `Total ${sale.año}`,
         precio_promedio: null,
         ...(isAllCompanies ? { companyBreakdown: [{ compañia: sale.compañia, cantidad_ventas: sale.cantidad_ventas, monto_total: sale.monto_total || 0 }] } : {}),
       }

@@ -4,7 +4,9 @@ import { useState, useEffect } from "react"
 import { usePermissions } from "@/lib/use-permissions"
 import { supabase } from "@/lib/supabase"
 import { Select } from "@/components/ui/select"
-import { productNameSortKey } from "@/lib/utils"
+import { Checkbox } from "@/components/ui/checkbox"
+import { ChevronDown } from "lucide-react"
+import { cn, productNameSortKey } from "@/lib/utils"
 import { PLTable } from "@/components/pl/PLTable"
 import { ProductMultiSearchFilter } from "@/components/dashboard/ProductMultiSearchFilter"
 
@@ -32,44 +34,127 @@ const CATEGORIES = [
 const selectClass =
   "w-full bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-white/30"
 
+type Option = { value: string; label: string }
+
+function MultiCheckboxDropdown({
+  label,
+  options,
+  selectedValues,
+  onSelectedValuesChange,
+  allLabel,
+}: {
+  label: string
+  options: Option[]
+  selectedValues: string[]
+  onSelectedValuesChange: (values: string[]) => void
+  allLabel: string
+}) {
+  const [open, setOpen] = useState(false)
+
+  const allValues = options.map((o) => o.value)
+  const isAll = allValues.length > 0 && selectedValues.length === allValues.length && allValues.every((v) => selectedValues.includes(v))
+
+  const display =
+    isAll ? allLabel : selectedValues.length === 1 ? options.find((o) => o.value === selectedValues[0])?.label ?? selectedValues[0] : `${selectedValues.length} seleccionados`
+
+  const toggle = (v: string) => {
+    const next = selectedValues.includes(v) ? selectedValues.filter((x) => x !== v) : [...selectedValues, v]
+    // Evitamos "0" selección: si se desmarca todo, volvemos a "todos".
+    onSelectedValuesChange(next.length === 0 ? allValues : next)
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <label className="text-sm font-medium text-white/90">{label}</label>
+      <div>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className={cn(
+            "flex h-10 w-full items-center justify-between rounded-md border px-3 py-2 text-sm",
+            "bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-2 focus:ring-white/30 focus:ring-offset-0 focus:ring-offset-transparent"
+          )}
+          aria-label={`Alternar ${label}`}
+        >
+          <span className="truncate">{display}</span>
+          <ChevronDown className={cn("h-4 w-4 opacity-70 transition-transform", open && "rotate-180")} />
+        </button>
+
+        {open && (
+          <div className="mt-1 w-full rounded-md border border-white/20 bg-blue-950/95 backdrop-blur-sm py-2 shadow-lg max-h-64 overflow-y-auto">
+            <button
+              type="button"
+              onClick={() => {
+                onSelectedValuesChange(allValues)
+                setOpen(false)
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/90 hover:bg-white/10"
+            >
+              <Checkbox checked={isAll} />
+              {allLabel}
+            </button>
+
+            {options.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => toggle(opt.value)}
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/90 hover:bg-white/10"
+              >
+                <Checkbox checked={selectedValues.includes(opt.value)} />
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function PLPage() {
   const { allowedCountries, isAdmin, canEdit, loading: permLoading } = usePermissions()
   const [modelo, setModelo] = useState<"budget" | "real">("budget")
-  const [country, setCountry] = useState<string>("AR")
-  const [category, setCategory] = useState<string>("all")
+  // Arrays con multi-selección: si elegís "Todos", guardamos todos los valores posibles.
+  const [selectedCountries, setSelectedCountries] = useState<string[]>([])
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(CATEGORIES)
   const [productsSelected, setProductsSelected] = useState<string[]>([])
-  const [channel, setChannel] = useState<string>("all")
+  const [selectedChannels, setSelectedChannels] = useState<string[]>(CHANNELS)
   const [products, setProducts] = useState<string[]>([])
   // YTD por defecto: hasta diciembre
   const [ytdMonth, setYtdMonth] = useState<number>(12)
   const [testMode, setTestMode] = useState<boolean>(false)
   const year = 2026
 
+  const allowedCountryCodes = isAdmin
+    ? [...BASE_COUNTRIES.map((c) => c.code)]
+    : allowedCountries
+
   useEffect(() => {
-    if (!permLoading && !isAdmin && allowedCountries.length > 0) {
-      setCountry(allowedCountries[0])
+    if (!permLoading && allowedCountryCodes.length > 0) {
+      setSelectedCountries([allowedCountryCodes[0]])
     }
   }, [permLoading, isAdmin, allowedCountries])
 
   useEffect(() => {
     fetchProducts()
     setProductsSelected([])
-  }, [country, category, modelo, year])
+  }, [selectedCountries, selectedCategories, modelo, year])
 
   const fetchProducts = async () => {
     try {
       if (modelo === "budget") {
         let q = supabase.from("budget").select("product_name").eq("year", year)
-        if (country !== "all") q = q.eq("country_code", country)
+        if (selectedCountries.length) q = q.in("country_code", selectedCountries)
         const { data } = await q
         if (!data) return
         let names = [...new Set(data.map((b: { product_name: string }) => b.product_name))] as string[]
 
-        if (category !== "all") {
+        if (selectedCategories.length && selectedCategories.length !== CATEGORIES.length) {
           const { data: prods } = await supabase
             .from("products")
             .select("name")
-            .eq("category", category)
+            .in("category", selectedCategories)
           const catNames = new Set(prods?.map((p: { name: string }) => p.name) || [])
           names = names.filter((n) => catNames.has(n))
         }
@@ -80,7 +165,9 @@ export default function PLPage() {
         )
       } else {
         let q = supabase.from("products").select("name, category")
-        if (category !== "all") q = q.eq("category", category)
+        if (selectedCategories.length && selectedCategories.length !== CATEGORIES.length) {
+          q = q.in("category", selectedCategories)
+        }
         const { data } = await q
         if (!data) return
         setProducts(
@@ -96,18 +183,11 @@ export default function PLPage() {
     }
   }
 
-  // Países disponibles, incluyendo opción de \"Todos\"
-  let availableCountries: { code: string; name: string }[]
-  if (isAdmin) {
-    availableCountries = [{ code: "all", name: "Todos los países" }, ...BASE_COUNTRIES]
-  } else if (allowedCountries.length > 1) {
-    availableCountries = [
-      { code: "all", name: "Todos (mis países)" },
-      ...BASE_COUNTRIES.filter((c) => allowedCountries.includes(c.code)),
-    ]
-  } else {
-    availableCountries = BASE_COUNTRIES.filter((c) => allowedCountries.includes(c.code))
-  }
+  const countryOptions: Option[] = BASE_COUNTRIES.filter((c) => allowedCountryCodes.includes(c.code)).map((c) => ({
+    value: c.code,
+    label: c.name,
+  }))
+  const countriesForUI = selectedCountries.length ? selectedCountries : (allowedCountryCodes[0] ? [allowedCountryCodes[0]] : [])
 
   return (
     <div className="min-h-screen bg-gradient-to-r from-blue-900 via-blue-950 to-slate-900">
@@ -139,40 +219,23 @@ export default function PLPage() {
               </Select>
             </div>
 
-            {/* País */}
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-white/90">País</label>
-              <Select
-                value={country}
-                onChange={(e) => setCountry(e.target.value)}
-                className={selectClass}
-              >
-                {availableCountries.map((c) => (
-                  <option key={c.code} value={c.code} className="bg-blue-900 text-white">
-                    {c.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
+            {/* Países (multi) */}
+            <MultiCheckboxDropdown
+              label="Países"
+              options={countryOptions}
+              selectedValues={countriesForUI}
+              onSelectedValuesChange={setSelectedCountries}
+              allLabel={isAdmin ? "Todos los países" : "Todos (mis países)"}
+            />
 
             {/* Categoría */}
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-white/90">Categoría</label>
-              <Select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className={selectClass}
-              >
-                <option value="all" className="bg-blue-900 text-white">
-                  Todas las categorías
-                </option>
-                {CATEGORIES.map((c) => (
-                  <option key={c} value={c} className="bg-blue-900 text-white">
-                    {c}
-                  </option>
-                ))}
-              </Select>
-            </div>
+            <MultiCheckboxDropdown
+              label="Categoría"
+              options={CATEGORIES.map((c) => ({ value: c, label: c }))}
+              selectedValues={selectedCategories}
+              onSelectedValuesChange={setSelectedCategories}
+              allLabel="Todas las categorías"
+            />
 
             {/* Producto */}
             <div className="flex flex-col gap-2">
@@ -184,24 +247,14 @@ export default function PLPage() {
               />
             </div>
 
-            {/* Canal */}
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-white/90">Canal</label>
-              <Select
-                value={channel}
-                onChange={(e) => setChannel(e.target.value)}
-                className={selectClass}
-              >
-                <option value="all" className="bg-blue-900 text-white">
-                  Todos los canales
-                </option>
-                {CHANNELS.map((ch) => (
-                  <option key={ch} value={ch} className="bg-blue-900 text-white">
-                    {ch}
-                  </option>
-                ))}
-              </Select>
-            </div>
+            {/* Canal (multi) */}
+            <MultiCheckboxDropdown
+              label="Canal"
+              options={CHANNELS.map((ch) => ({ value: ch, label: ch }))}
+              selectedValues={selectedChannels}
+              onSelectedValuesChange={setSelectedChannels}
+              allLabel="Todos los canales"
+            />
 
             {/* Hasta mes (YTD) */}
             <div className="flex flex-col gap-2">
@@ -248,10 +301,10 @@ export default function PLPage() {
         <PLTable
           modelo={modelo}
           year={year}
-          country={country}
-          category={category}
+          countries={countriesForUI}
+          categories={selectedCategories}
           products={productsSelected}
-          channel={channel}
+          channels={selectedChannels}
           canEdit={canEdit}
           ytdMonth={ytdMonth}
           testMode={testMode}

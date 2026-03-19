@@ -10,6 +10,7 @@ import { CountryPills } from "@/components/products/CountryPills"
 import { ProductMergeDialog } from "@/components/products/ProductMergeDialog"
 import { getProductsWithOverrides, deleteProductFromCountry, deleteProductFromAllCountries, getTotalSalesByProductIds, type ProductWithOverrides } from "@/lib/supabase-mcp"
 import { usePermissions } from "@/lib/use-permissions"
+import { supabase } from "@/lib/supabase"
 import { productNameSortKey } from "@/lib/utils"
 import { useProductCreateDialog } from "@/components/products/ProductCreateDialogProvider"
 
@@ -32,6 +33,7 @@ function ProductosContent() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [salesCountByProductId, setSalesCountByProductId] = useState<Record<string, number>>({})
+  const [budgetUnitsByProductId, setBudgetUnitsByProductId] = useState<Record<string, number>>({})
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false)
   const [productsToMerge, setProductsToMerge] = useState<ProductWithOverrides[]>([])
   const [isMerging, setIsMerging] = useState(false)
@@ -117,12 +119,37 @@ function ProductosContent() {
         if (sortedData.length === 0) {
           setError("No se encontraron productos. Verifica la conexión con la base de datos.")
           setSalesCountByProductId({})
+          setBudgetUnitsByProductId({})
         } else {
-          const counts = await getTotalSalesByProductIds(
-            sortedData.map(p => p.id),
-            selectedCountry
-          )
+          const productNames = sortedData.map((p) => p.name)
+          const nameToId = new Map(sortedData.map((p) => [p.name, p.id]))
+          const MONTH_KEYS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"] as const
+
+          const counts = await getTotalSalesByProductIds(sortedData.map((p) => p.id), selectedCountry)
           setSalesCountByProductId(counts)
+
+          const { data: budgetData, error: budgetError } = await supabase
+            .from("budget")
+            .select(["product_id", "product_name", ...MONTH_KEYS].join(","))
+            .eq("year", 2026)
+            .eq("country_code", selectedCountry)
+            .in("product_name", productNames)
+
+          const budgetUnitsById: Record<string, number> = {}
+          for (const p of sortedData) budgetUnitsById[p.id] = 0
+
+          if (!budgetError && Array.isArray(budgetData)) {
+            for (const r of budgetData as any[]) {
+              const id = r.product_id || nameToId.get(r.product_name)
+              if (!id) continue
+              const units = MONTH_KEYS.reduce((sum, k) => sum + Number(r[k] ?? 0), 0)
+              budgetUnitsById[id] = (budgetUnitsById[id] ?? 0) + units
+            }
+          } else if (budgetError) {
+            console.error("Error fetching budget units:", budgetError)
+          }
+
+          setBudgetUnitsByProductId(budgetUnitsById)
         }
       } catch (error) {
         console.error("Error loading products:", error)
@@ -372,6 +399,7 @@ function ProductosContent() {
             products={filteredProducts}
             selectedCountry={selectedCountry}
             salesCountByProductId={salesCountByProductId}
+            budgetUnitsByProductId={budgetUnitsByProductId}
             onViewProduct={handleViewProduct}
             onEditProduct={handleEditProduct}
             onDeleteProduct={handleDeleteProduct}

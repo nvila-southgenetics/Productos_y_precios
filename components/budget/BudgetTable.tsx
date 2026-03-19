@@ -5,7 +5,7 @@ import Link from "next/link"
 import { ChevronDown, ChevronRight, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
-import { formatCurrency, productNameSortKey, displayProductName } from "@/lib/utils"
+import { formatCurrency, formatNumber, productNameSortKey, displayProductName } from "@/lib/utils"
 import { useProductCreateDialog } from "@/components/products/ProductCreateDialogProvider"
 
 interface BudgetRow {
@@ -39,13 +39,11 @@ interface BudgetRow {
 
 interface BudgetTableProps {
   year: number
-  country: string
+  countries: string[]
   /** Array vacío = todos. */
   products: string[]
-  month: string
-  channel: string
-  /** Cuando country === "all" y hay varios países permitidos (no-admin), filtrar por estos. */
-  allowedCountryCodes?: string[]
+  months: string[]
+  channels: string[]
   /** Permite crear productos desde el budget cuando no existen. */
   canEdit?: boolean
 }
@@ -119,7 +117,7 @@ function getMarginColor(margin: number): string {
   return "text-red-300"
 }
 
-export function BudgetTable({ year, country, products, month, channel, allowedCountryCodes, canEdit }: BudgetTableProps) {
+export function BudgetTable({ year, countries, products, months, channels, canEdit }: BudgetTableProps) {
   const [data, setData] = useState<BudgetRow[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
@@ -129,26 +127,23 @@ export function BudgetTable({ year, country, products, month, channel, allowedCo
 
   useEffect(() => {
     fetchBudgetData()
-  }, [year, country, products, month, channel, allowedCountryCodes])
+  }, [year, countries, products, months, channels])
 
   const fetchBudgetData = async () => {
     setLoading(true)
     try {
       let query = supabase.from("budget").select("*").eq("year", year)
 
-      if (country !== "all") {
-        query = query.eq("country_code", country)
-      } else if (allowedCountryCodes?.length) {
-        query = query.in("country_code", allowedCountryCodes)
+      if (countries.length > 0) {
+        query = query.in("country_code", countries)
       }
 
       if (products.length > 0) {
         query = query.in("product_name", products)
       }
 
-      // Filtrar por canal si no es "all"
-      if (channel !== "all") {
-        query = query.eq("channel", channel)
+      if (channels.length > 0) {
+        query = query.in("channel", channels)
       }
 
       const { data: budgetData, error } = await query
@@ -178,35 +173,35 @@ export function BudgetTable({ year, country, products, month, channel, allowedCo
         productMap.set(p.name, p.id)
       })
 
-      // Determinar si estamos filtrando por mes
-      const isMonthFiltered = month !== "all"
-      const monthIndex = isMonthFiltered ? parseInt(month) - 1 : -1
-      const monthKey = isMonthFiltered ? MONTH_KEYS[monthIndex] : null
+      // Meses seleccionados: permitir 1/varios/todos.
+      const allMonthsSelected = months.length === 12
+      const isMonthFiltered = !allMonthsSelected
+      const monthIndices = Array.from(
+        new Set(months.map((m) => parseInt(m, 10) - 1).filter((i) => i >= 0 && i < 12))
+      )
+      const monthKeysSelected = isMonthFiltered ? monthIndices.map((i) => MONTH_KEYS[i]) : []
 
       type RawRow = { id: string; country: string; country_code: string; product_id: string | null; product_name: string; channel: string; total_units?: number } & Record<string, unknown>
 
-      // Cuando channel = "all", agrupar por (country_code, product_name) y sumar unidades
-      // Cuando channel es específico, mostrar cada fila directamente
-      let rowsToProcess: RawRow[]
-
-      if (channel === "all") {
-        // Agrupar por (country_code, product_name) - usar la primera fila como base y sumar meses
-        const grouped = new Map<string, RawRow>()
-        for (const row of budgetData as RawRow[]) {
-          const key = `${row.country_code}|${row.product_name}`
-          if (!grouped.has(key)) {
-            grouped.set(key, { ...row })
-          } else {
-            const existing = grouped.get(key)!
-            for (const mk of MONTH_KEYS) {
-              (existing as Record<string, unknown>)[mk as string] = (Number(existing[mk as string] ?? 0) + Number(row[mk as string] ?? 0))
-            }
+      // Agrupar/deduplicar por (country_code, product_name) para que cada producto
+      // aparezca una sola vez en la tabla, incluso si existen múltiples filas en `budget`.
+      // - Para selección multi-canal, el detalle financiero se recalcula por canal dentro del bloque `multiChannelMode`.
+      // - Para selección single-canal, alcanza con agrupar por producto para eliminar duplicados.
+      const multiChannelMode = channels.length > 1
+      const grouped = new Map<string, RawRow>()
+      for (const row of budgetData as RawRow[]) {
+        const key = `${row.country_code}|${row.product_name}`
+        if (!grouped.has(key)) {
+          grouped.set(key, { ...row })
+        } else {
+          const existing = grouped.get(key)!
+          for (const mk of MONTH_KEYS) {
+            ;(existing as Record<string, unknown>)[mk as string] =
+              Number(existing[mk as string] ?? 0) + Number(row[mk as string] ?? 0)
           }
         }
-        rowsToProcess = Array.from(grouped.values())
-      } else {
-        rowsToProcess = budgetData as RawRow[]
       }
+      const rowsToProcess: RawRow[] = Array.from(grouped.values())
 
       // Procesar datos y calcular financieros
       const processedData: BudgetRow[] = await Promise.all(
@@ -220,15 +215,19 @@ export function BudgetTable({ year, country, products, month, channel, allowedCo
           let monthlyGrossProfit = 0
           let rowTotalUnits = MONTH_KEYS.reduce((sum, mk) => sum + Number(row[mk as string] ?? 0), 0)
 
-          if (isMonthFiltered && monthKey) {
-            monthlyUnits = Number(row[monthKey as keyof RawRow] ?? 0)
+          if (isMonthFiltered) {
+            monthlyUnits = monthKeysSelected.reduce(
+              (sum, mk) => sum + Number((row as Record<string, unknown>)[mk as string] ?? 0),
+              0
+            )
           } else {
             monthlyUnits = rowTotalUnits
           }
 
-          if (productId) {
+            if (productId) {
             // Buscar override para este producto, país y canal específico (o Paciente como fallback)
-            const channelToQuery = channel !== "all" ? channel : "Paciente"
+            const primaryChannel = channels[0] || "Paciente"
+            const channelToQuery = primaryChannel
             let overrideQuery = supabase
               .from("product_country_overrides")
               .select("overrides, channel")
@@ -262,7 +261,7 @@ export function BudgetTable({ year, country, products, month, channel, allowedCo
             const commercialDiscountUSDPerUnit = overrideDataObj.commercialDiscountUSD || 0
             const grossProfitUSD = calculateGrossProfit(overrideDataObj)
 
-            if (channel === "all") {
+            if (multiChannelMode) {
               // Para "todos los canales", calcular la contribución de cada canal por separado
               // Buscamos todos los registros de budget para este producto/país y multiplicamos por sus overrides
               const channelRows = (budgetData as RawRow[]).filter(
@@ -275,9 +274,12 @@ export function BudgetTable({ year, country, products, month, channel, allowedCo
               await Promise.all(channelRows.map(async (cr) => {
                 const crProductId = cr.product_id || productMap.get(cr.product_name) || null
                 if (!crProductId) return
-                const crUnits = isMonthFiltered && monthKey
-                  ? Number(cr[monthKey as string] ?? 0)
-                  : MONTH_KEYS.reduce((s, mk) => s + Number(cr[mk as string] ?? 0), 0)
+                const crUnits = isMonthFiltered
+                  ? monthKeysSelected.reduce(
+                      (s, mk) => s + Number((cr as Record<string, unknown>)[mk as string] ?? 0),
+                      0
+                    )
+                  : MONTH_KEYS.reduce((s, mk) => s + Number((cr as Record<string, unknown>)[mk as string] ?? 0), 0)
 
                 const { data: crOverride } = await supabase
                   .from("product_country_overrides")
@@ -323,7 +325,7 @@ export function BudgetTable({ year, country, products, month, channel, allowedCo
             totalGrossSale = grossSaleUSD * rowTotalUnits
             totalGrossProfit = grossProfitUSD * rowTotalUnits
 
-            if (isMonthFiltered && monthKey) {
+            if (isMonthFiltered) {
               monthlyGrossSale = grossSaleUSD * monthlyUnits
               monthlyGrossProfit = grossProfitUSD * monthlyUnits
             }
@@ -345,9 +347,7 @@ export function BudgetTable({ year, country, products, month, channel, allowedCo
               monthly_gross_sale: monthlyGrossSale,
               monthly_gross_profit: monthlyGrossProfit,
               commercial_discount: commercialDiscountUSDPerUnit * rowTotalUnits,
-              monthly_commercial_discount: isMonthFiltered && monthKey
-                ? commercialDiscountUSDPerUnit * monthlyUnits
-                : 0,
+              monthly_commercial_discount: isMonthFiltered ? commercialDiscountUSDPerUnit * monthlyUnits : 0,
             }
           }
 
@@ -446,8 +446,13 @@ export function BudgetTable({ year, country, products, month, channel, allowedCo
   }
 
   const monthLabels = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"]
-  const isMonthFiltered = month !== "all"
-  const monthName = isMonthFiltered ? MONTH_NAMES[parseInt(month) - 1] : ""
+  const allMonthsSelected = months.length === 12
+  const isMonthFiltered = !allMonthsSelected
+  const monthName = isMonthFiltered
+    ? months.length === 1
+      ? MONTH_NAMES[parseInt(months[0], 10) - 1]
+      : `${months.length} meses`
+    : ""
 
   return (
     <div className="border border-white/20 rounded-lg overflow-hidden bg-white/10 backdrop-blur-sm shadow-sm">
@@ -526,8 +531,8 @@ export function BudgetTable({ year, country, products, month, channel, allowedCo
                   </td>
                   <td className="px-3 py-2 text-right font-medium text-sm text-white">
                     {isMonthFiltered
-                      ? (row.monthly_units || 0).toLocaleString("es-UY")
-                      : row.total_units.toLocaleString("es-UY")}
+                      ? formatNumber(row.monthly_units || 0, "es-UY")
+                      : formatNumber(row.total_units, "es-UY")}
                   </td>
                   <td className="px-3 py-2 text-right text-blue-300 font-medium text-sm">
                     {formatCurrency(grossSale)}

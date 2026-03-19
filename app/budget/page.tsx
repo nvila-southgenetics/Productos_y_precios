@@ -14,19 +14,35 @@ import { productNameSortKey } from "@/lib/utils"
 export default function BudgetPage() {
   const { allowedCountries, canEdit, isAdmin, loading: permLoading } = usePermissions()
   const [selectedYear, setSelectedYear] = useState(2026)
-  const [selectedCountry, setSelectedCountry] = useState<string>("all")
+  const [selectedCountries, setSelectedCountries] = useState<string[]>([])
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
-  const [selectedMonth, setSelectedMonth] = useState<string>("all")
-  const [selectedChannel, setSelectedChannel] = useState<string>("all")
+  const allMonths = Array.from({ length: 12 }, (_, i) => String(i + 1))
+  const [selectedMonths, setSelectedMonths] = useState<string[]>(allMonths)
+  const [selectedChannels, setSelectedChannels] = useState<string[]>([])
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [products, setProducts] = useState<string[]>([])
+
+  const allChannelValues = ["Paciente", "Pacientes desc", "Aseguradoras", "Instituciones SFL", "Gobierno", "Distribuidores"]
 
   // No-admins: un solo país → seleccionarlo; varios → "Todos (mis países)"
   useEffect(() => {
     if (!permLoading && !isAdmin && allowedCountries.length > 0) {
-      setSelectedCountry(allowedCountries.length === 1 ? allowedCountries[0] : "all")
+      setSelectedCountries(allowedCountries.length === 1 ? [allowedCountries[0]] : [...allowedCountries])
     }
   }, [permLoading, isAdmin, allowedCountries])
+
+  // Admins: por defecto, seleccionar todos los países.
+  useEffect(() => {
+    if (!permLoading && isAdmin) {
+      // Las mismas opciones que usa BudgetFilters; mantenemos consistencia.
+      setSelectedCountries(["AR", "CL", "CO", "MX", "UY", "VE", "PE", "BO", "TT", "BS", "BB", "BM", "KY"])
+    }
+  }, [permLoading, isAdmin])
+
+  // Por defecto, seleccionar todos los canales.
+  useEffect(() => {
+    setSelectedChannels(allChannelValues)
+  }, [])
 
   useEffect(() => {
     fetchProducts()
@@ -91,15 +107,15 @@ export default function BudgetPage() {
         <div className="mb-6 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4 shadow-sm">
           <BudgetFilters
             selectedYear={selectedYear}
-            selectedCountry={selectedCountry}
+            selectedCountries={selectedCountries}
             selectedProducts={selectedProducts}
-            selectedMonth={selectedMonth}
-            selectedChannel={selectedChannel}
+            selectedMonths={selectedMonths}
+            selectedChannels={selectedChannels}
             onYearChange={setSelectedYear}
-            onCountryChange={setSelectedCountry}
+            onCountriesChange={setSelectedCountries}
             onProductsChange={setSelectedProducts}
-            onMonthChange={setSelectedMonth}
-            onChannelChange={setSelectedChannel}
+            onMonthsChange={setSelectedMonths}
+            onChannelsChange={setSelectedChannels}
             products={products}
             allowedCountries={allowedCountries}
             showAllCountries={isAdmin}
@@ -110,22 +126,20 @@ export default function BudgetPage() {
         <div className="mb-6">
           <BudgetSummary
             year={selectedYear}
-            country={selectedCountry}
+            countries={selectedCountries}
             products={selectedProducts}
-            month={selectedMonth}
-            channel={selectedChannel}
-            allowedCountryCodes={!isAdmin ? allowedCountries : undefined}
+            months={selectedMonths}
+            channels={selectedChannels}
           />
         </div>
 
         {/* Tabla de datos */}
         <BudgetTable
           year={selectedYear}
-          country={selectedCountry}
+            countries={selectedCountries}
           products={selectedProducts}
-          month={selectedMonth}
-          channel={selectedChannel}
-          allowedCountryCodes={!isAdmin ? allowedCountries : undefined}
+            months={selectedMonths}
+            channels={selectedChannels}
           canEdit={canEdit}
         />
 

@@ -23,9 +23,19 @@ export function formatCurrency(amount: number): string {
     useGrouping: true,
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(amount)
+  }).format(Math.abs(amount))
 
-  return `${formatted} US$`
+  return amount < 0 ? `(${formatted} US$)` : `${formatted} US$`
+}
+
+export function formatNumber(
+  value: number,
+  locale: string = "es-UY",
+  options: Intl.NumberFormatOptions = { minimumFractionDigits: 0, maximumFractionDigits: 0 }
+): string {
+  const formatted = value.toLocaleString(locale, options)
+  if (value >= 0) return formatted
+  return `(${Math.abs(value).toLocaleString(locale, options)})`
 }
 
 export function formatPercentage(value: number): string {

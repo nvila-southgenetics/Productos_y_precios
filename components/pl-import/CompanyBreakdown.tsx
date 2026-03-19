@@ -2,8 +2,7 @@
 
 import { useState } from "react"
 import { ChevronDown, ChevronUp } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { formatCurrency } from "@/lib/utils"
+import { cn, formatCurrency, formatNumber } from "@/lib/utils"
 
 interface CompanyBreakdownProps {
   breakdown: Array<{
@@ -31,7 +30,7 @@ export function CompanyBreakdown({ breakdown }: CompanyBreakdownProps) {
           <ChevronDown className="h-3 w-3" />
         )}
         <span>
-          {breakdown.length} compañía{breakdown.length !== 1 ? 's' : ''} ({totalVentas.toLocaleString('es-UY')} ventas)
+          {breakdown.length} compañía{breakdown.length !== 1 ? 's' : ''} ({formatNumber(totalVentas, 'es-UY')} ventas)
         </span>
       </button>
       
@@ -45,7 +44,7 @@ export function CompanyBreakdown({ breakdown }: CompanyBreakdownProps) {
                 <div key={idx} className="flex justify-between items-center text-xs py-1 border-b border-slate-100 last:border-0">
                   <span className="text-slate-700">{item.compañia}</span>
                   <div className="flex gap-3">
-                    <span className="font-medium text-slate-800">{item.cantidad_ventas.toLocaleString('es-UY')}</span>
+                    <span className="font-medium text-slate-800">{formatNumber(item.cantidad_ventas, 'es-UY')}</span>
                     <span className="text-green-600 font-medium">{formatCurrency(item.monto_total || 0)}</span>
                   </div>
                 </div>
@@ -53,7 +52,7 @@ export function CompanyBreakdown({ breakdown }: CompanyBreakdownProps) {
             <div className="flex justify-between items-center text-xs font-semibold pt-1 mt-1 border-t border-slate-300">
               <span className="text-slate-900">Total:</span>
               <div className="flex gap-3">
-                <span className="text-slate-900">{totalVentas.toLocaleString('es-UY')}</span>
+                <span className="text-slate-900">{formatNumber(totalVentas, 'es-UY')}</span>
                 <span className="text-green-700">{formatCurrency(totalMonto)}</span>
               </div>
             </div>

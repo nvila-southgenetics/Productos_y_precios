@@ -3,17 +3,15 @@
 import { useEffect, useState } from "react"
 import { TrendingUp, DollarSign, Package, Calendar } from "lucide-react"
 import { supabase } from "@/lib/supabase"
-import { formatCurrency } from "@/lib/utils"
+import { formatCurrency, formatNumber } from "@/lib/utils"
 
 interface BudgetSummaryProps {
   year: number
-  country: string
+  countries: string[]
   /** Array vacío = todos. */
   products: string[]
-  month: string
-  channel: string
-  /** Cuando country === "all" y hay varios países permitidos (no-admin), filtrar por estos. */
-  allowedCountryCodes?: string[]
+  months: string[]
+  channels: string[]
 }
 
 const MONTH_KEYS = [
@@ -72,7 +70,7 @@ function calculateGrossProfit(overrides: any): number {
   return salesRevenueUSD - totalCosts
 }
 
-export function BudgetSummary({ year, country, products, month, channel, allowedCountryCodes }: BudgetSummaryProps) {
+export function BudgetSummary({ year, countries, products, months, channels }: BudgetSummaryProps) {
   const [summary, setSummary] = useState<SummaryData>({
     totalUnits: 0,
     totalGrossSale: 0,
@@ -83,25 +81,23 @@ export function BudgetSummary({ year, country, products, month, channel, allowed
 
   useEffect(() => {
     fetchSummary()
-  }, [year, country, products, month, channel, allowedCountryCodes])
+  }, [year, countries, products, months, channels])
 
   const fetchSummary = async () => {
     setLoading(true)
     try {
       let query = supabase.from("budget").select("*").eq("year", year)
 
-      if (country !== "all") {
-        query = query.eq("country_code", country)
-      } else if (allowedCountryCodes?.length) {
-        query = query.in("country_code", allowedCountryCodes)
+      if (countries.length > 0) {
+        query = query.in("country_code", countries)
       }
 
       if (products.length > 0) {
         query = query.in("product_name", products)
       }
 
-      if (channel !== "all") {
-        query = query.eq("channel", channel)
+      if (channels.length > 0) {
+        query = query.in("channel", channels)
       }
 
       const { data: budgetData, error } = await query
@@ -143,20 +139,25 @@ export function BudgetSummary({ year, country, products, month, channel, allowed
       let totalGrossProfit = 0
       let totalCommercialDiscount = 0
 
-      // Determinar si estamos filtrando por mes
-      const isMonthFiltered = month !== "all"
-      const monthKey = isMonthFiltered ? MONTH_KEYS[parseInt(month) - 1] : null
+      // Meses seleccionados: permitir 1/varios/todos
+      const allMonthsSelected = months.length === 12
+      const isMonthFiltered = !allMonthsSelected
+      const monthIndices = Array.from(
+        new Set(months.map((m) => parseInt(m, 10) - 1).filter((i) => i >= 0 && i < 12))
+      )
+      const monthKeysSelected = isMonthFiltered ? monthIndices.map((i) => MONTH_KEYS[i]) : []
 
       // Procesar cada registro con query individual para override correcto
       type SummaryRow = BudgetRow & { country_code: string; total_units?: number; [k: string]: unknown }
       await Promise.all(
         budgetData.map(async (row: SummaryRow) => {
           // Si hay filtro de mes, usar solo ese mes
-          const units = Number(
-            isMonthFiltered
-              ? row[monthKey as keyof SummaryRow] || 0
-              : row.total_units || 0
-          )
+          const units = isMonthFiltered
+            ? monthKeysSelected.reduce(
+                (sum, mk) => sum + Number((row as Record<string, unknown>)[mk as string] ?? 0),
+                0
+              )
+            : (row.total_units || 0)
 
           totalUnits += units
 
@@ -164,7 +165,10 @@ export function BudgetSummary({ year, country, products, month, channel, allowed
           if (!productId) return
 
           // Buscar el override para este producto, país y canal específico (o fallback)
-          const channelToQuery = channel !== "all" ? channel : (row as SummaryRow & { channel?: string }).channel || "Paciente"
+          const channelToQuery =
+            channels.length === 1
+              ? channels[0]
+              : (row as SummaryRow & { channel?: string }).channel || "Paciente"
           let overrideDataObj: Record<string, number> = {}
 
           const { data: channelOverride } = await supabase
@@ -228,10 +232,31 @@ export function BudgetSummary({ year, country, products, month, channel, allowed
   }
 
   // Texto dinámico según filtro
-  const isMonthFiltered = month !== "all"
+  const allMonthsSelected = months.length === 12
+  const isMonthFiltered = !allMonthsSelected
   const periodText = isMonthFiltered
-    ? `${MONTH_NAMES[parseInt(month) - 1]} ${year}`
+    ? months.length === 1
+      ? `${MONTH_NAMES[parseInt(months[0], 10) - 1]} ${year}`
+      : `Meses seleccionados (${months.length}) ${year}`
     : `Año ${year}`
+
+  const unitsLabel = isMonthFiltered
+    ? months.length === 1
+      ? "Total de unidades del mes"
+      : "Total de unidades seleccionadas"
+    : "Total de unidades del año"
+
+  const grossSaleLabel = isMonthFiltered
+    ? months.length === 1
+      ? "Gross Sale del Mes"
+      : "Gross Sale Seleccionado(s)"
+    : "Total Gross Sale"
+
+  const grossProfitLabel = isMonthFiltered
+    ? months.length === 1
+      ? "Gross Profit del Mes"
+      : "Gross Profit Seleccionado(s)"
+    : "Total Gross Profit"
 
   return (
     <div className="space-y-3">
@@ -251,10 +276,10 @@ export function BudgetSummary({ year, country, products, month, channel, allowed
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-white/70">
-                {isMonthFiltered ? "Total de unidades del mes" : "Total de unidades del año"}
+                {unitsLabel}
               </p>
               <p className="text-2xl font-bold mt-1 text-white">
-                {summary.totalUnits.toLocaleString("es-UY")}
+                {formatNumber(summary.totalUnits, "es-UY")}
               </p>
             </div>
             <Package className="w-8 h-8 text-blue-300" />
@@ -266,7 +291,7 @@ export function BudgetSummary({ year, country, products, month, channel, allowed
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-white/70">
-                {isMonthFiltered ? "Gross Sale del Mes" : "Total Gross Sale"}
+                {grossSaleLabel}
               </p>
               <p className="text-2xl font-bold mt-1 text-blue-300">
                 {formatCurrency(summary.totalGrossSale)}
@@ -281,7 +306,7 @@ export function BudgetSummary({ year, country, products, month, channel, allowed
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-white/70">
-                {isMonthFiltered ? "Gross Profit del Mes" : "Total Gross Profit"}
+                {grossProfitLabel}
               </p>
               <p className="text-2xl font-bold mt-1 text-emerald-300">
                 {formatCurrency(summary.totalGrossProfit)}

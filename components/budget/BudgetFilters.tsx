@@ -2,18 +2,22 @@
 
 import { Select } from "@/components/ui/select"
 import { ProductMultiSearchFilter } from "@/components/dashboard/ProductMultiSearchFilter"
+import { Checkbox } from "@/components/ui/checkbox"
+import { ChevronDown } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { useState } from "react"
 
 interface BudgetFiltersProps {
   selectedYear: number
-  selectedCountry: string
+  selectedCountries: string[]
   selectedProducts: string[]
-  selectedMonth: string
-  selectedChannel: string
+  selectedMonths: string[]
+  selectedChannels: string[]
   onYearChange: (year: number) => void
-  onCountryChange: (country: string) => void
+  onCountriesChange: (countries: string[]) => void
   onProductsChange: (products: string[]) => void
-  onMonthChange: (month: string) => void
-  onChannelChange: (channel: string) => void
+  onMonthsChange: (months: string[]) => void
+  onChannelsChange: (channels: string[]) => void
   countries?: string[]
   products?: string[]
   allowedCountries?: string[]
@@ -21,7 +25,6 @@ interface BudgetFiltersProps {
 }
 
 const CHANNELS = [
-  { value: "all", label: "Todos los canales" },
   { value: "Paciente", label: "Paciente" },
   { value: "Pacientes desc", label: "Pacientes desc" },
   { value: "Aseguradoras", label: "Aseguradoras" },
@@ -30,8 +33,86 @@ const CHANNELS = [
   { value: "Distribuidores", label: "Distribuidores" },
 ]
 
-const MONTHS = [
-  { value: "all", label: "Todos los meses" },
+type Option = { value: string; label: string }
+
+function MultiCheckboxDropdown({
+  label,
+  options,
+  selectedValues,
+  onSelectedValuesChange,
+  allLabel,
+}: {
+  label: string
+  options: Option[]
+  selectedValues: string[]
+  onSelectedValuesChange: (values: string[]) => void
+  allLabel: string
+}) {
+  const [open, setOpen] = useState(false)
+
+  const allValues = options.map((o) => o.value)
+  const isAll = allValues.length > 0 && selectedValues.length === allValues.length && allValues.every((v) => selectedValues.includes(v))
+  const display =
+    isAll
+      ? allLabel
+      : selectedValues.length === 1
+        ? options.find((o) => o.value === selectedValues[0])?.label ?? selectedValues[0]
+        : `${selectedValues.length} seleccionados`
+
+  const toggle = (v: string) => {
+    const next = selectedValues.includes(v) ? selectedValues.filter((x) => x !== v) : [...selectedValues, v]
+    onSelectedValuesChange(next.length === 0 ? allValues : next)
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <label className="text-sm font-medium text-white/90">{label}</label>
+      <div className="w-full">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className={cn(
+            "flex h-10 w-full items-center justify-between rounded-md border px-3 py-2 text-sm",
+            "bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-2 focus:ring-white/30"
+          )}
+          aria-label={`Alternar ${label}`}
+        >
+          <span className="truncate">{display}</span>
+          <ChevronDown className={cn("h-4 w-4 opacity-70 transition-transform", open && "rotate-180")} />
+        </button>
+
+        {open && (
+          <div className="mt-1 w-full rounded-md border border-white/20 bg-blue-950/95 backdrop-blur-sm py-2 shadow-lg max-h-64 overflow-y-auto">
+            <button
+              type="button"
+              onClick={() => {
+                onSelectedValuesChange(allValues)
+                setOpen(false)
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/90 hover:bg-white/10"
+            >
+              <Checkbox checked={isAll} />
+              {allLabel}
+            </button>
+            {options.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => toggle(opt.value)}
+                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/90 hover:bg-white/10"
+              >
+                <Checkbox checked={selectedValues.includes(opt.value)} />
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const MONTH_OPTIONS: Option[] = [
   { value: "1", label: "Enero" },
   { value: "2", label: "Febrero" },
   { value: "3", label: "Marzo" },
@@ -65,29 +146,28 @@ const countries = [
 
 export function BudgetFilters({
   selectedYear,
-  selectedCountry,
+  selectedCountries,
   selectedProducts,
-  selectedMonth,
-  selectedChannel,
+  selectedMonths,
+  selectedChannels,
   onYearChange,
-  onCountryChange,
+  onCountriesChange,
   onProductsChange,
-  onMonthChange,
-  onChannelChange,
+  onMonthsChange,
+  onChannelsChange,
   products = [],
   allowedCountries,
   showAllCountries = true,
 }: BudgetFiltersProps) {
-  // Admins: "Todos los países" + todos. No-admins: solo países permitidos; si tiene varios, también "Todos (mis países)".
-  const filteredCountries = allowedCountries?.length
-    ? countries.filter(
-        (c) =>
-          (c.code === "all" && (showAllCountries || allowedCountries.length > 1)) ||
-          allowedCountries.includes(c.code)
-      )
-    : showAllCountries
-      ? countries
+  // Opciones de países disponibles para este usuario.
+  const filteredCountries = showAllCountries
+    ? countries.filter((c) => c.code !== "all")
+    : allowedCountries?.length
+      ? countries.filter((c) => allowedCountries.includes(c.code))
       : countries.filter((c) => c.code !== "all")
+
+  const countryOptions: Option[] = filteredCountries.map((c) => ({ value: c.code, label: c.name }))
+  const allCountriesLabel = allowedCountries?.length && allowedCountries.length > 1 ? "Todos (mis países)" : "Todos los países"
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
@@ -106,50 +186,30 @@ export function BudgetFilters({
 
       <div className="flex flex-col gap-2">
         <label className="text-sm font-medium text-white/90">Mes</label>
-        <Select
-          value={selectedMonth}
-          onChange={(e) => onMonthChange(e.target.value)}
-          className="w-full bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-white/30"
-        >
-          {MONTHS.map((month) => (
-            <option key={month.value} value={month.value} className="bg-blue-900 text-white">
-              {month.label}
-            </option>
-          ))}
-        </Select>
+        <MultiCheckboxDropdown
+          label="Mes"
+          options={MONTH_OPTIONS}
+          selectedValues={selectedMonths}
+          onSelectedValuesChange={onMonthsChange}
+          allLabel="Todos los meses"
+        />
       </div>
 
-      <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium text-white/90">País</label>
-        <Select
-          value={selectedCountry}
-          onChange={(e) => onCountryChange(e.target.value)}
-          className="w-full bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-white/30"
-        >
-          {filteredCountries.map((country) => (
-            <option key={country.code} value={country.code} className="bg-blue-900 text-white">
-              {country.code === "all" && !showAllCountries && allowedCountries?.length
-                ? "Todos (mis países)"
-                : country.name}
-            </option>
-          ))}
-        </Select>
-      </div>
+      <MultiCheckboxDropdown
+        label="País"
+        options={countryOptions}
+        selectedValues={selectedCountries}
+        onSelectedValuesChange={onCountriesChange}
+        allLabel={allowedCountries?.length ? allCountriesLabel : "Todos los países"}
+      />
 
-      <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium text-white/90">Canal</label>
-        <Select
-          value={selectedChannel}
-          onChange={(e) => onChannelChange(e.target.value)}
-          className="w-full bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-white/30"
-        >
-          {CHANNELS.map((ch) => (
-            <option key={ch.value} value={ch.value} className="bg-blue-900 text-white">
-              {ch.label}
-            </option>
-          ))}
-        </Select>
-      </div>
+      <MultiCheckboxDropdown
+        label="Canal"
+        options={CHANNELS}
+        selectedValues={selectedChannels}
+        onSelectedValuesChange={onChannelsChange}
+        allLabel="Todos los canales"
+      />
 
       <div className="flex flex-col gap-2">
         <ProductMultiSearchFilter

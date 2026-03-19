@@ -11,6 +11,7 @@ import {
   Cell,
 } from "recharts"
 import { motion } from "framer-motion"
+import { formatNumber } from "@/lib/utils"
 import type { DashboardProduct } from "@/lib/supabase-mcp"
 
 interface SalesChartProps {
@@ -67,11 +68,11 @@ export function SalesChart({ products, title, dataKey, color }: SalesChartProps)
             labelStyle={{ fontWeight: 600, color: "#1e293b" }}
             formatter={(value: number | undefined) => [
               typeof value === "number"
-                ? value.toLocaleString("es-UY", {
+                ? formatNumber(value, "es-UY", {
                     minimumFractionDigits: 0,
                     maximumFractionDigits: 0,
                   })
-                : (value || 0).toLocaleString("es-UY", {
+                : formatNumber((value || 0), "es-UY", {
                     minimumFractionDigits: 0,
                     maximumFractionDigits: 0,
                   }),

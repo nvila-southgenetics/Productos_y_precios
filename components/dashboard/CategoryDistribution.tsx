@@ -9,6 +9,7 @@ import {
   Legend,
 } from "recharts"
 import type { DashboardProduct } from "@/lib/supabase-mcp"
+import { formatNumber } from "@/lib/utils"
 
 interface CategoryDistributionProps {
   products: DashboardProduct[]
@@ -82,7 +83,7 @@ export function CategoryDistribution({
               padding: "8px 12px",
             }}
             formatter={(value: number | undefined) => [
-              (value || 0).toLocaleString("es-UY"),
+              formatNumber((value || 0), "es-UY"),
               "Ventas",
             ]}
           />

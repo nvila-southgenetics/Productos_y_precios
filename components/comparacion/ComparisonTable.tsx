@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { ArrowUp, ArrowDown, Minus, ChevronDown } from 'lucide-react';
-import { cn, displayProductName } from '@/lib/utils';
+import { cn, displayProductName, formatNumber } from '@/lib/utils';
 import { getCountryForCompany } from '@/lib/auth-constants';
 
 interface BudgetMonthItem {
@@ -615,7 +615,7 @@ export function ComparisonTable({ month, countries, products }: ComparisonTableP
                         onClick={() => setOpenBudgetDropdownIdx(openBudgetDropdownIdx === idx ? null : idx)}
                         className="flex items-center justify-end gap-1 w-full font-medium text-blue-300 hover:text-blue-200 focus:outline-none"
                       >
-                        {row.budget2026.toLocaleString('es-UY')}
+                        {formatNumber(row.budget2026, 'es-UY')}
                         <ChevronDown className={cn("h-4 w-4 transition-transform", openBudgetDropdownIdx === idx && "rotate-180")} />
                       </button>
                       {openBudgetDropdownIdx === idx && (
@@ -630,7 +630,7 @@ export function ComparisonTable({ month, countries, products }: ComparisonTableP
                             {row.budgetByMonth.map((item, i) => (
                               <div key={i} className="flex justify-between items-center px-3 py-1.5 text-sm text-white/90">
                                 <span>{item.label}</span>
-                                <span className="font-medium tabular-nums">{item.value.toLocaleString('es-UY')}</span>
+                                <span className="font-medium tabular-nums">{formatNumber(item.value, 'es-UY')}</span>
                               </div>
                             ))}
                           </div>
@@ -638,17 +638,17 @@ export function ComparisonTable({ month, countries, products }: ComparisonTableP
                       )}
                     </div>
                   ) : (
-                    row.budget2026.toLocaleString('es-UY')
+                    formatNumber(row.budget2026, 'es-UY')
                   )}
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-sm text-emerald-300">
-                  {row.real2026.toLocaleString('es-UY')}
+                  {formatNumber(row.real2026, 'es-UY')}
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-sm text-purple-300">
-                  {row.real2025.toLocaleString('es-UY')}
+                  {formatNumber(row.real2025, 'es-UY')}
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-sm text-white/90">
-                  {row.deltaBudgetVsReal2026 >= 0 ? '+' : ''}{row.deltaBudgetVsReal2026.toLocaleString('es-UY')}
+                  {row.deltaBudgetVsReal2026 >= 0 ? '+' : ''}{formatNumber(row.deltaBudgetVsReal2026, 'es-UY')}
                 </td>
                 <td className={`px-4 py-3 text-right font-medium text-sm ${
                   isDeltaBudgetUp ? 'text-emerald-300' : 
@@ -663,7 +663,7 @@ export function ComparisonTable({ month, countries, products }: ComparisonTableP
                   </div>
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-sm text-white/90">
-                  {row.deltaReal2026VsReal2025 >= 0 ? '+' : ''}{row.deltaReal2026VsReal2025.toLocaleString('es-UY')}
+                  {row.deltaReal2026VsReal2025 >= 0 ? '+' : ''}{formatNumber(row.deltaReal2026VsReal2025, 'es-UY')}
                 </td>
                 <td className={`px-4 py-3 text-right font-medium text-sm ${
                   isDeltaR26Up ? 'text-emerald-300' : 

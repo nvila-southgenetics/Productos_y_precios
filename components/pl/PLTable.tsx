@@ -1,10 +1,10 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, type ReactNode } from "react"
 import { supabase } from "@/lib/supabase"
 import { ChevronDown, ChevronRight, Plus, Table2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { displayProductName } from "@/lib/utils"
+import { displayProductName, formatNumber } from "@/lib/utils"
 import { useProductCreateDialog } from "@/components/products/ProductCreateDialogProvider"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -12,11 +12,11 @@ import { useProductCreateDialog } from "@/components/products/ProductCreateDialo
 interface PLTableProps {
   modelo: "budget" | "real"
   year: number
-  country: string
-  category: string
+  countries: string[]
+  categories: string[]
   /** Array vacío = todos. */
   products: string[]
-  channel: string
+  channels: string[]
   canEdit: boolean
   /** Mes hasta el cual calcular el YTD (1-12) */
   ytdMonth: number
@@ -121,7 +121,7 @@ const emptyTax = (): TaxData => ({ iibb_pct: 0, income_tax_pct: 0 })
 
 function fmt(val: number): string {
   if (val === 0) return "-"
-  return val.toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+  return formatNumber(val, "es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
 // Shows value as negative (for costs / expenses)
@@ -132,7 +132,7 @@ function fmtNeg(val: number): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function PLTable({ modelo, year, country, category, products, channel, canEdit, ytdMonth, testMode }: PLTableProps) {
+export function PLTable({ modelo, year, countries, categories, products, channels, canEdit, ytdMonth, testMode }: PLTableProps) {
   const [loading, setLoading] = useState(true)
   const [quantities, setQuantities] = useState<Record<string, number[]>>({})
   const [productCategories, setProductCategories] = useState<Record<string, string>>({})
@@ -156,10 +156,21 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
 
   const product = products.length === 1 ? products[0] : "all"
   const { openCreateProductDialog } = useProductCreateDialog()
+
+  // Dropdowns independientes por fila de totales.
+  // Al expandir una fila, se muestra el desglose correspondiente (y dependencias),
+  // pero al expandir otra no se cierra esta.
+  const [expandedSalesRevenue, setExpandedSalesRevenue] = useState(false)
+  const [expandedGrossProfit, setExpandedGrossProfit] = useState(false)
+  const [expandedSGA, setExpandedSGA] = useState(false)
+  const [expandedNetIncome, setExpandedNetIncome] = useState(false)
+
+  const financialEnabled = modelo === "budget"
   // Can edit SGA amounts only when both product AND channel are specific (exactly one product)
-  const canEditSGA = canEdit && products.length === 1 && channel !== "all"
-  // Can always edit tax rates (country-level)
-  const canEditTax = canEdit
+  // En multi-selección: podemos editar solo cuando se seleccionó un único canal.
+  const canEditSGA = canEdit && financialEnabled && products.length === 1 && channels.length === 1 && countries.length === 1
+  // Taxes are stored at country-level (one country_code row), so allow editing only when a single country is selected.
+  const canEditTax = canEdit && financialEnabled && countries.length === 1
 
   // Mes índice (0-11) hasta el cual se calcula el YTD
   const ytdIndex = Math.min(Math.max(ytdMonth - 1, 0), 11)
@@ -193,6 +204,11 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
 
   const fetchData = useCallback(async () => {
     setLoading(true)
+    // En Real queremos "limpiar" únicamente SG&A/Impuestos (no el resto).
+    // Los costos de producto (Gross Sales / Gross Profit) se calculan desde overrides + cantidades,
+    // por eso NO debemos tocarlos.
+    setSga(Array.from({ length: 12 }, emptySGA))
+    setTaxRates(Array.from({ length: 12 }, emptyTax))
     try {
       if (modelo === "budget") {
         if (testMode) {
@@ -202,12 +218,13 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
           await Promise.all([fetchQuantities(), fetchBudgetOverrides(), fetchSGA()])
         }
       } else {
-        await Promise.all([fetchQuantities(), fetchOverrides(), fetchSGA()])
+        // En modo REAL dejamos SG&A e impuestos en blanco (zeros) hasta que se carguen/validen.
+        await Promise.all([fetchQuantities(), fetchOverrides(), fetchTaxes()])
       }
     } finally {
       setLoading(false)
     }
-  }, [modelo, year, country, category, products, channel, testMode])
+  }, [modelo, year, countries, categories, products, channels, testMode])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -224,23 +241,20 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
         .select("product_id, product_name, jan,feb,mar,apr,may,jun,jul,aug,sep,oct,nov,dec, channel, country_code")
         .eq("year", year)
 
-      if (country !== "all") {
-        q = q.eq("country_code", country)
-      }
+      if (countries.length) q = q.in("country_code", countries)
       if (products.length > 0) {
         q = q.in("product_name", products)
       }
       // Si se selecciona un canal específico, las unidades deben provenir solo de ese canal.
       // Si el canal es "all", sumamos las unidades de todos los canales.
-      if (channel !== "all") {
-        q = q.eq("channel", channel)
-      }
+      if (channels.length) q = q.in("channel", channels)
 
       const { data } = await q
       if (!data) { setProductCategories(cats); setBudgetRows([]); return }
 
-      const allowedProds = category !== "all"
-        ? new Set(Object.entries(cats).filter(([, c]) => c === category).map(([n]) => n))
+      const categorySet = categories.length ? new Set(categories) : null
+      const allowedProds = categorySet
+        ? new Set(Object.entries(cats).filter(([, c]) => categorySet.has(c)).map(([n]) => n))
         : null
 
       const rowsForBudget: Record<string, unknown>[] = []
@@ -257,7 +271,7 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
     } else {
       // Modo REAL: no usamos budgetRows
       setBudgetRows([])
-      const companies = COUNTRY_TO_COMPANIES[country] || []
+      const companies = countries.flatMap((c) => COUNTRY_TO_COMPANIES[c] || [])
       if (!companies.length) { setQuantities({}); setProductCategories(cats); return }
 
       let q = supabase
@@ -273,15 +287,15 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
       // IMPORTANTE (Real):
       // Si el producto no existe en `public.products` (no está en `cats`),
       // NO lo descartamos. Así mostramos las ventas aunque falte el match.
-      const filterCategory = category !== "all"
+      const categorySet = categories.length ? new Set(categories) : null
 
       for (const row of data as { producto: string; mes: number; cantidad_ventas: number }[]) {
         const name = row.producto
-        if (filterCategory) {
+        if (categorySet) {
           const knownCategory = cats[name]
           // Solo excluimos si es un producto CON categoría conocida y NO coincide.
           // Si `knownCategory` es undefined/"" (producto faltante), lo dejamos pasar.
-          if (knownCategory && knownCategory !== category) continue
+          if (knownCategory && !categorySet.has(knownCategory)) continue
         }
         if (!qtys[name]) qtys[name] = Array(12).fill(0)
         const mIdx = row.mes - 1
@@ -301,9 +315,7 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
       .from("product_country_overrides")
       .select("overrides, product_id, country_code, channel")
 
-    if (country !== "all") {
-      q = q.eq("country_code", country)
-    }
+    if (countries.length) q = q.in("country_code", countries)
 
     const { data: overrideRows } = await q
     if (!overrideRows || overrideRows.length === 0) {
@@ -333,7 +345,8 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
       const prodId = row.product_id
       const name = idToName[prodId]
       if (!name) continue
-      if (category !== "all" && idToCat[prodId] !== category) continue
+      const categorySet = categories.length ? new Set(categories) : null
+      if (categorySet && idToCat[prodId] && !categorySet.has(idToCat[prodId])) continue
       if (products.length > 0 && !products.includes(name)) continue
 
       const o = row.overrides || {}
@@ -364,10 +377,8 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
     let q = supabase
       .from("product_country_overrides")
       .select("overrides, product_id, country_code")
-    if (country !== "all") {
-      q = q.eq("country_code", country)
-    }
-    if (channel !== "all") q = q.eq("channel", channel)
+    if (countries.length) q = q.in("country_code", countries)
+    if (channels.length) q = q.in("channel", channels)
 
     const { data: overrideRows } = await q
     // Si no hay overrides para este filtro (por país/canal), limpiamos el estado
@@ -395,7 +406,8 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
     for (const row of overrideRows as { product_id: string; overrides: Record<string, number> }[]) {
       const name = idToName[row.product_id]
       if (!name) continue
-      if (category !== "all" && idToCat[row.product_id] !== category) continue
+      const categorySet = categories.length ? new Set(categories) : null
+      if (categorySet && idToCat[row.product_id] && !categorySet.has(idToCat[row.product_id])) continue
       if (products.length > 0 && !products.includes(name)) continue
 
       const o = row.overrides || {}
@@ -422,8 +434,7 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
     setOverrides(ovs)
   }
 
-  const fetchSGA = async () => {
-    const sgaArr: SGAData[] = Array.from({ length: 12 }, emptySGA)
+  const fetchTaxes = async () => {
     const taxArr: TaxData[] = Array.from({ length: 12 }, emptyTax)
 
     // Fetch tax rates (country-level: product_name='' AND channel='')
@@ -433,8 +444,9 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
       .eq("year", year)
       .eq("product_name", "")
       .eq("channel", "")
-    if (country !== "all") {
-      taxQuery = taxQuery.eq("country_code", country)
+
+    if (countries.length) {
+      taxQuery = taxQuery.in("country_code", countries)
     }
 
     const { data: taxData } = await taxQuery
@@ -449,20 +461,28 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
         }
       }
     }
+
     setTaxRates(taxArr)
+  }
+
+  const fetchSGA = async () => {
+    const sgaArr: SGAData[] = Array.from({ length: 12 }, emptySGA)
+    // Taxes + SG&A suelen vivir en el mismo recurso `pl_sga`,
+    // pero en modo REAL solo queremos limpiar SG&A y mantener impuestos.
+    // Por eso, `fetchSGA` carga ambos; en REAL llamamos solo a `fetchTaxes`.
+    await fetchTaxes()
 
     // Fetch SGA amounts
     let sgaQuery = supabase
       .from("pl_sga")
       .select("month, salaries_wages, professional_fees, contracted_services, travel_lodging_meals, rent_expenses, advertising_promotion, financial_expenses, other_expenses, product_name, channel, country_code")
       .eq("year", year)
-    if (country !== "all") {
-      sgaQuery = sgaQuery.eq("country_code", country)
-    }
+    if (countries.length) sgaQuery = sgaQuery.in("country_code", countries)
+    if (channels.length) sgaQuery = sgaQuery.in("channel", channels)
 
-    if (products.length === 1 && channel !== "all") {
+    if (products.length === 1 && channels.length === 1) {
       // Specific product+channel → load that specific row
-      sgaQuery = sgaQuery.eq("product_name", product).eq("channel", channel)
+      sgaQuery = sgaQuery.eq("product_name", product).eq("channel", channels[0])
     } else {
       // Aggregate all product/channel rows (exclude the tax-only country-level row)
       sgaQuery = sgaQuery.neq("product_name", "").neq("channel", "")
@@ -602,14 +622,14 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
       const normalized = Math.abs(newVal)
       setTaxRates((prev) => prev.map((r, i) => i === month ? { ...r, [field]: normalized } : r))
       await supabase.from("pl_sga").upsert(
-        { year, country_code: country, month: month + 1, product_name: "", channel: "", [field]: normalized },
+        { year, country_code: countries[0], month: month + 1, product_name: "", channel: "", [field]: normalized },
         { onConflict: "year,country_code,month,product_name,channel" }
       )
     } else {
       const normalized = Math.abs(newVal)
       setSga((prev) => prev.map((s, i) => i === month ? { ...s, [field]: normalized } : s))
       await supabase.from("pl_sga").upsert(
-        { year, country_code: country, month: month + 1, product_name: product, channel: channel, [field]: normalized },
+        { year, country_code: countries[0], month: month + 1, product_name: product, channel: channels[0], [field]: normalized },
         { onConflict: "year,country_code,month,product_name,channel" }
       )
     }
@@ -621,18 +641,23 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
   // ── Render helpers ────────────────────────────────────────────────────────
 
   const cellCls = "text-right px-2 py-1.5 text-xs whitespace-nowrap tabular-nums"
-  const stickyLabel = (bold = false, section = false, prominent = false) =>
-    `sticky left-0 px-3 ${prominent ? "py-2.5 text-sm" : "py-1.5 text-xs"} whitespace-nowrap z-10 min-w-[220px] ${
+  const stickyLabel = (bold = false, section = false, prominent = false, forceGray = false) =>
+    `sticky left-0 px-3 ${
+      prominent ? "py-2.5 text-sm" : "py-1.5 text-xs"
+    } whitespace-nowrap z-10 min-w-[220px] ${
       section
         ? "bg-slate-600/95 font-semibold text-white/60 uppercase tracking-wider"
-        : bold
-        ? `bg-slate-700/95 ${prominent ? "font-extrabold tracking-wide text-white" : "font-bold text-white"}`
-        : "bg-slate-800/95 text-white/80"
+        : forceGray
+          ? "bg-slate-700/40 border-y border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] font-extrabold tracking-wide text-white"
+          : bold
+            ? `bg-slate-700/95 ${prominent ? "font-extrabold tracking-wide text-white" : "font-bold text-white"}`
+            : "bg-slate-800/95 text-white/80"
     }`
 
   // Render a standard P&L row
   const Row = ({
     label,
+    labelNode,
     values,
     bold = false,
     section = false,
@@ -640,8 +665,10 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
     indent = false,
     colorClass,
     prominent = false,
+    forceGray = false,
   }: {
     label: string
+    labelNode?: ReactNode
     values: number[]
     bold?: boolean
     section?: boolean
@@ -649,10 +676,14 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
     indent?: boolean
     colorClass?: string
     prominent?: boolean
+    // Forzar color gris/neutral en totales clave.
+    forceGray?: boolean
   }) => {
     const ytdVal = ytd(values)
     const totalVal = sum(values)
-    const rowCls = section
+    const rowCls = forceGray
+      ? "bg-slate-700/40 border-y border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+      : section
       ? "bg-slate-600/30 border-t border-white/20"
       : prominent
       ? "bg-slate-900/45 border-y border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
@@ -673,9 +704,13 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
 
     return (
       <tr className={`${rowCls} transition-colors`}>
-        <td className={stickyLabel(bold, section, prominent)}>
+        <td className={stickyLabel(bold, section, prominent, forceGray)}>
           <span className={`${labelSizeCls} ${labelWeightCls}`}>
-            {indent ? <span className="ml-4">{label}</span> : label}
+            {indent ? (
+              <span className="ml-4">{labelNode ?? label}</span>
+            ) : (
+              labelNode ?? label
+            )}
           </span>
         </td>
         {monthIndices.map((i) => {
@@ -785,6 +820,15 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
     </tr>
   )
 
+  // Booleans del desglose según filas expandidas (independientes).
+  const zero12 = Array.from({ length: 12 }, () => 0)
+
+  const showGrossSalesAndDiscount =
+    expandedSalesRevenue || expandedGrossProfit || expandedNetIncome
+  const showCostOfSales = expandedGrossProfit || expandedNetIncome
+  const showSGAFields = financialEnabled && (expandedSGA || expandedNetIncome)
+  const showTaxRows = financialEnabled && expandedNetIncome
+
   // ── Loading ───────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -815,12 +859,13 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
                 · SG&A de solo lectura — filtrá por producto + canal para editar
               </span>
             )}
-            {canEdit && product !== "all" && channel === "all" && (
+            {canEdit && product !== "all" && channels.length !== 1 && (
               <span className="text-xs text-amber-400/70">
                 · SG&A de solo lectura — seleccioná un canal específico para editar
               </span>
             )}
           </div>
+          {/* Dropdowns de agrupación van en cada fila de totales */}
         </div>
 
         <div className="overflow-x-auto">
@@ -860,61 +905,171 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
                   const v = totalUnits[i] ?? 0
                   return (
                     <td key={i} className={`${cellCls} font-bold ${v > 0 ? "text-blue-200" : "text-white/25"}`}>
-                      {v > 0 ? v.toLocaleString("es-AR") : "-"}
+                      {v > 0 ? formatNumber(v, "es-AR") : "-"}
                     </td>
                   )
                 })}
                 <td className={`${cellCls} font-bold text-blue-200 border-l border-white/10`}>
-                  {ytd(totalUnits).toLocaleString("es-AR") || "-"}
+                  {formatNumber(ytd(totalUnits), "es-AR") || "-"}
                 </td>
                 <td className={`${cellCls} font-bold text-blue-200`}>
-                  {sum(totalUnits).toLocaleString("es-AR") || "-"}
+                  {formatNumber(sum(totalUnits), "es-AR") || "-"}
                 </td>
               </tr>
 
               {/* ─ Revenue ────────────────────────────────────────────── */}
-              <Row label="Gross Sales (sin IVA)" values={grossSales} />
-              <Row label="Commercial Discount" values={commercialDiscount} negative indent />
-              <Row label="Sales Revenue" values={salesRevenue} bold />
+              {showGrossSalesAndDiscount && <Row label="Gross Sales (sin IVA)" values={grossSales} />}
+              {showGrossSalesAndDiscount && <Row label="Commercial Discount" values={commercialDiscount} negative indent />}
+              <Row
+                label="Sales Revenue"
+                labelNode={
+                  <span className="inline-flex items-center gap-2">
+                    <span>Sales Revenue</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExpandedSalesRevenue((v) => !v)
+                      }}
+                      className="p-0.5 text-white/70 hover:text-white"
+                      aria-label="Alternar desglose Sales Revenue"
+                    >
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${
+                          expandedSalesRevenue ? "rotate-0" : "-rotate-90"
+                        }`}
+                      />
+                    </button>
+                  </span>
+                }
+                values={salesRevenue}
+                bold
+                prominent
+                forceGray
+                colorClass="text-white"
+              />
 
-              {/* ─ Cost of Sales ──────────────────────────────────────── */}
-              <SectionHeader label="Cost of Sales" />
-              <Row label="Product Cost" values={productCost} negative indent />
-              <Row label="Kit Cost" values={kitCost} negative indent />
-              <Row label="Payment Fee Costs" values={paymentFee} negative indent />
-              <Row label="Blood Drawn & Sample Handling" values={bloodDraw} negative indent />
-              <Row label="Sanitary Permits to export blood" values={sanitary} negative indent />
-              <Row label="External Courier" values={extCourier} negative indent />
-              <Row label="Internal Courier" values={intCourier} negative indent />
-              <Row label="Physicians Fees" values={physiciansFees} negative indent />
-              <Row label="Sales Commission" values={salesCommission} negative indent />
-              <Row label="Total Cost of Sales" values={totalCOS} bold negative />
+              {/* ─ Cost of Sales (sin título) ─────────────────────────── */}
+              {showCostOfSales && (
+                <>
+                  <Row label="Product Cost" values={productCost} negative indent />
+                  <Row label="Kit Cost" values={kitCost} negative indent />
+                  <Row label="Payment Fee Costs" values={paymentFee} negative indent />
+                  <Row label="Blood Drawn & Sample Handling" values={bloodDraw} negative indent />
+                  <Row label="Sanitary Permits to export blood" values={sanitary} negative indent />
+                  <Row label="External Courier" values={extCourier} negative indent />
+                  <Row label="Internal Courier" values={intCourier} negative indent />
+                  <Row label="Physicians Fees" values={physiciansFees} negative indent />
+                  <Row label="Sales Commission" values={salesCommission} negative indent />
+                  <Row label="Total Cost of Sales" values={totalCOS} bold negative />
+                </>
+              )}
 
-              {/* ─ Gross Profit ───────────────────────────────────────── */}
+              {/* ─ Gross Profit (gris/neutral) ─────────────────────────── */}
               <Row
                 label="Gross Profit"
+                labelNode={
+                  <span className="inline-flex items-center gap-2">
+                    <span>Gross Profit</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExpandedGrossProfit((v) => !v)
+                      }}
+                      className="p-0.5 text-white/70 hover:text-white"
+                      aria-label="Alternar desglose Gross Profit"
+                    >
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${
+                          expandedGrossProfit ? "rotate-0" : "-rotate-90"
+                        }`}
+                      />
+                    </button>
+                  </span>
+                }
                 values={grossProfit}
                 bold
                 prominent
-                colorClass={sum(grossProfit) >= 0 ? "text-emerald-300" : "text-red-400"}
+                forceGray
+                colorClass="text-white"
               />
 
-              {/* ─ SG&A ───────────────────────────────────────────────── */}
-              <SectionHeader label="SG&A" />
-              {SGA_FIELDS.map(({ key, label }) => (
-                <SGARow key={key} field={key} label={label} />
-              ))}
-              <Row label="SG&A" values={totalSGA} bold negative prominent />
+              {/* ─ SG&A (sin título) ──────────────────────────────────── */}
+              {showSGAFields && (
+                <>
+                  {SGA_FIELDS.map(({ key, label }) => (
+                    <SGARow key={key} field={key} label={label} />
+                  ))}
+                </>
+              )}
+              <Row
+                label="SG&A"
+                labelNode={
+                  <span className="inline-flex items-center gap-2">
+                    <span>SG&A</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!financialEnabled) return
+                        setExpandedSGA((v) => !v)
+                      }}
+                      className={`p-0.5 ${financialEnabled ? "text-white/70 hover:text-white" : "text-white/20 cursor-not-allowed"}`}
+                      aria-label="Alternar desglose SG&A"
+                    >
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${
+                          financialEnabled && expandedSGA ? "rotate-0" : "-rotate-90"
+                        }`}
+                      />
+                    </button>
+                  </span>
+                }
+                values={totalSGA}
+                bold
+                negative
+                prominent
+                forceGray
+                colorClass="text-white"
+              />
 
-              {/* ─ Taxes ──────────────────────────────────────────────── */}
-              <SectionHeader label="Impuestos" />
-              <TaxConfigRow field="iibb_pct" label="IIBB — tasa (% sobre revenue)" />
-              <Row label="IIBB (% sobre revenue)" values={iibbAmount} negative indent />
-              <TaxConfigRow field="income_tax_pct" label="Income tax — tasa (% sobre ganancia)" />
-              <Row label="Income tax (% sobre ganancia)" values={incomeTax} negative indent />
+              {/* ─ Taxes (sin título) ─────────────────────────────────── */}
+              {showTaxRows && (
+                <>
+                  <TaxConfigRow field="iibb_pct" label="IIBB — tasa (% sobre revenue)" />
+                  <Row label="IIBB (% sobre revenue)" values={iibbAmount} negative indent />
+                  <TaxConfigRow field="income_tax_pct" label="Income tax — tasa (% sobre ganancia)" />
+                  <Row label="Income tax (% sobre ganancia)" values={incomeTax} negative indent />
+                </>
+              )}
 
-              {/* ─ Net Income ─────────────────────────────────────────── */}
-              <Row label="Net Income" values={netIncome} bold prominent colorClass={netColor} />
+              {/* ─ Net Income (gris/neutral) ──────────────────────────── */}
+              <Row
+                label="Net Income"
+                labelNode={
+                  <span className="inline-flex items-center gap-2">
+                    <span>Net Income</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!financialEnabled) return
+                        setExpandedNetIncome((v) => !v)
+                      }}
+                      className={`p-0.5 ${financialEnabled ? "text-white/70 hover:text-white" : "text-white/20 cursor-not-allowed"}`}
+                      aria-label="Alternar desglose Net Income"
+                    >
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${
+                          financialEnabled && expandedNetIncome ? "rotate-0" : "-rotate-90"
+                        }`}
+                      />
+                    </button>
+                  </span>
+                }
+                values={netIncome}
+                bold
+                prominent
+                forceGray
+                colorClass="text-white"
+              />
             </tbody>
           </table>
         </div>
@@ -1016,7 +1171,25 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {Object.entries(activeQuantities)
-                    .sort(([a], [b]) => a.localeCompare(b, "es", { sensitivity: "base" }))
+                    .sort(([a], [b]) => {
+                      const keyA = ((name: string) => {
+                        const s = displayProductName(name) || ""
+                        const firstLetterIdx = s.search(/\p{L}/u)
+                        if (firstLetterIdx < 0) return ""
+                        const tail = s.slice(firstLetterIdx)
+                        // Clave compuesta solo por letras (ignora números, símbolos y espacios)
+                        return tail.replace(/[^\p{L}]+/gu, "")
+                      })(a)
+                      const keyB = ((name: string) => {
+                        const s = displayProductName(name) || ""
+                        const firstLetterIdx = s.search(/\p{L}/u)
+                        if (firstLetterIdx < 0) return ""
+                        const tail = s.slice(firstLetterIdx)
+                        return tail.replace(/[^\p{L}]+/gu, "")
+                      })(b)
+
+                      return keyA.localeCompare(keyB, "es", { sensitivity: "base" })
+                    })
                     .map(([name, qtArr]) => {
                       const cat = productCategories[name] || ""
                       const isKnownProduct = Object.prototype.hasOwnProperty.call(productCategories, name)
@@ -1106,7 +1279,7 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
                           )}
                           {detailMonth === null && (
                             <td className="px-2 py-2 text-right text-xs text-blue-300 tabular-nums font-medium">
-                              {totalGS > 0 ? `$${totalGS.toLocaleString("es-AR", { maximumFractionDigits: 0 })}` : "-"}
+                              {totalGS > 0 ? `$${formatNumber(totalGS, "es-AR", { maximumFractionDigits: 0 })}` : "-"}
                             </td>
                           )}
                         </tr>
@@ -1142,10 +1315,10 @@ export function PLTable({ modelo, year, country, category, products, channel, ca
                     )}
                     {detailMonth === null && (
                       <td className="px-2 py-2 text-right text-xs font-bold text-blue-300 tabular-nums">
-                        ${Object.entries(quantities).reduce((s, [name, arr]) => {
+                        ${formatNumber(Object.entries(quantities).reduce((s, [name, arr]) => {
                           const gs = overrides[name]?.grossSalesUSD || 0
                           return s + arr.reduce((a, b) => a + b, 0) * gs
-                        }, 0).toLocaleString("es-AR", { maximumFractionDigits: 0 })}
+                        }, 0), "es-AR", { maximumFractionDigits: 0 })}
                       </td>
                     )}
                   </tr>

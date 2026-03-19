@@ -7,7 +7,7 @@ import { Eye, Edit, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { formatDate, displayProductName } from "@/lib/utils"
+import { displayProductName, formatNumber } from "@/lib/utils"
 import type { ProductWithOverrides } from "@/lib/supabase-mcp"
 import { updateProductCountryOverride } from "@/lib/supabase-mcp"
 import { DeleteProductDialog } from "@/components/products/DeleteProductDialog"
@@ -16,6 +16,7 @@ interface ProductTableProps {
   products: ProductWithOverrides[]
   selectedCountry: string
   salesCountByProductId?: Record<string, number>
+  budgetUnitsByProductId?: Record<string, number>
   onViewProduct: (product: ProductWithOverrides) => void
   onEditProduct: (product: ProductWithOverrides) => void
   onDeleteProduct: (product: ProductWithOverrides, deleteFromAllCountries: boolean) => Promise<void>
@@ -52,6 +53,7 @@ export function ProductTable({
   products,
   selectedCountry,
   salesCountByProductId = {},
+  budgetUnitsByProductId = {},
   onViewProduct,
   onEditProduct,
   onDeleteProduct,
@@ -217,11 +219,8 @@ export function ProductTable({
             <th className="h-12 px-4 text-left align-middle font-semibold text-white">
               Producto
             </th>
-            <th className="h-12 px-4 text-left align-middle font-semibold text-white">
-              SKU
-            </th>
-            <th className="h-12 px-4 text-left align-middle font-semibold text-white">
-              Fecha
+            <th className="h-12 px-4 text-right align-middle font-semibold text-white">
+              Q budget
             </th>
             <th className="h-12 px-4 text-right align-middle font-semibold text-white">
               Ventas totales
@@ -239,7 +238,10 @@ export function ProductTable({
         <tbody>
           {products.length === 0 ? (
             <tr>
-              <td colSpan={7} className="h-24 text-center text-white/60">
+              <td
+                colSpan={canEdit ? 6 : 4}
+                className="h-24 text-center text-white/60"
+              >
                 No se encontraron productos
               </td>
             </tr>
@@ -292,15 +294,14 @@ export function ProductTable({
                     </div>
                   </div>
                 </td>
-                <td className="p-4">
-                  <span className="text-sm text-white/70 font-mono">{product.sku}</span>
-                </td>
-                <td className="p-4">
-                  <span className="text-sm text-white/70">{formatDate(product.created_at)}</span>
+                <td className="p-4 text-right">
+                  <span className="text-sm font-medium text-white/90 tabular-nums">
+                    {formatNumber((budgetUnitsByProductId[product.id] ?? 0), "es-UY")}
+                  </span>
                 </td>
                 <td className="p-4 text-right">
                   <span className="text-sm font-medium text-white/90 tabular-nums">
-                    {(salesCountByProductId[product.id] ?? 0).toLocaleString('es-UY')}
+                    {formatNumber((salesCountByProductId[product.id] ?? 0), 'es-UY')}
                   </span>
                 </td>
                 <td className="p-4">

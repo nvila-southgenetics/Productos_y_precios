@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState } fro
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { Select } from "@/components/ui/select"
 import { createProduct, type ProductWithOverrides } from "@/lib/supabase-mcp"
 
 type CreateProductCallback = (product: ProductWithOverrides) => void | Promise<void>
@@ -11,6 +12,8 @@ type CloseCallback = () => void
 
 type OpenOptions = {
   defaultName?: string
+  defaultCategory?: string
+  defaultTipo?: string
   onCreated?: CreateProductCallback
   onCancel?: CloseCallback
 }
@@ -30,6 +33,8 @@ export function useProductCreateDialog(): ProductCreateDialogContextValue {
 export function ProductCreateDialogProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
+  const [category, setCategory] = useState("")
+  const [tipo, setTipo] = useState("")
   const [isCreating, setIsCreating] = useState(false)
 
   const onCreatedRef = useRef<CreateProductCallback | undefined>(undefined)
@@ -43,6 +48,9 @@ export function ProductCreateDialogProvider({ children }: { children: React.Reac
     onCancelRef.current = undefined
     hasCreatedRef.current = false
     setOpen(false)
+    setName("")
+    setCategory("")
+    setTipo("")
   }, [])
 
   const openCreateProductDialog = useCallback((opts: OpenOptions) => {
@@ -51,6 +59,8 @@ export function ProductCreateDialogProvider({ children }: { children: React.Reac
     hasCreatedRef.current = false
 
     setName(opts.defaultName ?? "")
+    setCategory(opts.defaultCategory ?? "")
+    setTipo(opts.defaultTipo ?? "")
     setOpen(true)
   }, [])
 
@@ -67,10 +77,22 @@ export function ProductCreateDialogProvider({ children }: { children: React.Reac
       return
     }
 
+    if (!category.trim()) {
+      alert("La categoría del producto es obligatoria.")
+      return
+    }
+
+    if (!tipo.trim()) {
+      alert("El tipo de muestra es obligatorio.")
+      return
+    }
+
     setIsCreating(true)
     try {
       const product = await createProduct({
         name: name.trim(),
+        category: category.trim(),
+        tipo: tipo.trim(),
       })
 
       hasCreatedRef.current = true
@@ -80,6 +102,8 @@ export function ProductCreateDialogProvider({ children }: { children: React.Reac
       onCancelRef.current = undefined
       setOpen(false)
       setName("")
+      setCategory("")
+      setTipo("")
       hasCreatedRef.current = false
 
       await cb?.(product)
@@ -90,7 +114,7 @@ export function ProductCreateDialogProvider({ children }: { children: React.Reac
     } finally {
       setIsCreating(false)
     }
-  }, [name])
+  }, [name, category, tipo])
 
   const value = useMemo<ProductCreateDialogContextValue>(
     () => ({
@@ -120,6 +144,54 @@ export function ProductCreateDialogProvider({ children }: { children: React.Reac
                 placeholder="Ej: ONCOTYPE DX MAMA"
                 className="bg-white/10 border-white/20 text-white placeholder:text-white/40"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Categoría <span className="text-red-400">*</span>
+              </label>
+              <Select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="bg-white/10 border-white/20 text-white"
+              >
+                <option value="" className="bg-blue-900 text-white">
+                  Seleccionar categoría
+                </option>
+                {["Ginecología", "Oncología", "Endocrinología", "Urología", "Prenatales", "Anualidades", "Otros"].map((c) => (
+                  <option key={c} value={c} className="bg-blue-900 text-white">
+                    {c}
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Tipo de muestra <span className="text-red-400">*</span>
+              </label>
+              <Select
+                value={tipo}
+                onChange={(e) => setTipo(e.target.value)}
+                className="bg-white/10 border-white/20 text-white"
+              >
+                <option value="" className="bg-blue-900 text-white">
+                  Seleccionar tipo de muestra
+                </option>
+                {[
+                  "Sangre",
+                  "Corte de Tejido",
+                  "Punción",
+                  "Biopsia endometrial",
+                  "Hisopado bucal",
+                  "Sangre y corte tejido",
+                  "Orina",
+                ].map((t) => (
+                  <option key={t} value={t} className="bg-blue-900 text-white">
+                    {t}
+                  </option>
+                ))}
+              </Select>
             </div>
           </div>
 

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { formatCurrency } from "@/lib/utils"
+import { formatCurrency, formatNumber } from "@/lib/utils"
 import type { MonthlySalesWithProduct } from "@/lib/supabase-mcp"
 
 interface MonthlyPLModalProps {
@@ -158,7 +158,7 @@ export function MonthlyPLModal({
           <div className="bg-blue-50 p-3 rounded-lg">
             <p className="text-sm font-medium text-blue-900">{compañía}</p>
             <p className="text-xs text-blue-700">
-              Total de productos vendidos: {totalProducts.toLocaleString("es-UY")}
+              Total de productos vendidos: {formatNumber(totalProducts, "es-UY")}
             </p>
           </div>
 

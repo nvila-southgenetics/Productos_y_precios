@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { AlertTriangle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { formatCurrency } from "@/lib/utils"
+import { formatCurrency, formatNumber } from "@/lib/utils"
 import { CompanyBreakdown } from "./CompanyBreakdown"
 import type { MonthlySalesWithProduct } from "@/lib/supabase-mcp"
 
@@ -142,7 +142,7 @@ export function ProductSalesTable({ sales, isAllCompanies = false, isTotal = fal
                   )}
                 </td>
                 <td className="px-3 py-2 text-right">
-                  <span className="font-medium text-sm text-white/90">{sale.cantidad_ventas.toLocaleString('es-UY')}</span>
+                  <span className="font-medium text-sm text-white/90">{formatNumber(sale.cantidad_ventas, 'es-UY')}</span>
                 </td>
                 <td className="px-3 py-2 text-right">
                   <div className="flex items-center justify-end gap-1">
@@ -182,7 +182,7 @@ export function ProductSalesTable({ sales, isAllCompanies = false, isTotal = fal
               TOTAL
             </td>
             <td className="px-3 py-2 text-right text-white">
-              {totalCantidad.toLocaleString('es-UY')}
+              {formatNumber(totalCantidad, 'es-UY')}
             </td>
             <td className="px-3 py-2 text-right text-sky-300">
               {formatCurrency(totalGrossSale)}

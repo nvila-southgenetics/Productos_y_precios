@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { TrendingUp, TrendingDown, Equal } from 'lucide-react';
 import { getCountryForCompany } from '@/lib/auth-constants';
+import { formatNumber } from '@/lib/utils';
 
 interface ComparisonSummaryProps {
   month: string;
@@ -284,7 +285,7 @@ export function ComparisonSummary({ month, countries, products }: ComparisonSumm
           <div>
             <p className="text-sm text-white/70">Budget 2026</p>
             <p className="text-2xl font-bold mt-1 text-blue-300">
-              {summary.budget2026.toLocaleString('es-UY')}
+              {formatNumber(summary.budget2026, 'es-UY')}
             </p>
             <p className="text-xs text-white/60 mt-1">unidades proyectadas</p>
           </div>
@@ -297,7 +298,7 @@ export function ComparisonSummary({ month, countries, products }: ComparisonSumm
           <div>
             <p className="text-sm text-white/70">Real 2026</p>
             <p className="text-2xl font-bold mt-1 text-emerald-300">
-              {summary.real2026.toLocaleString('es-UY')}
+              {formatNumber(summary.real2026, 'es-UY')}
             </p>
             <p className="text-xs text-white/60 mt-1">unidades vendidas</p>
           </div>
@@ -310,7 +311,7 @@ export function ComparisonSummary({ month, countries, products }: ComparisonSumm
           <div>
             <p className="text-sm text-white/70">Real 2025</p>
             <p className="text-2xl font-bold mt-1 text-purple-300">
-              {summary.real2025.toLocaleString('es-UY')}
+              {formatNumber(summary.real2025, 'es-UY')}
             </p>
             <p className="text-xs text-white/60 mt-1">unidades vendidas</p>
           </div>
@@ -327,7 +328,7 @@ export function ComparisonSummary({ month, countries, products }: ComparisonSumm
               isDeltaBudgetDown ? 'text-red-300' : 
               'text-white/60'
             }`}>
-              {summary.deltaBudgetVsReal2026 >= 0 ? '+' : ''}{summary.deltaBudgetVsReal2026.toLocaleString('es-UY')}
+              {summary.deltaBudgetVsReal2026 >= 0 ? '+' : ''}{formatNumber(summary.deltaBudgetVsReal2026, 'es-UY')}
             </p>
             <p className="text-xs text-white/60 mt-1">unidades</p>
           </div>
@@ -363,7 +364,7 @@ export function ComparisonSummary({ month, countries, products }: ComparisonSumm
               isDeltaR26Down ? 'text-red-300' : 
               'text-white/60'
             }`}>
-              {summary.deltaReal2026VsReal2025 >= 0 ? '+' : ''}{summary.deltaReal2026VsReal2025.toLocaleString('es-UY')}
+              {summary.deltaReal2026VsReal2025 >= 0 ? '+' : ''}{formatNumber(summary.deltaReal2026VsReal2025, 'es-UY')}
             </p>
             <p className="text-xs text-white/60 mt-1">unidades</p>
           </div>

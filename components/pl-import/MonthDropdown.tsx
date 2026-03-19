@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ProductSalesTable, calculateGrossSale, calculateGrossProfit } from "./ProductSalesTable"
 import { MonthlyPLModal } from "./MonthlyPLModal"
-import { cn, formatCurrency } from "@/lib/utils"
+import { cn, formatCurrency, formatNumber } from "@/lib/utils"
 import type { MonthlySalesWithProduct } from "@/lib/supabase-mcp"
 
 interface MonthDropdownProps {
@@ -131,7 +131,7 @@ export function MonthDropdown({
             "text-xs font-semibold px-2 py-0.5 rounded",
             totalCantidad > 0 ? "text-blue-200 bg-blue-500/20" : "text-white/50"
           )}>
-            {isLoading ? "Cargando..." : `${totalCantidad.toLocaleString('es-UY')} ventas`}
+            {isLoading ? "Cargando..." : `${formatNumber(totalCantidad, 'es-UY')} ventas`}
           </span>
           {/* Totales en vista previa */}
           {!isLoading && sales.length > 0 && (

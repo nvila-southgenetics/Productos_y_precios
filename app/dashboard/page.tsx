@@ -33,6 +33,7 @@ import { SalesChart } from "@/components/dashboard/SalesChart"
 import { MarginChart } from "@/components/dashboard/MarginChart"
 import { CategoryDistribution } from "@/components/dashboard/CategoryDistribution"
 import { MonthlySalesEvolutionChart } from "@/components/dashboard/MonthlySalesEvolutionChart"
+import { formatNumber } from "@/lib/utils"
 
 export default function DashboardPage() {
   const { allowedCountries, isAdmin, loading: permLoading } = usePermissions()
@@ -270,14 +271,14 @@ export default function DashboardPage() {
             >
               <MetricCard
                 title="Total Ventas"
-                value={metrics.totalSales.toLocaleString("es-UY")}
+                value={formatNumber(metrics.totalSales, "es-UY")}
                 subtitle="Unidades vendidas"
                 icon={Package}
                 iconColor="text-blue-600"
               />
               <MetricCard
                 title="Ingresos Totales"
-                value={`$${metrics.totalRevenue.toLocaleString("es-UY", {
+                value={`$${formatNumber(metrics.totalRevenue, "es-UY", {
                   minimumFractionDigits: 0,
                   maximumFractionDigits: 0,
                 })}`}
@@ -287,7 +288,7 @@ export default function DashboardPage() {
               />
               <MetricCard
                 title="Ganancia Total"
-                value={`$${metrics.totalProfit.toLocaleString("es-UY", {
+                value={`$${formatNumber(metrics.totalProfit, "es-UY", {
                   minimumFractionDigits: 0,
                   maximumFractionDigits: 0,
                 })}`}
@@ -364,7 +365,7 @@ export default function DashboardPage() {
                 products={topSelling}
                 title="Productos Más Vendidos"
                 metricLabel="ventas"
-                getMetricValue={(p) => p.cantidad_ventas.toLocaleString("es-UY")}
+                getMetricValue={(p) => formatNumber(p.cantidad_ventas, "es-UY")}
                 getMetricColor={(_, index) => {
                   if (index === 0) return "bg-gradient-to-br from-blue-500 to-blue-600"
                   if (index === 1) return "bg-gradient-to-br from-blue-400 to-blue-500"
@@ -379,12 +380,14 @@ export default function DashboardPage() {
                 title="Productos Más Caros"
                 metricLabel="precio unitario"
                 getMetricValue={(p) =>
-                  `$${(
-                    p.overrides?.grossSalesUSD || 0
-                  ).toLocaleString("es-UY", {
+                  `$${formatNumber(
+                    p.overrides?.grossSalesUSD || 0,
+                    "es-UY",
+                    {
                     minimumFractionDigits: 0,
                     maximumFractionDigits: 0,
-                  })}`
+                    }
+                  )}`
                 }
                 getMetricColor={(_, index) => {
                   if (index === 0) return "bg-gradient-to-br from-purple-500 to-purple-600"

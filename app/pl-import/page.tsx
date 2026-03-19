@@ -335,7 +335,7 @@ export default function PLImportPage() {
               let finalTotalData: MonthlySalesWithProduct[]
               
               if (isAllCompanies && totalData.length > 0) {
-                finalTotalData = totalData
+                finalTotalData = totalData.filter((item) => String(item.año) === year)
               } else {
                 // Calcular total anual desde los períodos mensuales
                 finalTotalData = yearPeriods.reduce((acc, periodo) => {
@@ -386,7 +386,7 @@ export default function PLImportPage() {
               }
               
               // Solo mostrar total si hay datos cargados
-              const hasData = yearPeriods.some(p => (monthlyData[p] || []).length > 0) || (isAllCompanies && totalData.length > 0)
+              const hasData = yearPeriods.some(p => (monthlyData[p] || []).length > 0) || (isAllCompanies && finalTotalData.length > 0)
 
               return (
                 <YearSection

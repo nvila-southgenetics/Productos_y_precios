@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
+import { Select } from "@/components/ui/select"
 import { formatCurrency, formatPercentage, cn, productNameSortKey, displayProductName } from "@/lib/utils"
 import type { ProductWithOverrides, ProductCountryOverride } from "@/lib/supabase-mcp"
-import { updateProductCountryOverride, getProductsWithOverrides, CHANNELS } from "@/lib/supabase-mcp"
+import { updateProductCountryOverride, getProductsWithOverrides, CHANNELS, updateProductMeta } from "@/lib/supabase-mcp"
 import { Info, AlertTriangle, GitCompare, ChevronDown, Search } from "lucide-react"
 
 interface ProductDetailViewProps {
@@ -91,6 +92,18 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
   const displayCountries = allowedCountries?.length
     ? countries.filter((c) => allowedCountries.includes(c.code))
     : countries
+
+  const CATEGORY_OPTIONS = ["Ginecología", "Oncología", "Endocrinología", "Urología", "Prenatales", "Anualidades", "Otros"]
+  const TIPO_OPTIONS = ["Sangre", "Corte de Tejido", "Punción", "Biopsia endometrial", "Hisopado bucal", "Sangre y corte tejido", "Orina"]
+
+  const [metaCategory, setMetaCategory] = useState<string>(product.category ?? "")
+  const [metaTipo, setMetaTipo] = useState<string>(product.tipo ?? "")
+  const [isSavingMeta, setIsSavingMeta] = useState(false)
+
+  useEffect(() => {
+    setMetaCategory(product.category ?? "")
+    setMetaTipo(product.tipo ?? "")
+  }, [product.id, product.category, product.tipo])
 
   // Inicializar país seleccionado según query param o defaults
   const initializedCountryRef = useRef(false)
@@ -1307,28 +1320,88 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
           </div>
           <div>
             <label className="text-xs font-semibold text-white/70 uppercase tracking-wide">Categoría</label>
-            <div className="mt-2">
-              {product.category && (
-                <Badge
-                  className={`${categoryColors[product.category] || categoryColors["Otros"]} border shadow-sm`}
-                >
-                  {product.category}
-                </Badge>
-              )}
-            </div>
+                  <div className="mt-2">
+                    {canEdit ? (
+                      <Select
+                        value={metaCategory}
+                        onChange={(e) => setMetaCategory(e.target.value)}
+                        className="bg-white/10 border-white/20 text-white"
+                      >
+                        <option value="">Seleccionar categoría</option>
+                        {CATEGORY_OPTIONS.map((c) => (
+                          <option key={c} value={c} className="bg-blue-900 text-white">
+                            {c}
+                          </option>
+                        ))}
+                      </Select>
+                    ) : (
+                      product.category && (
+                        <Badge
+                          className={`${categoryColors[product.category] || categoryColors["Otros"]} border shadow-sm`}
+                        >
+                          {product.category}
+                        </Badge>
+                      )
+                    )}
+                  </div>
           </div>
           <div>
             <label className="text-xs font-semibold text-white/70 uppercase tracking-wide">Tipo</label>
-            <div className="mt-2">
-              {product.tipo && (
-                <Badge
-                  className={`${tipoColors[product.tipo] || "bg-gray-500/20 text-gray-200 border-gray-400/30"} border shadow-sm`}
-                >
-                  {product.tipo}
-                </Badge>
-              )}
-            </div>
+                  <div className="mt-2">
+                    {canEdit ? (
+                      <Select
+                        value={metaTipo}
+                        onChange={(e) => setMetaTipo(e.target.value)}
+                        className="bg-white/10 border-white/20 text-white"
+                      >
+                        <option value="">Seleccionar tipo de muestra</option>
+                        {TIPO_OPTIONS.map((t) => (
+                          <option key={t} value={t} className="bg-blue-900 text-white">
+                            {t}
+                          </option>
+                        ))}
+                      </Select>
+                    ) : (
+                      product.tipo && (
+                        <Badge
+                          className={`${tipoColors[product.tipo] || "bg-gray-500/20 text-gray-200 border-gray-400/30"} border shadow-sm`}
+                        >
+                          {product.tipo}
+                        </Badge>
+                      )
+                    )}
+                  </div>
           </div>
+
+                {canEdit && (
+                  <div className="pt-2">
+                    <Button
+                      onClick={async () => {
+                        if (!metaCategory.trim() || !metaTipo.trim()) {
+                          alert("Completá categoría y tipo de muestra antes de guardar.")
+                          return
+                        }
+                        setIsSavingMeta(true)
+                        try {
+                          await updateProductMeta(product.id, {
+                            category: metaCategory.trim(),
+                            tipo: metaTipo.trim(),
+                          })
+                          router.refresh()
+                        } catch (e) {
+                          console.error("Error updating product meta:", e)
+                          alert("Error al guardar categoría/tipo. Intenta nuevamente.")
+                        } finally {
+                          setIsSavingMeta(false)
+                        }
+                      }}
+                      disabled={isSavingMeta}
+                      className="w-full"
+                    >
+                      {isSavingMeta ? "Guardando..." : "Guardar categoría y tipo"}
+                    </Button>
+                  </div>
+                )}
         </div>
         </div>
       )}

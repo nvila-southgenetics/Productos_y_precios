@@ -12,7 +12,7 @@ import {
   Legend,
 } from "recharts"
 import { motion } from "framer-motion"
-import { cn } from "@/lib/utils"
+import { cn, formatNumber } from "@/lib/utils"
 import type { MonthlyEvolutionPoint } from "@/lib/supabase-mcp"
 import { ProductMultiSearchFilter } from "@/components/dashboard/ProductMultiSearchFilter"
 
@@ -177,7 +177,7 @@ export function MonthlySalesEvolutionChart({
             }}
             labelStyle={{ fontWeight: 600, color: "rgba(255,255,255,0.9)" }}
             formatter={(value: number | undefined) => [
-              (value ?? 0).toLocaleString("es-UY", { minimumFractionDigits: 0, maximumFractionDigits: 0 }),
+              formatNumber((value ?? 0), "es-UY", { minimumFractionDigits: 0, maximumFractionDigits: 0 }),
               "",
             ]}
             labelFormatter={(label) => `Mes: ${label}`}
