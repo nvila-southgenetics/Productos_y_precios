@@ -80,6 +80,7 @@ const COUNTRY_TO_COMPANIES: Record<string, string[]> = {
 const MONTH_KEYS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"] as const
 const MONTH_LABELS = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
 const SHORT_LABELS = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"]
+const KNOWN_PL_CATEGORIES = ["Anualidades", "Endocrinología", "Ginecología", "Oncología", "Otros", "Prenatales", "Urología"] as const
 
 const SGA_FIELDS: { key: keyof SGAData; label: string }[] = [
   { key: "salaries_wages", label: "Salaries & Wages" },
@@ -156,6 +157,9 @@ export function PLTable({ modelo, year, countries, categories, products, channel
 
   const product = products.length === 1 ? products[0] : "all"
   const { openCreateProductDialog } = useProductCreateDialog()
+  const categoriesSet = new Set(categories)
+  const allKnownCategoriesSelected = KNOWN_PL_CATEGORIES.every((c) => categoriesSet.has(c))
+  const shouldFilterCategories = categories.length > 0 && !allKnownCategoriesSelected
 
   // Dropdowns independientes por fila de totales.
   // Al expandir una fila, se muestra el desglose correspondiente (y dependencias),
@@ -252,7 +256,7 @@ export function PLTable({ modelo, year, countries, categories, products, channel
       const { data } = await q
       if (!data) { setProductCategories(cats); setBudgetRows([]); return }
 
-      const categorySet = categories.length ? new Set(categories) : null
+      const categorySet = shouldFilterCategories ? categoriesSet : null
       const allowedProds = categorySet
         ? new Set(Object.entries(cats).filter(([, c]) => categorySet.has(c)).map(([n]) => n))
         : null
@@ -287,7 +291,7 @@ export function PLTable({ modelo, year, countries, categories, products, channel
       // IMPORTANTE (Real):
       // Si el producto no existe en `public.products` (no está en `cats`),
       // NO lo descartamos. Así mostramos las ventas aunque falte el match.
-      const categorySet = categories.length ? new Set(categories) : null
+      const categorySet = shouldFilterCategories ? categoriesSet : null
 
       for (const row of data as { producto: string; mes: number; cantidad_ventas: number }[]) {
         const name = row.producto
@@ -345,7 +349,7 @@ export function PLTable({ modelo, year, countries, categories, products, channel
       const prodId = row.product_id
       const name = idToName[prodId]
       if (!name) continue
-      const categorySet = categories.length ? new Set(categories) : null
+      const categorySet = shouldFilterCategories ? categoriesSet : null
       if (categorySet && idToCat[prodId] && !categorySet.has(idToCat[prodId])) continue
       if (products.length > 0 && !products.includes(name)) continue
 
@@ -406,7 +410,7 @@ export function PLTable({ modelo, year, countries, categories, products, channel
     for (const row of overrideRows as { product_id: string; overrides: Record<string, number> }[]) {
       const name = idToName[row.product_id]
       if (!name) continue
-      const categorySet = categories.length ? new Set(categories) : null
+      const categorySet = shouldFilterCategories ? categoriesSet : null
       if (categorySet && idToCat[row.product_id] && !categorySet.has(idToCat[row.product_id])) continue
       if (products.length > 0 && !products.includes(name)) continue
 
