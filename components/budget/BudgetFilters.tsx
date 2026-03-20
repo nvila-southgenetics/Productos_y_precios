@@ -41,12 +41,14 @@ function MultiCheckboxDropdown({
   selectedValues,
   onSelectedValuesChange,
   allLabel,
+  hideLabel = false,
 }: {
   label: string
   options: Option[]
   selectedValues: string[]
   onSelectedValuesChange: (values: string[]) => void
   allLabel: string
+  hideLabel?: boolean
 }) {
   const [open, setOpen] = useState(false)
 
@@ -60,13 +62,18 @@ function MultiCheckboxDropdown({
         : `${selectedValues.length} seleccionados`
 
   const toggle = (v: string) => {
+    // UX: si está seleccionado "todo", al clickear una opción pasamos directo a esa opción sola.
+    if (isAll && selectedValues.includes(v)) {
+      onSelectedValuesChange([v])
+      return
+    }
     const next = selectedValues.includes(v) ? selectedValues.filter((x) => x !== v) : [...selectedValues, v]
     onSelectedValuesChange(next.length === 0 ? allValues : next)
   }
 
   return (
     <div className="flex flex-col gap-2">
-      <label className="text-sm font-medium text-white/90">{label}</label>
+      {!hideLabel && <label className="text-sm font-medium text-white/90">{label}</label>}
       <div className="w-full">
         <button
           type="button"
@@ -192,6 +199,7 @@ export function BudgetFilters({
           selectedValues={selectedMonths}
           onSelectedValuesChange={onMonthsChange}
           allLabel="Todos los meses"
+          hideLabel
         />
       </div>
 

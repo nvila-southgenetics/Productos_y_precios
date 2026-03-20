@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { ArrowUp, ArrowDown, Minus, ChevronDown } from 'lucide-react';
-import { cn, displayProductName, formatNumber } from '@/lib/utils';
+import { cn, displayProductName, formatCurrency, formatNumber } from '@/lib/utils';
 import { getCountryForCompany } from '@/lib/auth-constants';
 
 interface BudgetMonthItem {
@@ -18,9 +18,12 @@ interface ComparisonRow {
   product_name: string;
   product_id: string | null;
   budget2026: number;
+  budgetAmountUSD: number;
   budgetByMonth?: BudgetMonthItem[];
   real2026: number;
+  real2026AmountUSD: number;
   real2025: number;
+  real2025AmountUSD: number;
   deltaBudgetVsReal2026: number;
   deltaBudgetVsReal2026Pct: number;
   deltaReal2026VsReal2025: number;
@@ -28,7 +31,7 @@ interface ComparisonRow {
 }
 
 interface ComparisonTableProps {
-  month: string;
+  months: string[];
   countries: string[];
   /** Array vacío = todos. */
   products: string[];
@@ -150,7 +153,7 @@ const productNamesMatch = (name1: string, name2: string): boolean => {
   return false;
 };
 
-export function ComparisonTable({ month, countries, products }: ComparisonTableProps) {
+export function ComparisonTable({ months, countries, products }: ComparisonTableProps) {
   const [data, setData] = useState<ComparisonRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<'deltaBudgetVsReal2026' | 'deltaReal2026VsReal2025'>('deltaBudgetVsReal2026');
@@ -158,7 +161,7 @@ export function ComparisonTable({ month, countries, products }: ComparisonTableP
   const [openBudgetDropdownIdx, setOpenBudgetDropdownIdx] = useState<number | null>(null);
   const budgetDropdownRef = useRef<HTMLDivElement>(null);
 
-  const isAllMonths = month === 'all';
+  const isAllMonths = months.length >= 12;
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -172,7 +175,7 @@ export function ComparisonTable({ month, countries, products }: ComparisonTableP
 
   useEffect(() => {
     fetchComparisonData();
-  }, [month, countries, products]);
+  }, [months, countries, products]);
 
   const fetchComparisonData = async () => {
     setLoading(true);
@@ -253,7 +256,8 @@ export function ComparisonTable({ month, countries, products }: ComparisonTableP
       // 4. Agrupar datos reales 2025 por producto y país
       const real2025Grouped: Record<string, number> = {};
       
-      const isMonthFiltered = month !== 'all';
+      const isMonthFiltered = months.length > 0 && months.length < 12;
+      const monthSet = new Set(months.map((m) => parseInt(m, 10)));
 
       safeReal2025Data?.forEach((row: any) => {
         // Extraer código de país de la compañía
@@ -270,7 +274,7 @@ export function ComparisonTable({ month, countries, products }: ComparisonTableP
         const matchesProduct =
           products.length === 0 ||
           products.some((p) => productNamesMatch(p, row.producto));
-        const matchesMonth = !isMonthFiltered || row.mes === parseInt(month);
+        const matchesMonth = !isMonthFiltered || monthSet.has(Number(row.mes));
 
         if (matchesCountry && matchesProduct && matchesMonth) {
           const cantidad = parseInt(row.cantidad_ventas) || 0;
@@ -300,7 +304,7 @@ export function ComparisonTable({ month, countries, products }: ComparisonTableP
         const matchesProduct =
           products.length === 0 ||
           products.some((p) => productNamesMatch(p, row.producto));
-        const matchesMonth = !isMonthFiltered || row.mes === parseInt(month);
+        const matchesMonth = !isMonthFiltered || monthSet.has(Number(row.mes));
 
         if (matchesCountry && matchesProduct && matchesMonth) {
           const cantidad = parseInt(row.cantidad_ventas) || 0;
@@ -322,7 +326,6 @@ export function ComparisonTable({ month, countries, products }: ComparisonTableP
       }
 
       // 6. Combinar datos de budget con reales
-      const monthKey = isMonthFiltered ? MONTH_KEYS[parseInt(month) - 1] : null;
 
       // Verificar que hay datos de budget
       if (!budgetData || budgetData.length === 0) {
@@ -334,11 +337,50 @@ export function ComparisonTable({ month, countries, products }: ComparisonTableP
 
       console.log('📋 Procesando', budgetData.length, 'registros de budget');
 
-      const comparisonData: ComparisonRow[] = budgetData.map((budgetRow: any) => {
+      // 6.a Cargar overrides una sola vez para calcular monto (cantidad * grossSalesUSD)
+      const budgetProductIds = Array.from(
+        new Set((budgetData as any[]).map((r: any) => r.product_id).filter(Boolean))
+      );
+      let overrideRows: any[] = [];
+      if (budgetProductIds.length > 0) {
+        let ovQuery = supabase
+          .from('product_country_overrides')
+          .select('product_id,country_code,channel,overrides')
+          .in('product_id', budgetProductIds);
+        if (countries.length > 0) ovQuery = ovQuery.in('country_code', countries);
+        const { data: ovData } = await ovQuery;
+        overrideRows = ovData || [];
+      }
+
+      const overrideMap = new Map<string, any>();
+      for (const ov of overrideRows) {
+        overrideMap.set(`${ov.product_id}|${ov.country_code}|${ov.channel || ''}`, ov.overrides || {});
+      }
+
+      const getGrossSalesUSDForRow = (row: any): number => {
+        const pid = row.product_id;
+        if (!pid) return 0;
+        const cc = row.country_code || '';
+        const rowChannel = row.channel || '';
+        const exact = overrideMap.get(`${pid}|${cc}|${rowChannel}`);
+        if (exact && typeof exact.grossSalesUSD === 'number') return exact.grossSalesUSD;
+        const paciente = overrideMap.get(`${pid}|${cc}|Paciente`);
+        if (paciente && typeof paciente.grossSalesUSD === 'number') return paciente.grossSalesUSD;
+        // Fallback: primer override disponible para producto+país
+        const fallback = overrideRows.find((ov) => ov.product_id === pid && ov.country_code === cc);
+        return Number(fallback?.overrides?.grossSalesUSD || 0);
+      };
+
+      const rawComparisonData: ComparisonRow[] = budgetData.map((budgetRow: any) => {
         // Calcular budget correctamente
-        const budget = isMonthFiltered && monthKey
-          ? (budgetRow[monthKey] || 0)
+        const budget = isMonthFiltered
+          ? MONTH_KEYS.reduce((sum, mk, idx) => {
+              const monthNum = idx + 1;
+              return monthSet.has(monthNum) ? sum + (budgetRow[mk] || 0) : sum;
+            }, 0)
           : (budgetRow.total_units || 0);
+        const grossSalesUSD = getGrossSalesUSDForRow(budgetRow);
+        const budgetAmountUSD = budget * grossSalesUSD;
 
         // Buscar en real2025Grouped usando match flexible
         const matchingKeys2025 = Object.keys(real2025Grouped).filter(k => {
@@ -413,15 +455,71 @@ export function ComparisonTable({ month, countries, products }: ComparisonTableP
           product_name: budgetRow.product_name,
           product_id: budgetRow.product_id,
           budget2026: budget,
+          budgetAmountUSD,
           budgetByMonth,
           real2026: real2026,
+          real2026AmountUSD: real2026 * grossSalesUSD,
           real2025: real2025,
+          real2025AmountUSD: real2025 * grossSalesUSD,
           deltaBudgetVsReal2026,
           deltaBudgetVsReal2026Pct,
           deltaReal2026VsReal2025,
           deltaReal2026VsReal2025Pct,
         };
       }) || [];
+
+      // 6.b Consolidar filas duplicadas de budget (mismo país + mismo producto lógico).
+      // Esto evita mostrar el mismo producto repetido cuando en budget existen múltiples
+      // filas (por ejemplo, por canal) para el mismo producto.
+      const consolidatedMap = new Map<string, ComparisonRow>();
+      for (const row of rawComparisonData) {
+        const key = `${row.country_code}-${normalizeProductName(row.product_name)}`;
+        const existing = consolidatedMap.get(key);
+        if (!existing) {
+          consolidatedMap.set(key, { ...row });
+          continue;
+        }
+
+        const mergedBudget = existing.budget2026 + row.budget2026;
+        const mergedAmount = existing.budgetAmountUSD + row.budgetAmountUSD;
+        const mergedByMonth = existing.budgetByMonth && row.budgetByMonth
+          ? existing.budgetByMonth.map((m, i) => ({
+              label: m.label,
+              value: m.value + (row.budgetByMonth?.[i]?.value || 0),
+            }))
+          : existing.budgetByMonth || row.budgetByMonth;
+
+        // Real 2025/2026 provienen de agrupaciones por país+producto y suelen ser iguales
+        // entre duplicados; en caso de diferencia, mantenemos el mayor para evitar subestimar.
+        const mergedReal2026 = Math.max(existing.real2026, row.real2026);
+        const mergedReal2025 = Math.max(existing.real2025, row.real2025);
+        const mergedReal2026AmountUSD = Math.max(existing.real2026AmountUSD, row.real2026AmountUSD);
+        const mergedReal2025AmountUSD = Math.max(existing.real2025AmountUSD, row.real2025AmountUSD);
+        const mergedDeltaBudgetVsReal2026 = mergedReal2026 - mergedBudget;
+        const mergedDeltaBudgetVsReal2026Pct =
+          mergedBudget > 0
+            ? (mergedDeltaBudgetVsReal2026 / mergedBudget) * 100
+            : (mergedReal2026 > 0 ? 100 : 0);
+        const mergedDeltaReal2026VsReal2025 = mergedReal2026 - mergedReal2025;
+        const mergedDeltaReal2026VsReal2025Pct =
+          mergedReal2025 > 0 ? (mergedDeltaReal2026VsReal2025 / mergedReal2025) * 100 : (mergedReal2026 > 0 ? 100 : 0);
+
+        consolidatedMap.set(key, {
+          ...existing,
+          budget2026: mergedBudget,
+          budgetAmountUSD: mergedAmount,
+          budgetByMonth: mergedByMonth,
+          real2026: mergedReal2026,
+          real2026AmountUSD: mergedReal2026AmountUSD,
+          real2025: mergedReal2025,
+          real2025AmountUSD: mergedReal2025AmountUSD,
+          deltaBudgetVsReal2026: mergedDeltaBudgetVsReal2026,
+          deltaBudgetVsReal2026Pct: mergedDeltaBudgetVsReal2026Pct,
+          deltaReal2026VsReal2025: mergedDeltaReal2026VsReal2025,
+          deltaReal2026VsReal2025Pct: mergedDeltaReal2026VsReal2025Pct,
+        });
+      }
+      const comparisonData: ComparisonRow[] = Array.from(consolidatedMap.values());
 
       // 6. Agregar filas para productos/países con ventas reales que NO están en budget
       const budgetKeys = new Set(
@@ -493,9 +591,12 @@ export function ComparisonTable({ month, countries, products }: ComparisonTableP
               product_name: productName,
               product_id: productId,
               budget2026: 0,
+              budgetAmountUSD: 0,
               budgetByMonth: undefined,
               real2026: real2026,
+              real2026AmountUSD: 0,
               real2025: real2025,
+              real2025AmountUSD: 0,
               deltaBudgetVsReal2026,
               deltaBudgetVsReal2026Pct,
               deltaReal2026VsReal2025,
@@ -557,8 +658,11 @@ export function ComparisonTable({ month, countries, products }: ComparisonTableP
             <th className="text-left px-4 py-3 font-medium text-xs text-white">País</th>
             <th className="text-left px-4 py-3 font-medium text-xs text-white">Producto</th>
             <th className="text-right px-4 py-3 font-medium text-xs text-white">Budget 2026</th>
+            <th className="text-right px-4 py-3 font-medium text-xs text-white">Monto (US$)</th>
             <th className="text-right px-4 py-3 font-medium text-xs text-white">Real 2026</th>
+            <th className="text-right px-4 py-3 font-medium text-xs text-white">Monto Real 2026</th>
             <th className="text-right px-4 py-3 font-medium text-xs text-white">Real 2025</th>
+            <th className="text-right px-4 py-3 font-medium text-xs text-white">Monto Real 2025</th>
             <th className="text-right px-4 py-3 font-medium text-xs text-white">Δ Real 2026 vs Budget</th>
             <th 
               className="text-right px-4 py-3 font-medium text-xs text-white cursor-pointer hover:bg-white/10 transition-colors"
@@ -642,10 +746,19 @@ export function ComparisonTable({ month, countries, products }: ComparisonTableP
                   )}
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-sm text-emerald-300">
+                  {formatCurrency(row.budgetAmountUSD)}
+                </td>
+                <td className="px-4 py-3 text-right font-medium text-sm text-emerald-300">
                   {formatNumber(row.real2026, 'es-UY')}
+                </td>
+                <td className="px-4 py-3 text-right font-medium text-sm text-emerald-300">
+                  {formatCurrency(row.real2026AmountUSD)}
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-sm text-purple-300">
                   {formatNumber(row.real2025, 'es-UY')}
+                </td>
+                <td className="px-4 py-3 text-right font-medium text-sm text-purple-300">
+                  {formatCurrency(row.real2025AmountUSD)}
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-sm text-white/90">
                   {row.deltaBudgetVsReal2026 >= 0 ? '+' : ''}{formatNumber(row.deltaBudgetVsReal2026, 'es-UY')}

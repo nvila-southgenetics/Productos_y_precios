@@ -10,7 +10,8 @@ import { usePermissions } from '@/lib/use-permissions';
 
 export default function ComparacionPage() {
   const { allowedCountries, isAdmin, loading: permLoading } = usePermissions();
-  const [selectedMonth, setSelectedMonth] = useState<string>('all');
+  const allMonths = Array.from({ length: 12 }, (_, i) => String(i + 1));
+  const [selectedMonths, setSelectedMonths] = useState<string[]>(allMonths);
   const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
 
@@ -66,10 +67,10 @@ export default function ComparacionPage() {
 
       {/* Filtros */}
       <ComparisonFilters
-        selectedMonth={selectedMonth}
+        selectedMonths={selectedMonths}
         selectedCountries={selectedCountries}
         selectedProducts={selectedProducts}
-        onMonthChange={setSelectedMonth}
+        onMonthsChange={setSelectedMonths}
         onCountriesChange={setSelectedCountries}
         onProductsChange={setSelectedProducts}
         allowedCountries={allowedCountries}
@@ -78,14 +79,14 @@ export default function ComparacionPage() {
 
       {/* Resumen comparativo */}
       <ComparisonSummary
-        month={selectedMonth}
+        months={selectedMonths}
         countries={selectedCountries}
         products={selectedProducts}
       />
 
       {/* Tabla comparativa */}
       <ComparisonTable
-        month={selectedMonth}
+        months={selectedMonths}
         countries={selectedCountries}
         products={selectedProducts}
       />

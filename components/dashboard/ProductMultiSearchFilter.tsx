@@ -23,23 +23,27 @@ export function ProductMultiSearchFilter({
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
   const ref = useRef<HTMLDivElement>(null)
+  const safeProducts = useMemo(
+    () => products.filter((p): p is string => typeof p === "string" && p.trim().length > 0),
+    [products]
+  )
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return products
-    return products.filter((p) => p.toLowerCase().includes(q))
-  }, [products, query])
+    if (!q) return safeProducts
+    return safeProducts.filter((p) => p.toLowerCase().includes(q))
+  }, [safeProducts, query])
 
   const selectedSet = useMemo(() => new Set(selectedProducts), [selectedProducts])
 
-  const isAllSelected = selectedProducts.length > 0 && selectedProducts.length === products.length
+  const isAllSelected = selectedProducts.length > 0 && selectedProducts.length === safeProducts.length
 
   const displayValue = useMemo(() => {
     if (selectedProducts.length === 0) return allLabel
-    if (selectedProducts.length === products.length) return allLabel
+    if (selectedProducts.length === safeProducts.length) return allLabel
     if (selectedProducts.length === 1) return displayProductName(selectedProducts[0])
     return `${selectedProducts.length} productos`
-  }, [allLabel, selectedProducts, products.length])
+  }, [allLabel, selectedProducts, safeProducts.length])
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -59,7 +63,7 @@ export function ProductMultiSearchFilter({
     }
   }
 
-  const selectAll = () => onSelectedProductsChange([...products])
+  const selectAll = () => onSelectedProductsChange([...safeProducts])
   const deselectAll = () => onSelectedProductsChange([])
 
   const toggleSelectAllFiltered = () => {

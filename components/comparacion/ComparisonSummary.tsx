@@ -7,7 +7,7 @@ import { getCountryForCompany } from '@/lib/auth-constants';
 import { formatNumber } from '@/lib/utils';
 
 interface ComparisonSummaryProps {
-  month: string;
+  months: string[];
   countries: string[];
   /** Array vacío = todos. */
   products: string[];
@@ -108,7 +108,7 @@ const productNamesMatch = (name1: string, name2: string): boolean => {
   return false;
 };
 
-export function ComparisonSummary({ month, countries, products }: ComparisonSummaryProps) {
+export function ComparisonSummary({ months, countries, products }: ComparisonSummaryProps) {
   const [summary, setSummary] = useState<SummaryData>({
     budget2026: 0,
     real2026: 0,
@@ -122,7 +122,7 @@ export function ComparisonSummary({ month, countries, products }: ComparisonSumm
 
   useEffect(() => {
     fetchSummary();
-  }, [month, countries, products]);
+  }, [months, countries, products]);
 
   const fetchSummary = async () => {
     setLoading(true);
@@ -182,13 +182,16 @@ export function ComparisonSummary({ month, countries, products }: ComparisonSumm
       let real2025 = 0;
       let real2026 = 0;
 
-      const isMonthFiltered = month !== 'all';
-      const monthKey = isMonthFiltered ? MONTH_KEYS[parseInt(month) - 1] : null;
+      const isMonthFiltered = months.length > 0 && months.length < 12;
+      const monthSet = new Set(months.map((m) => parseInt(m, 10)));
 
       // Sumar Budget
       budgetData?.forEach((row: any) => {
-        if (isMonthFiltered && monthKey) {
-          budget2026 += row[monthKey] || 0;
+        if (isMonthFiltered) {
+          budget2026 += MONTH_KEYS.reduce((sum, mk, idx) => {
+            const monthNum = idx + 1;
+            return monthSet.has(monthNum) ? sum + (row[mk] || 0) : sum;
+          }, 0);
         } else {
           budget2026 += row.total_units || 0;
         }
@@ -205,7 +208,7 @@ export function ComparisonSummary({ month, countries, products }: ComparisonSumm
         const matchesProduct =
           products.length === 0 ||
           products.some((p) => productNamesMatch(p, row.producto));
-        const matchesMonth = !isMonthFiltered || row.mes === parseInt(month);
+        const matchesMonth = !isMonthFiltered || monthSet.has(Number(row.mes));
 
         if (matchesCountry && matchesProduct && matchesMonth) {
           const cantidad = parseInt(row.cantidad_ventas) || 0;
@@ -224,7 +227,7 @@ export function ComparisonSummary({ month, countries, products }: ComparisonSumm
         const matchesProduct =
           products.length === 0 ||
           products.some((p) => productNamesMatch(p, row.producto));
-        const matchesMonth = !isMonthFiltered || row.mes === parseInt(month);
+        const matchesMonth = !isMonthFiltered || monthSet.has(Number(row.mes));
 
         if (matchesCountry && matchesProduct && matchesMonth) {
           const cantidad = parseInt(row.cantidad_ventas) || 0;

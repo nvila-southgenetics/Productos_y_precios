@@ -58,6 +58,12 @@ function MultiCheckboxDropdown({
     isAll ? allLabel : selectedValues.length === 1 ? options.find((o) => o.value === selectedValues[0])?.label ?? selectedValues[0] : `${selectedValues.length} seleccionados`
 
   const toggle = (v: string) => {
+    // UX: si "todos" está activo y se toca una opción,
+    // se toma como intención de filtrar solo por esa opción.
+    if (isAll && selectedValues.includes(v)) {
+      onSelectedValuesChange([v])
+      return
+    }
     const next = selectedValues.includes(v) ? selectedValues.filter((x) => x !== v) : [...selectedValues, v]
     // Evitamos "0" selección: si se desmarca todo, volvemos a "todos".
     onSelectedValuesChange(next.length === 0 ? allValues : next)
