@@ -57,7 +57,7 @@ interface TaxData {
 // Maps country_code → company names in ventas_mensuales_view
 const COUNTRY_TO_COMPANIES: Record<string, string[]> = {
   AR: ["SouthGenetics LLC Argentina", "SouthGenetics LLC Arge"],
-  CL: ["SouthGenetics LLC Chile", "Southgenetics LLC Chile", "Southgenetics LTDA"],
+  CL: ["Southgenetics LLC Chile"],
   CO: ["SouthGenetics LLC Colombia"],
   MX: ["SouthGenetics LLC México"],
   UY: ["SouthGenetics LLC", "SouthGenetics LLC Uruguay"],
@@ -66,9 +66,7 @@ const COUNTRY_TO_COMPANIES: Record<string, string[]> = {
   all: [
     "SouthGenetics LLC Argentina",
     "SouthGenetics LLC Arge",
-    "SouthGenetics LLC Chile",
     "Southgenetics LLC Chile",
-    "Southgenetics LTDA",
     "SouthGenetics LLC Colombia",
     "SouthGenetics LLC México",
     "SouthGenetics LLC",
@@ -129,6 +127,13 @@ function fmt(val: number): string {
 function fmtNeg(val: number): string {
   if (val === 0) return "-"
   return `(${Math.abs(val).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })})`
+}
+
+function normalizeProductKey(name: string): string {
+  return (name || "")
+    .toLowerCase()
+    .replace(/\[.*?\]/g, "")
+    .replace(/[^a-z0-9]/g, "")
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -278,23 +283,25 @@ export function PLTable({ modelo, year, countries, categories, products, channel
       const companies = countries.flatMap((c) => COUNTRY_TO_COMPANIES[c] || [])
       if (!companies.length) { setQuantities({}); setProductCategories(cats); return }
 
-      let q = supabase
+      const { data } = await supabase
         .from("ventas_mensuales_view")
-        .select("producto, mes, cantidad_ventas")
+        .select("producto, mes, cantidad_ventas, compañia")
         .eq("año", year)
         .in("compañia", companies)
-      if (products.length > 0) q = q.in("producto", products)
 
-      const { data } = await q
       if (!data) { setProductCategories(cats); return }
 
       // IMPORTANTE (Real):
       // Si el producto no existe en `public.products` (no está en `cats`),
       // NO lo descartamos. Así mostramos las ventas aunque falte el match.
       const categorySet = shouldFilterCategories ? categoriesSet : null
+      const selectedProductKeys = new Set((products || []).map((p) => normalizeProductKey(p)))
 
-      for (const row of data as { producto: string; mes: number; cantidad_ventas: number }[]) {
+      for (const row of data as { producto: string; mes: number; cantidad_ventas: number | string | null; compañia: string | null }[]) {
         const name = row.producto
+        if (!name) continue
+        if (selectedProductKeys.size > 0 && !selectedProductKeys.has(normalizeProductKey(name))) continue
+
         if (categorySet) {
           const knownCategory = cats[name]
           // Solo excluimos si es un producto CON categoría conocida y NO coincide.
@@ -302,8 +309,8 @@ export function PLTable({ modelo, year, countries, categories, products, channel
           if (knownCategory && !categorySet.has(knownCategory)) continue
         }
         if (!qtys[name]) qtys[name] = Array(12).fill(0)
-        const mIdx = row.mes - 1
-        if (mIdx >= 0 && mIdx < 12) qtys[name][mIdx] += row.cantidad_ventas
+        const mIdx = Number(row.mes) - 1
+        if (mIdx >= 0 && mIdx < 12) qtys[name][mIdx] += Number(row.cantidad_ventas || 0)
       }
     }
 

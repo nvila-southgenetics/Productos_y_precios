@@ -1,0 +1,120 @@
+{
+    "año": 2026,
+    "empresas": {
+      "SouthGenetics LLC Argentina": {
+        "enero": 30, "febrero": 35, "marzo": 16,
+        "productos": {
+          "Genomind Professional PGx": { "enero": null, "febrero": 1, "marzo": null },
+          "Tempus xF + biopsia liquida": { "enero": 1, "febrero": 1, "marzo": null },
+          "Tempus XT + XR Tejido": { "enero": 0, "febrero": 1, "marzo": 3 },
+          "mirTHYpe FULL": { "enero": 7, "febrero": 11, "marzo": 5 },
+          "Afirma GSC": { "enero": 2, "febrero": null, "marzo": null },
+          "Invitae Panel Ca Prostata": { "enero": null, "febrero": 1, "marzo": null },
+          "MaterniT Genome": { "enero": null, "febrero": 1, "marzo": null },
+          "MaterniT21 Plus": { "enero": 1, "febrero": 6, "marzo": 1 },
+          "Panel Genetico Invitae": { "enero": null, "febrero": 2, "marzo": null },
+          "Paternidad Prenatal BGI": { "enero": null, "febrero": null, "marzo": 1 },
+          "Sentis Cancer + Discovery (B)": { "enero": 2, "febrero": null, "marzo": null },
+          "Sentis Cancer + Discovery (T)": { "enero": 1, "febrero": null, "marzo": null },
+          "Unity": { "enero": 11, "febrero": 7, "marzo": 4 },
+          "Unity Carrier": { "enero": null, "febrero": 1, "marzo": null },
+          "Unity Complete": { "enero": 1, "febrero": 1, "marzo": null },
+          "Vista Carrier 1200": { "enero": 2, "febrero": null, "marzo": null },
+          "Vista Targeted Carrier": { "enero": 1, "febrero": null, "marzo": null },
+          "Envíos": { "enero": 1, "febrero": 2, "marzo": 2 }
+        }
+      },
+      "SouthGenetics LLC México": {
+        "enero": 57, "febrero": 70, "marzo": 3,
+        "productos": {
+          "Ninguno": { "enero": 7, "febrero": 10, "marzo": null },
+          "Oncotype Dx Mama": { "enero": 48, "febrero": 59, "marzo": 1 },
+          "mirTHYpe FULL": { "enero": 2, "febrero": 1, "marzo": null },
+          "SENTIS Pancreatic Cancer Medication Guidance": { "enero": null, "febrero": null, "marzo": 1 },
+          "Sentis Panel Cáncer Hereditario": { "enero": null, "febrero": null, "marzo": 1 }
+        }
+      },
+      "SouthGenetics LLC Uruguay": {
+        "enero": 64, "febrero": 67, "marzo": 47,
+        "productos": {
+          "Genomic Prostate Score (GPS)": { "enero": 1, "febrero": null, "marzo": null },
+          "Genomind Professional PGx": { "enero": 3, "febrero": 7, "marzo": 6 },
+          "Oncotype Dx Mama": { "enero": 13, "febrero": 13, "marzo": 8 },
+          "mirTHYpe FULL": { "enero": 3, "febrero": 2, "marzo": null },
+          "mirTHYpe preOp": { "enero": 1, "febrero": null, "marzo": 1 },
+          "4Kscore": { "enero": 2, "febrero": 3, "marzo": null },
+          "Afirma GSC": { "enero": 1, "febrero": null, "marzo": null },
+          "Inscripción Sangre": { "enero": 2, "febrero": null, "marzo": null },
+          "Inscripción Sangre + Segmento": { "enero": 5, "febrero": 10, "marzo": 5 },
+          "MaterniT Genome": { "enero": 6, "febrero": 1, "marzo": 3 },
+          "MaterniT21 Plus": { "enero": 8, "febrero": null, "marzo": 5 },
+          "Paternidad Prenatal BGI": { "enero": null, "febrero": 2, "marzo": null },
+          "SENTIS GASTROINTESTINAL CANCER (Tissue)": { "enero": 1, "febrero": 1, "marzo": null },
+          "SENTIS Pancreatic Cancer Medication Guidance": { "enero": null, "febrero": 1, "marzo": null },
+          "Sentis: Multi-Cancer Precision Medication Guidance (ctDNA)": { "enero": null, "febrero": 1, "marzo": null },
+          "Unity": { "enero": 14, "febrero": 25, "marzo": 17 },
+          "Unity Carrier": { "enero": 2, "febrero": null, "marzo": null },
+          "Unity Complete": { "enero": 1, "febrero": null, "marzo": 1 },
+          "MyProstateScore v2.0 (MPS2)": { "enero": null, "febrero": null, "marzo": 1 },
+          "Oncotype DX Colon": { "enero": null, "febrero": 1, "marzo": null },
+          "SENTIS GASTROINTESTINAL CANCER (ctDNA)": { "enero": 1, "febrero": null, "marzo": null }
+        }
+      },
+      "SouthGenetics LLC Colombia": {
+        "enero": 34, "febrero": 26, "marzo": 15,
+        "productos": {
+          "MaterniT Genome": { "enero": 1, "febrero": null, "marzo": null },
+          "MaterniT21": { "enero": 2, "febrero": 0, "marzo": null },
+          "MaterniT21 Plus": { "enero": 1, "febrero": 4, "marzo": 1 },
+          "Paternidad Prenatal DDC": { "enero": 5, "febrero": 2, "marzo": null },
+          "Unity": { "enero": 22, "febrero": 17, "marzo": 13 },
+          "Unity Complete": { "enero": 3, "febrero": 1, "marzo": 1 },
+          "Decision DX: Add On": { "enero": null, "febrero": 1, "marzo": null },
+          "DecisionDx-UM": { "enero": null, "febrero": 1, "marzo": null }
+        }
+      },
+      "Southgenetics LLC Chile": {
+        "enero": 33, "febrero": 23, "marzo": 13,
+        "productos": {
+          "Genomind Professional PGx": { "enero": 5, "febrero": 3, "marzo": 4 },
+          "Oncotype Dx Mama": { "enero": 26, "febrero": 19, "marzo": 7 },
+          "BCRA 1/2": { "enero": null, "febrero": null, "marzo": 1 },
+          "Unity": { "enero": 2, "febrero": 1, "marzo": 1 }
+        }
+      },
+      "SouthGenetics LLC Venezuela": {
+        "enero": 14, "febrero": 16, "marzo": 11,
+        "productos": {
+          "mirTHYpe FULL": { "enero": 1, "febrero": null, "marzo": null },
+          "Afirma GSC": { "enero": null, "febrero": 1, "marzo": 1 },
+          "Invitae Multi-Cancer Panel": { "enero": 1, "febrero": 3, "marzo": 2 },
+          "SENTIS GASTROINTESTINAL CANCER (Tissue)": { "enero": 1, "febrero": null, "marzo": null },
+          "SENTIS Lung Cancer Panel (Tissue)": { "enero": null, "febrero": 1, "marzo": null },
+          "SENTIS Panel Gástrico (Tissue)": { "enero": null, "febrero": null, "marzo": 1 },
+          "Sentis Cancer + Discovery (B)": { "enero": 2, "febrero": 1, "marzo": 2 },
+          "Sentis Cancer + Discovery (T)": { "enero": 1, "febrero": 2, "marzo": 2 },
+          "Sentis Panel Cáncer Hereditario": { "enero": 1, "febrero": null, "marzo": null },
+          "Unity": { "enero": 3, "febrero": 7, "marzo": null },
+          "Unity Complete": { "enero": 4, "febrero": 1, "marzo": 3 }
+        }
+      },
+      "SouthGenetics LLC": {
+        "enero": 74, "febrero": 74, "marzo": 39,
+        "productos": {
+          "CellSearch CTC": { "enero": 1, "febrero": null, "marzo": 2 },
+          "Oncotype Dx Mama": { "enero": 18, "febrero": 22, "marzo": 18 },
+          "Tempus XT + XR Tejido": { "enero": 1, "febrero": 3, "marzo": null },
+          "mirTHYpe FULL": { "enero": 2, "febrero": 2, "marzo": 1 },
+          "4Kscore": { "enero": null, "febrero": null, "marzo": 1 },
+          "Afirma GSC": { "enero": 1, "febrero": 1, "marzo": null },
+          "Confirm MDX": { "enero": 1, "febrero": null, "marzo": null },
+          "Invitae Multi-Cancer Panel": { "enero": 4, "febrero": 3, "marzo": 3 },
+          "MaterniT Genome": { "enero": null, "febrero": 1, "marzo": null },
+          "Unity": { "enero": 43, "febrero": 40, "marzo": 11 },
+          "Unity Complete": { "enero": 3, "febrero": 2, "marzo": 2 },
+          "MyProstateScore v2.0 (MPS2)": { "enero": null, "febrero": null, "marzo": 1 }
+        }
+      }
+    },
+    "total_general": { "enero": 306, "febrero": 311, "marzo": 144 }
+  }
