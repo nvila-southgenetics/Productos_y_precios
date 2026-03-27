@@ -312,6 +312,14 @@ export function PLTable({ modelo, year, countries, categories, products, channel
         const mIdx = Number(row.mes) - 1
         if (mIdx >= 0 && mIdx < 12) qtys[name][mIdx] += Number(row.cantidad_ventas || 0)
       }
+
+      // Ventas reales solo están cargadas en el canal Paciente; si el filtro no lo incluye,
+      // no hay unidades reales para esos otros canales.
+      if (channels.length > 0 && !channels.includes("Paciente")) {
+        for (const k of Object.keys(qtys)) {
+          qtys[k] = Array(12).fill(0)
+        }
+      }
     }
 
     setQuantities(qtys)
@@ -389,7 +397,12 @@ export function PLTable({ modelo, year, countries, categories, products, channel
       .from("product_country_overrides")
       .select("overrides, product_id, country_code")
     if (countries.length) q = q.in("country_code", countries)
-    if (channels.length) q = q.in("channel", channels)
+    // Real: precios/costos unitarios reales solo existen en overrides del canal Paciente.
+    if (modelo === "real") {
+      q = q.eq("channel", "Paciente")
+    } else if (channels.length) {
+      q = q.in("channel", channels)
+    }
 
     const { data: overrideRows } = await q
     // Si no hay overrides para este filtro (por país/canal), limpiamos el estado
@@ -500,7 +513,26 @@ export function PLTable({ modelo, year, countries, categories, products, channel
     }
 
     const { data: sgaData } = await sgaQuery
+
+    // SG&A depende de producto; si filtramos por categoría, traducimos categoría -> nombres de producto permitidos.
+    let allowedProductsByCategory: Set<string> | null = null
+    if (shouldFilterCategories) {
+      const { data: allProds } = await supabase.from("products").select("name, category")
+      const categorySet = categoriesSet
+      allowedProductsByCategory = new Set(
+        (allProds || [])
+          .filter((p: { name: string; category: string | null }) => categorySet.has(p.category || ""))
+          .map((p: { name: string; category: string | null }) => p.name)
+      )
+    }
+
+    const selectedProducts = products.length > 0 ? new Set(products) : null
     for (const row of sgaData || []) {
+      const rowProduct = String(row.product_name || "")
+      if (!rowProduct) continue
+      if (selectedProducts && !selectedProducts.has(rowProduct)) continue
+      if (allowedProductsByCategory && !allowedProductsByCategory.has(rowProduct)) continue
+
       const idx = row.month - 1
       if (idx < 0 || idx >= 12) continue
       for (const f of SGA_FIELDS) {

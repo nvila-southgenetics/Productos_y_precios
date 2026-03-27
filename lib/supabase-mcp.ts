@@ -94,6 +94,171 @@ export interface DashboardProduct {
   overrides?: ProductCountryOverride['overrides']
 }
 
+/** Normaliza nombre de producto para emparejar filas de ventas con `products.name` (corchetes, espacios, etc.). */
+function normalizeProductNameForMatch(name: string): string {
+  return (name || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\[.*?\]/g, "")
+    .replace(/[^\w]/g, "")
+    .replace(/\s+/g, "")
+}
+
+/**
+ * Resuelve el producto del catálogo a partir del texto en `ventas_mensuales_view`
+ * (p. ej. "[Genomind Professional PGx] Genomind Professional PGx" vs nombre en catálogo).
+ */
+export function findProductBySaleName(products: Product[] | null | undefined, saleProducto: string): Product | undefined {
+  if (!products?.length || !saleProducto) return undefined
+  const exact = products.find((p) => p.name === saleProducto)
+  if (exact) return exact
+  const saleNorm = normalizeProductNameForMatch(saleProducto)
+  if (!saleNorm) return undefined
+  const byNorm = products.find((p) => normalizeProductNameForMatch(p.name) === saleNorm)
+  if (byNorm) return byNorm
+  for (const p of products) {
+    const pn = normalizeProductNameForMatch(p.name)
+    if (saleNorm.length >= 5 && pn.length >= 5 && (saleNorm.includes(pn) || pn.includes(saleNorm))) {
+      return p
+    }
+  }
+  return undefined
+}
+
+const DEFAULT_OVERRIDE_CHANNEL = "Paciente"
+
+/** Entre varios overrides por producto+país (distintos canales), preferir Paciente — alineado con datos reales/P&L. */
+function pickOverrideForCountry(
+  rows: ProductCountryOverride[] | null | undefined,
+  productId: string,
+  countryCode: string
+): ProductCountryOverride | undefined {
+  if (!rows?.length) return undefined
+  const candidates = rows.filter((o) => o.product_id === productId && o.country_code === countryCode)
+  if (candidates.length === 0) return undefined
+  const paciente = candidates.find((o) => (o.channel || DEFAULT_OVERRIDE_CHANNEL) === DEFAULT_OVERRIDE_CHANNEL)
+  return paciente ?? candidates[0]
+}
+
+/** Vista "todas las compañías": primer override Paciente del producto (evita tomar un canal arbitrario). */
+function pickOverrideAllCompaniesFirst(
+  rows: ProductCountryOverride[] | null | undefined,
+  productId: string
+): ProductCountryOverride | undefined {
+  if (!rows?.length) return undefined
+  const forProduct = rows.filter((o) => o.product_id === productId)
+  if (forProduct.length === 0) return undefined
+  const paciente = forProduct.filter((o) => (o.channel || DEFAULT_OVERRIDE_CHANNEL) === DEFAULT_OVERRIDE_CHANNEL)
+  const pool = paciente.length ? paciente : forProduct
+  return pool[0]
+}
+
+type VentasIdRow = { test: string | null; id_producto: string | null }
+
+/** Por cada texto `test` (igual a `producto` en la vista), el id de producto más frecuente en filas de `ventas`. */
+function tallyProductIdByTest(rows: VentasIdRow[]): Map<string, string> {
+  const counts = new Map<string, Map<string, number>>()
+  for (const row of rows) {
+    const t = row.test?.trim()
+    const id = row.id_producto
+    if (!t || !id) continue
+    if (!counts.has(t)) counts.set(t, new Map())
+    const m = counts.get(t)!
+    m.set(id, (m.get(id) || 0) + 1)
+  }
+  const out = new Map<string, string>()
+  for (const [test, idMap] of counts) {
+    let bestId = ""
+    let bestN = 0
+    for (const [id, n] of idMap) {
+      if (n > bestN) {
+        bestN = n
+        bestId = id
+      }
+    }
+    if (bestId) out.set(test, bestId)
+  }
+  return out
+}
+
+/**
+ * Obtiene `product_id` desde la tabla `ventas` donde `test` coincide con el nombre en `ventas_mensuales_view.producto`.
+ * Es la fuente de verdad para el mismo enlace que usa `/productos/[id]`.
+ */
+async function fetchProductIdMapFromVentasTable(productNames: string[]): Promise<Map<string, string>> {
+  const merged = new Map<string, string>()
+  const unique = [...new Set(productNames.filter((n) => typeof n === "string" && n.trim().length > 0))]
+  if (unique.length === 0) return merged
+
+  const chunkSize = 100
+  for (let i = 0; i < unique.length; i += chunkSize) {
+    const chunk = unique.slice(i, i + chunkSize)
+    const { data, error } = await supabase
+      .from("ventas")
+      .select("test, id_producto")
+      .in("test", chunk)
+      .not("id_producto", "is", null)
+
+    if (error) {
+      console.warn("fetchProductIdMapFromVentasTable:", error)
+      continue
+    }
+    tallyProductIdByTest(data || []).forEach((id, test) => merged.set(test, id))
+  }
+  return merged
+}
+
+/** Prioriza `product_id` enlazado en `ventas`; si no hay match por id, usa el nombre del catálogo. */
+function resolveProductForSale(
+  products: Product[],
+  saleProducto: string,
+  ventasTestToProductId: Map<string, string>
+): Product | undefined {
+  const idFromVentas = ventasTestToProductId.get(saleProducto)
+  if (idFromVentas) {
+    const byId = products.find((p) => p.id === idFromVentas)
+    if (byId) return byId
+  }
+  return findProductBySaleName(products, saleProducto)
+}
+
+function collectProductIdsFromSaleRows(
+  rows: Array<{ producto: string }>,
+  products: Product[],
+  ventasTestToProductId: Map<string, string>
+): string[] {
+  const ids = new Set<string>()
+  for (const row of rows) {
+    const p = resolveProductForSale(products, row.producto, ventasTestToProductId)
+    if (p?.id) ids.add(p.id)
+  }
+  return [...ids]
+}
+
+/**
+ * PostgREST/Supabase limita por defecto a 1000 filas; con ~1100+ overrides el `select('*')` trunca resultados.
+ * Solo cargamos filas de los productos que aparecen en las ventas (o en el catálogo dado).
+ */
+async function fetchOverridesForProductIds(productIds: string[]): Promise<ProductCountryOverride[]> {
+  const unique = [...new Set(productIds.filter(Boolean))]
+  if (unique.length === 0) return []
+  const chunkSize = 100
+  const out: ProductCountryOverride[] = []
+  for (let i = 0; i < unique.length; i += chunkSize) {
+    const chunk = unique.slice(i, i + chunkSize)
+    const { data, error } = await supabase
+      .from("product_country_overrides")
+      .select("*")
+      .in("product_id", chunk)
+    if (error) {
+      console.warn("fetchOverridesForProductIds:", error)
+      continue
+    }
+    out.push(...(data || []))
+  }
+  return out
+}
+
 /** Venta de la tabla ventas (por fecha) */
 export interface VentaByDate {
   id: string
@@ -167,23 +332,16 @@ export async function getProductsWithOverrides(countryCode?: string): Promise<Pr
   if (productsError) throw productsError
   if (!products) return []
 
-  // Obtener overrides
-  let overridesQuery = supabase
-    .from('product_country_overrides')
-    .select('*')
-
+  const productIds = (products as Product[]).map((p) => p.id)
+  let overrides = await fetchOverridesForProductIds(productIds)
   if (countryCode) {
-    overridesQuery = overridesQuery.eq('country_code', countryCode)
+    overrides = overrides.filter((o) => o.country_code === countryCode)
   }
-
-  const { data: overrides, error: overridesError } = await overridesQuery
-
-  if (overridesError) throw overridesError
 
   // Combinar productos con sus overrides
   const productsWithOverrides = products.map((product: Product) => ({
     ...product,
-    country_overrides: overrides?.filter((o: ProductCountryOverride) => o.product_id === product.id) || []
+    country_overrides: overrides.filter((o: ProductCountryOverride) => o.product_id === product.id) || []
   }))
 
   // Si se especifica un país, solo devolver productos que tengan overrides para ese país
@@ -702,6 +860,9 @@ export async function getMonthlySales(
     throw error
   }
   if (!sales) return []
+
+  const saleProductNames = [...new Set((sales as { producto: string }[]).map((s) => s.producto).filter(Boolean))]
+  const ventasTestToProductId = await fetchProductIdMapFromVentasTable(saleProductNames)
   
   // Debug: verificar resultados
   console.log(`📊 getMonthlySales: ${sales.length} ventas para ${normalizedCompany} - ${periodo || 'todos los períodos'}`)
@@ -711,10 +872,12 @@ export async function getMonthlySales(
     .from('products')
     .select('id, name, category, tipo')
 
-  // Obtener overrides
-  const { data: overrides } = await supabase
-    .from('product_country_overrides')
-    .select('*')
+  const productIdsForOverrides = collectProductIdsFromSaleRows(
+    sales as { producto: string }[],
+    products || [],
+    ventasTestToProductId
+  )
+  const overrides = await fetchOverridesForProductIds(productIdsForOverrides)
 
   // Mapear compañía a país
   const companyToCountry: Record<string, 'UY' | 'AR' | 'MX' | 'CL' | 'VE' | 'CO'> = {
@@ -771,9 +934,8 @@ export async function getMonthlySales(
     
     // Convertir a array y agregar información de productos
     return (Object.values(groupedByProduct) as MonthlySales[]).map((sale: MonthlySales) => {
-      const product = products?.find((p: Product) => p.name === sale.producto)
-      // Buscar overrides de cualquier país (usar el primero disponible)
-      const productOverrides = overrides?.find((o: ProductCountryOverride) => o.product_id === product?.id)
+      const product = resolveProductForSale(products || [], sale.producto, ventasTestToProductId)
+      const productOverrides = pickOverrideAllCompaniesFirst(overrides || [], product?.id || "")
       
       // Recalcular precio promedio
       if (sale.cantidad_ventas > 0 && sale.monto_total) {
@@ -792,12 +954,12 @@ export async function getMonthlySales(
   
   // Si no es "Todas las compañías", comportamiento normal
   return sales.map((sale: MonthlySales) => {
-    const product = products?.find((p: Product) => p.name === sale.producto)
+    const product = resolveProductForSale(products || [], sale.producto, ventasTestToProductId)
     const saleCompany = sale.compañia
     const saleCountryCode = companyToCountry[saleCompany] || 'UY'
-    const productOverrides = overrides?.find(
-      (o: ProductCountryOverride) => o.product_id === product?.id && o.country_code === saleCountryCode
-    )
+    const productOverrides = product?.id
+      ? pickOverrideForCountry(overrides || [], product.id, saleCountryCode)
+      : undefined
 
     return {
       ...sale,
@@ -931,15 +1093,26 @@ export async function getAnnualTotal(
     return acc
   }, [] as MonthlySalesWithProduct[])
 
+  const annualProductNames = Array.from(
+    new Set(
+      (aggregated as MonthlySalesWithProduct[])
+        .map((row: MonthlySalesWithProduct) => String(row.producto ?? "").trim())
+        .filter((name: string) => name.length > 0)
+    )
+  )
+  const ventasTestToProductId = await fetchProductIdMapFromVentasTable(annualProductNames)
+
   // Obtener productos para join
   const { data: products } = await supabase
     .from('products')
     .select('id, name, category, tipo')
 
-  // Obtener overrides
-  const { data: overrides } = await supabase
-    .from('product_country_overrides')
-    .select('*')
+  const productIdsForOverrides = collectProductIdsFromSaleRows(
+    aggregated as { producto: string }[],
+    products || [],
+    ventasTestToProductId
+  )
+  const overrides = await fetchOverridesForProductIds(productIdsForOverrides)
 
   const companyToCountry: Record<string, 'UY' | 'AR' | 'MX' | 'CL' | 'VE' | 'CO'> = {
     'SouthGenetics LLC': 'UY',
@@ -952,15 +1125,16 @@ export async function getAnnualTotal(
     'SouthGenetics LLC Venezuela': 'VE',
   }
 
-  const countryCode = isAllCompanies ? null : (companyToCountry[company] || 'UY')
+  const countryCode = isAllCompanies ? null : (companyToCountry[normalizedCompany] || 'UY')
 
   // Combinar datos
   return aggregated.map((sale: MonthlySalesWithProduct) => {
-    const product = products?.find((p: Product) => p.name === sale.producto)
-    // Si es todas las compañías, buscar overrides de cualquier país o usar el primero disponible
-    const productOverrides = isAllCompanies 
-      ? overrides?.find((o: ProductCountryOverride) => o.product_id === product?.id) // Cualquier override del producto
-      : overrides?.find((o: ProductCountryOverride) => o.product_id === product?.id && o.country_code === countryCode)
+    const product = resolveProductForSale(products || [], sale.producto, ventasTestToProductId)
+    const productOverrides = isAllCompanies
+      ? pickOverrideAllCompaniesFirst(overrides || [], product?.id || "")
+      : product?.id && countryCode
+        ? pickOverrideForCountry(overrides || [], product.id, countryCode)
+        : undefined
 
     return {
       ...sale,
@@ -1029,15 +1203,20 @@ async function getProductsWithMetrics(
     product.cantidad_ventas += sale.cantidad_ventas
     product.monto_total = (product.monto_total || 0) + (sale.monto_total || 0)
   })
+
+  const ventasTestToProductId = await fetchProductIdMapFromVentasTable([...productMap.keys()])
   
   // Obtener productos y overrides
   const { data: products } = await supabase
     .from('products')
     .select('id, name, category, tipo')
-  
-  const { data: overrides } = await supabase
-    .from('product_country_overrides')
-    .select('*')
+
+  const productIdsForOverrides = collectProductIdsFromSaleRows(
+    Array.from(productMap.values()) as { producto: string }[],
+    products || [],
+    ventasTestToProductId
+  )
+  const overrides = await fetchOverridesForProductIds(productIdsForOverrides)
   
   const companyToCountry: Record<string, 'UY' | 'AR' | 'MX' | 'CL' | 'VE' | 'CO'> = {
     'SouthGenetics LLC': 'UY',
@@ -1054,21 +1233,25 @@ async function getProductsWithMetrics(
   const dashboardProducts: DashboardProduct[] = []
   
   Array.from(productMap.values()).forEach((product: ProductAgg) => {
-    const productInfo = products?.find((p: Product) => p.name === product.producto)
-    
-    // Si es todas las compañías, usar el primer override disponible
+    const productInfo = resolveProductForSale(products || [], product.producto, ventasTestToProductId)
+
     const countryCode = isAllCompanies 
       ? null 
-      : (companyToCountry[company] || 'UY')
+      : (companyToCountry[normalizedCompany] || 'UY')
     
     const matchesChannel = (o: ProductCountryOverride) => {
       if (!channel || channel === 'Todos los canales') return true
       return (o.channel || 'Paciente') === channel
     }
 
-    const productOverride = isAllCompanies
-      ? overrides?.find((o: ProductCountryOverride) => o.product_id === productInfo?.id && matchesChannel(o))
-      : overrides?.find((o: ProductCountryOverride) => o.product_id === productInfo?.id && o.country_code === countryCode && matchesChannel(o))
+    const productOverrideCandidates = (overrides || []).filter((o: ProductCountryOverride) => {
+      if (o.product_id !== productInfo?.id) return false
+      if (!isAllCompanies && countryCode && o.country_code !== countryCode) return false
+      return matchesChannel(o)
+    })
+    const productOverride =
+      productOverrideCandidates.find((o: ProductCountryOverride) => (o.channel || 'Paciente') === 'Paciente') ??
+      productOverrideCandidates[0]
     
     const overrideData = productOverride?.overrides || {}
     const grossSalesUSD = overrideData.grossSalesUSD || 0
