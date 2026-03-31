@@ -174,7 +174,9 @@ export function PLTable({ modelo, year, countries, categories, products, channel
   const [expandedSGA, setExpandedSGA] = useState(false)
   const [expandedNetIncome, setExpandedNetIncome] = useState(false)
 
-  const financialEnabled = modelo === "budget"
+  // SG&A / impuestos se pueden usar tanto en Budget como en Real,
+  // pero siempre filtrando por la columna `modelo` en `pl_sga`.
+  const financialEnabled = true
   // Can edit SGA amounts only when both product AND channel are specific (exactly one product)
   // En multi-selección: podemos editar solo cuando se seleccionó un único canal.
   const canEditSGA = canEdit && financialEnabled && products.length === 1 && channels.length === 1 && countries.length === 1
@@ -227,8 +229,7 @@ export function PLTable({ modelo, year, countries, categories, products, channel
           await Promise.all([fetchQuantities(), fetchBudgetOverrides(), fetchSGA()])
         }
       } else {
-        // En modo REAL dejamos SG&A e impuestos en blanco (zeros) hasta que se carguen/validen.
-        await Promise.all([fetchQuantities(), fetchOverrides(), fetchTaxes()])
+        await Promise.all([fetchQuantities(), fetchOverrides(), fetchSGA()])
       }
     } finally {
       setLoading(false)
@@ -466,6 +467,7 @@ export function PLTable({ modelo, year, countries, categories, products, channel
       .from("pl_sga")
       .select("month, iibb_pct, income_tax_pct")
       .eq("year", year)
+      .eq("modelo", modelo)
       .eq("product_name", "")
       .eq("channel", "")
 
@@ -491,9 +493,6 @@ export function PLTable({ modelo, year, countries, categories, products, channel
 
   const fetchSGA = async () => {
     const sgaArr: SGAData[] = Array.from({ length: 12 }, emptySGA)
-    // Taxes + SG&A suelen vivir en el mismo recurso `pl_sga`,
-    // pero en modo REAL solo queremos limpiar SG&A y mantener impuestos.
-    // Por eso, `fetchSGA` carga ambos; en REAL llamamos solo a `fetchTaxes`.
     await fetchTaxes()
 
     // Fetch SGA amounts
@@ -501,6 +500,7 @@ export function PLTable({ modelo, year, countries, categories, products, channel
       .from("pl_sga")
       .select("month, salaries_wages, professional_fees, contracted_services, travel_lodging_meals, rent_expenses, advertising_promotion, financial_expenses, other_expenses, product_name, channel, country_code")
       .eq("year", year)
+      .eq("modelo", modelo)
     if (countries.length) sgaQuery = sgaQuery.in("country_code", countries)
     if (channels.length) sgaQuery = sgaQuery.in("channel", channels)
 
@@ -665,15 +665,15 @@ export function PLTable({ modelo, year, countries, categories, products, channel
       const normalized = Math.abs(newVal)
       setTaxRates((prev) => prev.map((r, i) => i === month ? { ...r, [field]: normalized } : r))
       await supabase.from("pl_sga").upsert(
-        { year, country_code: countries[0], month: month + 1, product_name: "", channel: "", [field]: normalized },
-        { onConflict: "year,country_code,month,product_name,channel" }
+        { year, country_code: countries[0], month: month + 1, modelo, product_name: "", channel: "", [field]: normalized },
+        { onConflict: "year,country_code,month,product_name,channel,modelo" }
       )
     } else {
       const normalized = Math.abs(newVal)
       setSga((prev) => prev.map((s, i) => i === month ? { ...s, [field]: normalized } : s))
       await supabase.from("pl_sga").upsert(
-        { year, country_code: countries[0], month: month + 1, product_name: product, channel: channels[0], [field]: normalized },
-        { onConflict: "year,country_code,month,product_name,channel" }
+        { year, country_code: countries[0], month: month + 1, modelo, product_name: product, channel: channels[0], [field]: normalized },
+        { onConflict: "year,country_code,month,product_name,channel,modelo" }
       )
     }
     setEditingCell(null)
