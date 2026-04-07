@@ -8,7 +8,7 @@ import { supabase } from './supabase'
 export interface Product {
   id: string
   name: string
-  sku: string
+  alias: string
   description: string | null
   category: string | null
   tipo: string | null
@@ -397,13 +397,13 @@ export async function createProduct(input: {
     throw new Error('El nombre del producto es obligatorio')
   }
 
-  // SKU requerido por DB: lo generamos a partir del nombre (sin necesidad de input del usuario).
-  const generatedSku = baseName
+  // Alias requerido por DB: lo generamos a partir del nombre (sin necesidad de input del usuario).
+  const generatedAlias = baseName
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-zA-Z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-    .toUpperCase() || `SKU-${Date.now()}`
+    .toUpperCase() || `ALIAS-${Date.now()}`
 
   // productos.user_id y productos.base_price son NOT NULL, así que deben setearse al insertar.
   const {
@@ -467,7 +467,7 @@ export async function createProduct(input: {
     .from('products')
     .insert({
       name: baseName,
-      sku: generatedSku,
+      alias: generatedAlias,
       base_price: 0,
       user_id: user.id,
       description: input.description ?? null,

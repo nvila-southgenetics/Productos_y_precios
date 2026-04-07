@@ -575,10 +575,7 @@ export function ProductDetailModal({
                 <label className="text-sm text-muted-foreground">Nombre</label>
                 <p className="font-medium">{product.name}</p>
               </div>
-              <div>
-                <label className="text-sm text-muted-foreground">SKU</label>
-                <p className="font-medium">{product.sku}</p>
-              </div>
+              {/* SKU eliminado de la BD; no mostrar campo aquí */}
               <div>
                 <label className="text-sm text-muted-foreground">Categoría</label>
                 <div className="mt-1">

@@ -15,7 +15,6 @@ interface ProductMergeDialogProps {
     mergedFrom: ProductWithOverrides[],
     chosenFields: {
       name: string
-      sku?: string
       category?: string | null
       tipo?: string | null
       costBaseProductId?: string
@@ -54,7 +53,6 @@ export function ProductMergeDialog({
   const [defaultProduct] = products
 
   const [selectedNameId, setSelectedNameId] = useState<string | undefined>(defaultProduct?.id)
-  const [selectedSkuId, setSelectedSkuId] = useState<string | undefined>(defaultProduct?.id)
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | undefined>(defaultProduct?.id)
   const [selectedTipoId, setSelectedTipoId] = useState<string | undefined>(defaultProduct?.id)
   const [selectedCostBaseId, setSelectedCostBaseId] = useState<string | undefined>(defaultProduct?.id)
@@ -62,10 +60,6 @@ export function ProductMergeDialog({
   const nameProduct = useMemo(
     () => products.find(p => p.id === selectedNameId) ?? defaultProduct,
     [products, selectedNameId, defaultProduct]
-  )
-  const skuProduct = useMemo(
-    () => products.find(p => p.id === selectedSkuId) ?? defaultProduct,
-    [products, selectedSkuId, defaultProduct]
   )
   const categoryProduct = useMemo(
     () => products.find(p => p.id === selectedCategoryId) ?? defaultProduct,
@@ -79,12 +73,11 @@ export function ProductMergeDialog({
   const preview = useMemo(() => {
     return {
       name: nameProduct?.name ?? "",
-      sku: skuProduct?.sku,
       category: categoryProduct?.category ?? null,
       tipo: tipoProduct?.tipo ?? null,
       costBaseProductId: selectedCostBaseId,
     }
-  }, [nameProduct, skuProduct, categoryProduct, tipoProduct, selectedCostBaseId])
+  }, [nameProduct, categoryProduct, tipoProduct, selectedCostBaseId])
 
   const handleConfirm = () => {
     if (!preview.name.trim()) return
@@ -120,11 +113,6 @@ export function ProductMergeDialog({
                       <li key={p.id} className="flex items-center gap-2 text-white/80">
                         <span className="w-2 h-2 rounded-full bg-emerald-400" />
                         <span className="font-medium">{displayProductName(p.name)}</span>
-                        {p.sku && (
-                          <span className="text-xs text-white/50 font-mono">
-                            ({p.sku})
-                          </span>
-                        )}
                       </li>
                     ))}
                   </ul>
@@ -155,45 +143,6 @@ export function ProductMergeDialog({
                             )}
                           />
                           <span className="font-medium">{displayProductName(p.name)}</span>
-                          {p.sku && (
-                            <span className="text-xs text-white/50 font-mono">
-                              ({p.sku})
-                            </span>
-                          )}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* Campo: SKU */}
-                <div className="border-t border-white/10 pt-4">
-                  <h3 className="text-sm font-semibold mb-2 text-white">SKU</h3>
-                  <div className="space-y-2">
-                    {products.map((p) => {
-                      const checked = selectedSkuId === p.id
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => setSelectedSkuId(p.id)}
-                          className={cn(
-                            "w-full flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors",
-                            checked
-                              ? "border-emerald-400 bg-emerald-950/40"
-                              : "border-white/10 bg-white/5 hover:bg-white/10"
-                          )}
-                        >
-                          <span
-                            className={cn(
-                              "inline-block w-3 h-3 rounded-full border",
-                              checked ? "bg-emerald-400 border-emerald-300" : "border-white/40"
-                            )}
-                          />
-                          <span className="font-medium">{p.sku || "Sin SKU"}</span>
-                          <span className="text-xs text-white/40 ml-2">
-                            ({displayProductName(p.name)})
-                          </span>
                         </button>
                       )
                     })}
@@ -317,11 +266,6 @@ export function ProductMergeDialog({
                           <span className="font-medium">
                             Costos de {displayProductName(p.name)}
                           </span>
-                          {p.sku && (
-                            <span className="text-xs text-white/50 font-mono">
-                              ({p.sku})
-                            </span>
-                          )}
                         </button>
                       )
                     })}
@@ -346,14 +290,7 @@ export function ProductMergeDialog({
                     {displayProductName(preview.name)}
                   </p>
                 </div>
-                <div>
-                  <p className="text-xs font-semibold text-emerald-200/80 uppercase tracking-wide">
-                    SKU
-                  </p>
-                  <p className="mt-1 font-mono text-emerald-100">
-                    {preview.sku || "Sin SKU"}
-                  </p>
-                </div>
+                {/* SKU eliminado de la BD; no mostrar en vista previa */}
                 <div className="flex flex-wrap gap-2">
                   {preview.category && (
                     <Badge

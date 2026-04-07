@@ -1314,10 +1314,7 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
             <label className="text-xs font-semibold text-white/70 uppercase tracking-wide">Nombre</label>
             <p className="font-semibold mt-2 text-white">{displayProductName(product.name)}</p>
           </div>
-          <div>
-            <label className="text-xs font-semibold text-white/70 uppercase tracking-wide">SKU</label>
-            <p className="font-medium mt-2 text-white/80 font-mono">{product.sku}</p>
-          </div>
+          {/* SKU eliminado de la BD; no mostrar campo aquí */}
           <div>
             <label className="text-xs font-semibold text-white/70 uppercase tracking-wide">Categoría</label>
                   <div className="mt-2">

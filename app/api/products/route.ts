@@ -12,7 +12,7 @@ export async function GET(request: Request) {
       SELECT 
         p.id,
         p.name,
-        p.sku,
+        p.alias,
         p.description,
         p.category,
         p.tipo,
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
       FROM products p
       LEFT JOIN product_country_overrides pco ON p.id = pco.product_id
       ${countryCode ? `WHERE pco.country_code = '${countryCode}'` : ''}
-      GROUP BY p.id, p.name, p.sku, p.description, p.category, p.tipo, p.created_at, p.user_id
+      GROUP BY p.id, p.name, p.alias, p.description, p.category, p.tipo, p.created_at, p.user_id
       ORDER BY p.created_at DESC
     `
 

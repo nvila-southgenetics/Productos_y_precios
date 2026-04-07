@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServerSupabaseClient } from '@/lib/supabase/server'
 
-function safeSlugSku(input: string) {
+function safeSlugAlias(input: string) {
   const base = (input || '').trim()
   const slug = base
     .normalize('NFD')
@@ -9,7 +9,7 @@ function safeSlugSku(input: string) {
     .replace(/[^a-zA-Z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .toUpperCase()
-  return slug || `SKU-${Date.now()}`
+  return slug || `ALIAS-${Date.now()}`
 }
 
 export async function POST(request: Request) {
@@ -19,14 +19,12 @@ export async function POST(request: Request) {
     const {
       productIds,
       name,
-      sku,
       category,
       tipo,
       costBaseProductId,
     }: {
       productIds: string[]
       name: string
-      sku?: string
       category?: string | null
       tipo?: string | null
       costBaseProductId?: string
@@ -81,13 +79,12 @@ export async function POST(request: Request) {
       )
     }
 
-    const requestedSku = sku?.trim()
-    const initialSku = requestedSku || `${safeSlugSku(trimmedName)}-${Date.now().toString().slice(-6)}`
+    const initialAlias = `${safeSlugAlias(trimmedName)}-${Date.now().toString().slice(-6)}`
 
     // 1) Crear el nuevo producto base
-    const insertPayload = (skuToUse: string) => ({
+    const insertPayload = (aliasToUse: string) => ({
       name: trimmedName,
-      sku: skuToUse,
+      alias: aliasToUse,
       category: category ?? null,
       tipo: tipo ?? null,
       // Campos requeridos por schema
@@ -102,15 +99,15 @@ export async function POST(request: Request) {
 
     // Intento 1 con SKU inicial
     {
-      const res = await supabase.from('products').insert(insertPayload(initialSku)).select('*').single()
+      const res = await supabase.from('products').insert(insertPayload(initialAlias)).select('*').single()
       newProduct = res.data
       createError = res.error
     }
 
     // Si el SKU ya existe, reintentar una vez con sufijo nuevo
     if (createError?.code === '23505') {
-      const retrySku = `${initialSku}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
-      const res2 = await supabase.from('products').insert(insertPayload(retrySku)).select('*').single()
+      const retryAlias = `${initialAlias}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
+      const res2 = await supabase.from('products').insert(insertPayload(retryAlias)).select('*').single()
       newProduct = res2.data
       createError = res2.error
     }
@@ -119,7 +116,7 @@ export async function POST(request: Request) {
       console.error('Error creando producto fusionado:', createError)
       const msg =
         createError?.code === '23505'
-          ? 'No se pudo crear el producto fusionado porque el SKU ya existe (incluso tras reintentar).'
+          ? 'No se pudo crear el producto fusionado porque el alias ya existe (incluso tras reintentar).'
           : 'No se pudo crear el producto fusionado.'
       return NextResponse.json({ error: msg }, { status: 500 })
     }
@@ -232,7 +229,7 @@ export async function POST(request: Request) {
       newProductId,
       mergedProduct: {
         name: trimmedName,
-        sku: newProduct.sku,
+        alias: newProduct.alias,
         category: newProduct.category,
         tipo: newProduct.tipo,
       },

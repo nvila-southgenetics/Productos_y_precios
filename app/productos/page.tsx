@@ -170,7 +170,7 @@ function ProductosContent() {
       filtered = filtered.filter(
         (p) =>
           p.name.toLowerCase().includes(query) ||
-          p.sku.toLowerCase().includes(query) ||
+          (p.alias || "").toLowerCase().includes(query) ||
           (p.description && p.description.toLowerCase().includes(query))
       )
     }
@@ -256,7 +256,6 @@ function ProductosContent() {
     mergedFrom: ProductWithOverrides[],
     chosenFields: {
       name: string
-      sku?: string
       category?: string | null
       tipo?: string | null
       costBaseProductId?: string
@@ -273,7 +272,6 @@ function ProductosContent() {
         body: JSON.stringify({
           productIds: mergedFrom.map((p) => p.id),
           name: chosenFields.name,
-          sku: chosenFields.sku,
           category: chosenFields.category,
           tipo: chosenFields.tipo,
           costBaseProductId: chosenFields.costBaseProductId,
@@ -293,7 +291,7 @@ function ProductosContent() {
       // Mostrar un pequeño resumen antes de navegar
       const resumenLineas: string[] = []
       if (mergedProduct?.name) {
-        resumenLineas.push(`Nuevo producto: ${mergedProduct.name} (${mergedProduct.sku || "sin SKU"})`)
+        resumenLineas.push(`Nuevo producto: ${mergedProduct.name}`)
       }
       if (stats) {
         if (typeof stats.ventasReasignadas === "number") {
