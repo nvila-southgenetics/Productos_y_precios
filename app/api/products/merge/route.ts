@@ -158,44 +158,106 @@ export async function POST(request: Request) {
 
     const budgetsReasignados = updatedBudget?.length ?? 0
 
-    // 4) Copiar cálculo de costos completo desde el producto base seleccionado
-    if (costBaseProductId) {
-      const { data: baseOverrides, error: baseOverridesError } = await supabase
-        .from('product_country_overrides')
-        .select('country_code, channel, overrides')
-        .eq('product_id', costBaseProductId)
+    // 4) Reasignar TODOS los overrides al nuevo producto.
+    // Nota: la tabla tiene unicidad por (product_id, country_code, channel) (y además config types),
+    // así que si hay más de un producto con overrides para el mismo country+channel,
+    // debemos elegir un "ganador" y eliminar el resto antes de finalizar.
+    const overridesKey = (o: {
+      country_code: string | null
+      channel: string | null
+      mx_config_type?: string | null
+      cl_config_type?: string | null
+      col_config_type?: string | null
+    }) =>
+      [
+        String(o.country_code || ''),
+        String(o.channel || 'Paciente'),
+        String(o.mx_config_type || ''),
+        String(o.cl_config_type || ''),
+        String(o.col_config_type || ''),
+      ].join('|')
 
-      if (baseOverridesError) {
-        console.error('Error leyendo overrides base en fusión de productos:', baseOverridesError)
-        return NextResponse.json(
-          { error: 'El nuevo producto fue creado, pero hubo un error al leer el cálculo de costos base.' },
-          { status: 500 }
-        )
+    const { data: allOverrides, error: overridesFetchError } = await supabase
+      .from('product_country_overrides')
+      .select('id, product_id, country_code, channel, mx_config_type, cl_config_type, col_config_type')
+      .in('product_id', productIds)
+
+    if (overridesFetchError) {
+      console.error('Error leyendo product_country_overrides en fusión:', overridesFetchError)
+      return NextResponse.json(
+        { error: 'El nuevo producto fue creado, pero hubo un error al leer los overrides de costos.' },
+        { status: 500 }
+      )
+    }
+
+    const overrides = (allOverrides || []) as any[]
+    const baseForConflicts = costBaseProductId || baseIdForRequiredFields
+
+    const winnersByKey = new Map<string, any>()
+    const losers: any[] = []
+
+    // Elegir ganadores: preferir el costBaseProductId cuando hay conflicto.
+    // Si no hay base, elegir el primero que aparezca (estable).
+    for (const o of overrides) {
+      const key = overridesKey(o)
+      const existing = winnersByKey.get(key)
+      if (!existing) {
+        winnersByKey.set(key, o)
+        continue
       }
-
-      if (baseOverrides && baseOverrides.length > 0) {
-        const overridesToInsert = baseOverrides.map((o: any) => ({
-          product_id: newProductId,
-          country_code: o.country_code,
-          channel: o.channel ?? 'Paciente',
-          overrides: o.overrides,
-        }))
-
-        const { error: overridesError } = await supabase
-          .from('product_country_overrides')
-          .insert(overridesToInsert)
-
-        if (overridesError) {
-          console.error('Error al copiar overrides de costos en fusión de productos:', overridesError)
-          return NextResponse.json(
-            { error: 'El nuevo producto fue creado, pero hubo un error al copiar el cálculo de costos.' },
-            { status: 500 }
-          )
-        }
+      const existingIsBase = existing.product_id === baseForConflicts
+      const candidateIsBase = o.product_id === baseForConflicts
+      if (!existingIsBase && candidateIsBase) {
+        losers.push(existing)
+        winnersByKey.set(key, o)
+      } else {
+        losers.push(o)
       }
     }
 
-    // 5) Eliminar productos originales y sus overrides (ya reasignamos ventas/budgets y copiamos costos).
+    const winnerIds = Array.from(winnersByKey.values()).map((o) => o.id)
+    const loserIds = losers.map((o) => o.id)
+
+    // Mover ganadores al nuevo product_id (normalizando channel null -> 'Paciente' para consistencia).
+    // Hacemos updates por id para no tocar otras filas.
+    let overridesReasignados = 0
+    for (const o of winnersByKey.values()) {
+      const { data: moved, error: moveError } = await supabase
+        .from('product_country_overrides')
+        .update({ product_id: newProductId, channel: o.channel ?? 'Paciente' })
+        .eq('id', o.id)
+        .select('id')
+
+      if (moveError) {
+        console.error('Error reasignando override en fusión:', moveError)
+        return NextResponse.json(
+          { error: 'El nuevo producto fue creado, pero hubo un error al reasignar los overrides de costos.' },
+          { status: 500 }
+        )
+      }
+      overridesReasignados += moved?.length ?? 0
+    }
+
+    // Eliminar overrides en conflicto (perdedores).
+    let overridesEliminadosPorConflicto = 0
+    if (loserIds.length) {
+      const { data: deletedLosers, error: delLosersError } = await supabase
+        .from('product_country_overrides')
+        .delete()
+        .in('id', loserIds)
+        .select('id')
+
+      if (delLosersError) {
+        console.error('Error eliminando overrides en conflicto:', delLosersError)
+        return NextResponse.json(
+          { error: 'El nuevo producto fue creado, pero hubo un error al eliminar overrides en conflicto.' },
+          { status: 500 }
+        )
+      }
+      overridesEliminadosPorConflicto = deletedLosers?.length ?? 0
+    }
+
+    // 5) Eliminar productos originales y cualquier override remanente (ya reasignamos ventas/budgets y movimos costos).
     const idsToRemove = productIds.filter((id) => id !== newProductId)
     if (idsToRemove.length > 0) {
       const { error: delOverridesError } = await supabase
@@ -236,6 +298,10 @@ export async function POST(request: Request) {
       stats: {
         ventasReasignadas,
         budgetsReasignados,
+        overridesReasignados,
+        overridesEliminadosPorConflicto,
+        overrideKeysReasignadas: winnersByKey.size,
+        overrideConflictos: loserIds.length,
       },
     })
   } catch (error) {

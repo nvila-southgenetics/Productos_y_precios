@@ -110,9 +110,73 @@ export function ProductMergeDialog({
                   <h3 className="text-sm font-semibold mb-2 text-white/80">Productos seleccionados</h3>
                   <ul className="space-y-1 text-sm">
                     {products.map((p) => (
-                      <li key={p.id} className="flex items-center gap-2 text-white/80">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                        <span className="font-medium">{displayProductName(p.name)}</span>
+                      <li key={p.id} className="rounded-md border border-white/10 bg-white/5 p-3">
+                        <div className="flex items-start gap-3 text-white/80">
+                          <span className="mt-1 w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium">{displayProductName(p.name)}</span>
+                              {p.category && (
+                                <Badge className={`${categoryColors[p.category] || categoryColors["Otros"]} border shadow-sm`}>
+                                  {p.category}
+                                </Badge>
+                              )}
+                              {p.tipo && (
+                                <Badge className={`${tipoColors[p.tipo] || "bg-gray-500/20 text-gray-200 border-gray-400/30"} border shadow-sm`}>
+                                  {p.tipo}
+                                </Badge>
+                              )}
+                            </div>
+
+                            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-white/60">
+                              {"alias" in p && (p as any).alias ? (
+                                <div className="font-mono break-all">
+                                  <span className="text-white/40">alias:</span> {(p as any).alias}
+                                </div>
+                              ) : (
+                                <div>
+                                  <span className="text-white/40">alias:</span> <span className="text-white/30">—</span>
+                                </div>
+                              )}
+
+                              {"currency" in p && (p as any).currency ? (
+                                <div>
+                                  <span className="text-white/40">currency:</span> {(p as any).currency}
+                                </div>
+                              ) : (
+                                <div>
+                                  <span className="text-white/40">currency:</span> <span className="text-white/30">—</span>
+                                </div>
+                              )}
+
+                              {"base_price" in p && (p as any).base_price !== undefined && (p as any).base_price !== null ? (
+                                <div className="tabular-nums">
+                                  <span className="text-white/40">base_price:</span> {String((p as any).base_price)}
+                                </div>
+                              ) : (
+                                <div>
+                                  <span className="text-white/40">base_price:</span> <span className="text-white/30">—</span>
+                                </div>
+                              )}
+
+                              {"created_at" in p && (p as any).created_at ? (
+                                <div>
+                                  <span className="text-white/40">created_at:</span> {String((p as any).created_at).slice(0, 10)}
+                                </div>
+                              ) : (
+                                <div>
+                                  <span className="text-white/40">created_at:</span> <span className="text-white/30">—</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {"description" in p && (p as any).description ? (
+                              <div className="mt-2 text-xs text-white/60 line-clamp-2">
+                                <span className="text-white/40">description:</span> {(p as any).description}
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
                       </li>
                     ))}
                   </ul>
