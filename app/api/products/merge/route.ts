@@ -206,23 +206,11 @@ export async function POST(request: Request) {
     const budgetsReasignados = updatedBudget?.length ?? 0
 
     // 4) Reasignar TODOS los overrides al nuevo producto.
-    // Nota: la tabla tiene unicidad por (product_id, country_code, channel) (y además config types),
-    // así que si hay más de un producto con overrides para el mismo country+channel,
-    // debemos elegir un "ganador" y eliminar el resto antes de finalizar.
-    const overridesKey = (o: {
-      country_code: string | null
-      channel: string | null
-      mx_config_type?: string | null
-      cl_config_type?: string | null
-      col_config_type?: string | null
-    }) =>
-      [
-        String(o.country_code || ''),
-        String(o.channel || 'Paciente'),
-        String(o.mx_config_type || ''),
-        String(o.cl_config_type || ''),
-        String(o.col_config_type || ''),
-      ].join('|')
+    // Nota: en DB existe un UNIQUE por (product_id, country_code, channel), así que solo puede
+    // existir UNA fila por país+canal para un mismo producto. Por eso, si hay múltiples filas
+    // entre productos a fusionar para el mismo país+canal, elegimos un "ganador" y eliminamos el resto.
+    const overridesKey = (o: { country_code: string | null; channel: string | null }) =>
+      [String(o.country_code || ''), String(o.channel || 'Paciente')].join('|')
 
     const { data: allOverrides, error: overridesFetchError } = await supabase
       .from('product_country_overrides')
@@ -262,7 +250,6 @@ export async function POST(request: Request) {
       }
     }
 
-    const winnerIds = Array.from(winnersByKey.values()).map((o) => o.id)
     const loserIds = losers.map((o) => o.id)
 
     // Mover ganadores al nuevo product_id (normalizando channel null -> 'Paciente' para consistencia).
