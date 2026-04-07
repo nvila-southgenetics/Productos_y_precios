@@ -17,6 +17,10 @@ interface ProductMergeDialogProps {
       name: string
       category?: string | null
       tipo?: string | null
+      /** De qué producto tomar el alias del registro `products`. */
+      aliasFromProductId?: string
+      /** De qué producto tomar `base_price` y `currency`. */
+      basePriceFromProductId?: string
       costBaseProductId?: string
     }
   ) => void
@@ -55,6 +59,8 @@ export function ProductMergeDialog({
   const [selectedNameId, setSelectedNameId] = useState<string | undefined>(defaultProduct?.id)
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | undefined>(defaultProduct?.id)
   const [selectedTipoId, setSelectedTipoId] = useState<string | undefined>(defaultProduct?.id)
+  const [selectedAliasId, setSelectedAliasId] = useState<string | undefined>(defaultProduct?.id)
+  const [selectedBasePriceId, setSelectedBasePriceId] = useState<string | undefined>(defaultProduct?.id)
   const [selectedCostBaseId, setSelectedCostBaseId] = useState<string | undefined>(defaultProduct?.id)
 
   const nameProduct = useMemo(
@@ -69,15 +75,28 @@ export function ProductMergeDialog({
     () => products.find(p => p.id === selectedTipoId) ?? defaultProduct,
     [products, selectedTipoId, defaultProduct]
   )
+  const aliasProduct = useMemo(
+    () => products.find(p => p.id === selectedAliasId) ?? defaultProduct,
+    [products, selectedAliasId, defaultProduct]
+  )
+  const basePriceProduct = useMemo(
+    () => products.find(p => p.id === selectedBasePriceId) ?? defaultProduct,
+    [products, selectedBasePriceId, defaultProduct]
+  )
 
   const preview = useMemo(() => {
     return {
       name: nameProduct?.name ?? "",
       category: categoryProduct?.category ?? null,
       tipo: tipoProduct?.tipo ?? null,
+      alias: (aliasProduct as any)?.alias ?? "",
+      base_price: (basePriceProduct as any)?.base_price,
+      currency: (basePriceProduct as any)?.currency ?? "",
+      aliasFromProductId: selectedAliasId,
+      basePriceFromProductId: selectedBasePriceId,
       costBaseProductId: selectedCostBaseId,
     }
-  }, [nameProduct, categoryProduct, tipoProduct, selectedCostBaseId])
+  }, [nameProduct, categoryProduct, tipoProduct, aliasProduct, basePriceProduct, selectedAliasId, selectedBasePriceId, selectedCostBaseId])
 
   const handleConfirm = () => {
     if (!preview.name.trim()) return
@@ -297,6 +316,86 @@ export function ProductMergeDialog({
                   </div>
                 </div>
 
+                {/* Campo: Alias */}
+                <div className="border-t border-white/10 pt-4">
+                  <h3 className="text-sm font-semibold mb-2 text-white">Alias</h3>
+                  <div className="space-y-2">
+                    {products.map((p) => {
+                      const checked = selectedAliasId === p.id
+                      const al = (p as any).alias as string | undefined
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setSelectedAliasId(p.id)}
+                          className={cn(
+                            "w-full flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors",
+                            checked
+                              ? "border-emerald-400 bg-emerald-950/40"
+                              : "border-white/10 bg-white/5 hover:bg-white/10"
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "inline-block w-3 h-3 rounded-full border",
+                              checked ? "bg-emerald-400 border-emerald-300" : "border-white/40"
+                            )}
+                          />
+                          <span className="font-mono text-xs break-all">
+                            {al || "—"}
+                          </span>
+                          <span className="text-xs text-white/40 ml-2 truncate">
+                            ({displayProductName(p.name)})
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Campo: Precio base */}
+                <div className="border-t border-white/10 pt-4">
+                  <h3 className="text-sm font-semibold mb-2 text-white">Precio base</h3>
+                  <p className="text-xs text-white/70 mb-3">
+                    Se copian <span className="font-semibold">base_price</span> y{" "}
+                    <span className="font-semibold">currency</span> del producto elegido.
+                  </p>
+                  <div className="space-y-2">
+                    {products.map((p) => {
+                      const checked = selectedBasePriceId === p.id
+                      const bp = (p as any).base_price
+                      const cur = (p as any).currency
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setSelectedBasePriceId(p.id)}
+                          className={cn(
+                            "w-full flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors",
+                            checked
+                              ? "border-emerald-400 bg-emerald-950/40"
+                              : "border-white/10 bg-white/5 hover:bg-white/10"
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "inline-block w-3 h-3 rounded-full border",
+                              checked ? "bg-emerald-400 border-emerald-300" : "border-white/40"
+                            )}
+                          />
+                          <span className="tabular-nums">
+                            {bp != null ? String(bp) : "—"}{" "}
+                            {cur ? <span className="text-white/60">{cur}</span> : null}
+                          </span>
+                          <span className="text-xs text-white/40 ml-2 truncate">
+                            ({displayProductName(p.name)})
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
                 {/* Campo: Cálculo de costos completo */}
                 <div className="border-t border-white/10 pt-4 pb-2">
                   <h3 className="text-sm font-semibold mb-2 text-white">
@@ -376,17 +475,32 @@ export function ProductMergeDialog({
                     </p>
                   )}
                 </div>
+                <div>
+                  <p className="text-xs font-semibold text-emerald-200/80 uppercase tracking-wide">
+                    Alias
+                  </p>
+                  <p className="mt-1 font-mono text-sm text-white break-all">
+                    {preview.alias || "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-emerald-200/80 uppercase tracking-wide">
+                    Precio base
+                  </p>
+                  <p className="mt-1 tabular-nums text-white">
+                    {preview.base_price != null ? String(preview.base_price) : "—"}{" "}
+                    {preview.currency ? (
+                      <span className="text-emerald-100/80">{preview.currency}</span>
+                    ) : null}
+                  </p>
+                </div>
               </div>
             </div>
 
             <div className="rounded-lg border border-white/20 bg-white/5 p-4 text-xs text-white/75 space-y-2">
               <p>
-                En el siguiente paso (cuando implementemos la lógica de backend) este producto
-                heredará las ventas, budgets y demás registros relacionados de todos los productos
-                seleccionados.
-              </p>
-              <p>
-                Por ahora, esta pantalla solo define cómo se verá el nuevo producto fusionado.
+                Al confirmar, el producto fusionado heredará ventas, budgets y se reasignarán los
+                overrides de costos según el producto base de costos elegido.
               </p>
             </div>
 

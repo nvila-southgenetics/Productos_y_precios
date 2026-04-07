@@ -258,6 +258,8 @@ function ProductosContent() {
       name: string
       category?: string | null
       tipo?: string | null
+      aliasFromProductId?: string
+      basePriceFromProductId?: string
       costBaseProductId?: string
     }
   ) => {
@@ -274,6 +276,8 @@ function ProductosContent() {
           name: chosenFields.name,
           category: chosenFields.category,
           tipo: chosenFields.tipo,
+          aliasFromProductId: chosenFields.aliasFromProductId,
+          basePriceFromProductId: chosenFields.basePriceFromProductId,
           costBaseProductId: chosenFields.costBaseProductId,
         }),
       })

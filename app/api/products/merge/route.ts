@@ -21,12 +21,18 @@ export async function POST(request: Request) {
       name,
       category,
       tipo,
+      aliasFromProductId,
+      basePriceFromProductId,
       costBaseProductId,
     }: {
       productIds: string[]
       name: string
       category?: string | null
       tipo?: string | null
+      /** Producto del cual copiar `products.alias`. */
+      aliasFromProductId?: string
+      /** Producto del cual copiar `base_price` y `currency`. */
+      basePriceFromProductId?: string
       costBaseProductId?: string
     } = body
 
@@ -55,7 +61,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Usuario no autenticado.' }, { status: 401 })
     }
 
-    // Para cumplir NOT NULL en products (ej: base_price, currency), copiamos del producto base.
+    const idSet = new Set(productIds)
+    if (aliasFromProductId && !idSet.has(aliasFromProductId)) {
+      return NextResponse.json({ error: 'aliasFromProductId debe ser uno de los productos a fusionar.' }, { status: 400 })
+    }
+    if (basePriceFromProductId && !idSet.has(basePriceFromProductId)) {
+      return NextResponse.json({ error: 'basePriceFromProductId debe ser uno de los productos a fusionar.' }, { status: 400 })
+    }
+
+    // Descripción y fallback de precio: producto base de costos (o el primero).
     const baseIdForRequiredFields = costBaseProductId || productIds[0]
     const { data: baseProductRow, error: baseProductError } = await supabase
       .from('products')
@@ -71,15 +85,50 @@ export async function POST(request: Request) {
       )
     }
 
-    // Asegurar que base_price exista; si viene undefined, supabase-js omite el campo y termina en NULL.
-    if (baseProductRow.base_price === null || baseProductRow.base_price === undefined) {
+    // Precio base explícito: otro producto de la fusión.
+    let currencyToUse = baseProductRow.currency
+    let basePriceToUse = baseProductRow.base_price
+    if (basePriceFromProductId) {
+      const { data: priceRow, error: priceErr } = await supabase
+        .from('products')
+        .select('base_price, currency')
+        .eq('id', basePriceFromProductId)
+        .single()
+      if (priceErr || !priceRow) {
+        console.error('Error leyendo precio base para fusionar:', priceErr)
+        return NextResponse.json(
+          { error: 'No se pudo leer el precio base del producto elegido.' },
+          { status: 500 }
+        )
+      }
+      currencyToUse = priceRow.currency
+      basePriceToUse = priceRow.base_price
+    }
+
+    if (basePriceToUse === null || basePriceToUse === undefined) {
       return NextResponse.json(
-        { error: 'El producto base no tiene base_price válido; no se puede crear el producto fusionado.' },
+        { error: 'El precio base elegido no es válido; no se puede crear el producto fusionado.' },
         { status: 400 }
       )
     }
 
-    const initialAlias = `${safeSlugAlias(trimmedName)}-${Date.now().toString().slice(-6)}`
+    // Alias: del producto elegido o generado desde el nombre.
+    let initialAlias = `${safeSlugAlias(trimmedName)}-${Date.now().toString().slice(-6)}`
+    if (aliasFromProductId) {
+      const { data: aliasRow, error: aliasErr } = await supabase
+        .from('products')
+        .select('alias')
+        .eq('id', aliasFromProductId)
+        .single()
+      if (aliasErr || !aliasRow?.alias) {
+        console.error('Error leyendo alias para fusionar:', aliasErr)
+        return NextResponse.json(
+          { error: 'No se pudo leer el alias del producto elegido.' },
+          { status: 500 }
+        )
+      }
+      initialAlias = String(aliasRow.alias).trim() || initialAlias
+    }
 
     // 1) Crear el nuevo producto base
     const insertPayload = (aliasToUse: string) => ({
@@ -87,10 +136,8 @@ export async function POST(request: Request) {
       alias: aliasToUse,
       category: category ?? null,
       tipo: tipo ?? null,
-      // Campos requeridos por schema
-      currency: baseProductRow.currency,
-      base_price: baseProductRow.base_price,
-      // Mantener una descripción por defecto (puede cambiarse luego)
+      currency: currencyToUse,
+      base_price: basePriceToUse,
       description: baseProductRow.description ?? null,
     })
 
