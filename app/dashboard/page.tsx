@@ -21,12 +21,12 @@ import {
   getBottomMarginProducts,
   getMostExpensiveProducts,
   getMonthlySalesEvolution,
-  CHANNELS,
   type DashboardProduct,
   type MonthlyEvolutionPoint,
 } from "@/lib/supabase-mcp"
 import { usePermissions } from "@/lib/use-permissions"
 import { filterCompaniesByCountries } from "@/lib/auth-constants"
+import { companyQueryFromSelection } from "@/lib/company-filter"
 import { MetricCard } from "@/components/dashboard/MetricCard"
 import { ProductRanking } from "@/components/dashboard/ProductRanking"
 import { SalesChart } from "@/components/dashboard/SalesChart"
@@ -39,10 +39,11 @@ export default function DashboardPage() {
   const { allowedCountries, isAdmin, loading: permLoading } = usePermissions()
   const [companies, setCompanies] = useState<string[]>([])
   const [products, setProducts] = useState<string[]>([])
-  const [selectedCompany, setSelectedCompany] = useState("Todas las compañías")
+  const [selectedCompanies, setSelectedCompanies] = useState<string[]>([])
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [selectedYear, setSelectedYear] = useState("Todos")
-  const [selectedMonth, setSelectedMonth] = useState("Todos")
+  const [monthFrom, setMonthFrom] = useState(1)
+  const [monthTo, setMonthTo] = useState(12)
   const [selectedChannel, setSelectedChannel] = useState<string>("Todos los canales")
   const [availableYears, setAvailableYears] = useState<string[]>([])
   const [topSelling, setTopSelling] = useState<DashboardProduct[]>([])
@@ -54,6 +55,11 @@ export default function DashboardPage() {
   const [chartSelectedProducts, setChartSelectedProducts] = useState<string[]>([])
   const [isEvolutionLoading, setIsEvolutionLoading] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+
+  const companyParam = useMemo(
+    () => companyQueryFromSelection(companies, selectedCompanies, isAdmin),
+    [companies, selectedCompanies, isAdmin]
+  )
 
   // Cargar compañías y productos
   useEffect(() => {
@@ -67,10 +73,7 @@ export default function DashboardPage() {
         const filtered = filterCompaniesByCountries(companiesData, allowedCountries)
         setCompanies(filtered)
         setProducts(productsData)
-        // Para no-admins, auto-seleccionar la primera compañía permitida
-        if (!isAdmin && filtered.length > 0) {
-          setSelectedCompany(filtered[0])
-        }
+        setSelectedCompanies(isAdmin ? [...filtered] : filtered.length ? [filtered[0]] : [])
       } catch (error) {
         console.error("Error loading initial data:", error)
       } finally {
@@ -83,9 +86,9 @@ export default function DashboardPage() {
   // Cargar años disponibles
   useEffect(() => {
     async function loadYears() {
-      if (!selectedCompany) return
+      if (!companies.length) return
       try {
-        const periodsData = await getAvailablePeriods(selectedCompany)
+        const periodsData = await getAvailablePeriods(companyParam)
         const years = Array.from(
           new Set(periodsData.map((p) => p.split("-")[0]))
         ).sort((a, b) => b.localeCompare(a))
@@ -95,12 +98,17 @@ export default function DashboardPage() {
       }
     }
     loadYears()
-  }, [selectedCompany])
+  }, [companies.length, companyParam])
+
+  const monthRange = useMemo(
+    () => ({ from: monthFrom, to: monthTo }),
+    [monthFrom, monthTo]
+  )
 
   // Cargar datos del dashboard
   useEffect(() => {
     async function loadDashboardData() {
-      if (!selectedCompany) return
+      if (!companies.length) return
       setIsLoading(true)
       try {
         const channelParam =
@@ -109,36 +117,40 @@ export default function DashboardPage() {
         const [selling, topMarginData, bottomMarginData, expensive] =
           await Promise.all([
             getTopSellingProducts(
-              selectedCompany,
+              companyParam,
               selectedYear !== "Todos" ? selectedYear : undefined,
-              selectedMonth !== "Todos" ? selectedMonth : undefined,
+              undefined,
               selectedProducts.length ? selectedProducts : undefined,
               channelParam,
-              10
+              10,
+              monthRange
             ),
             getTopMarginProducts(
-              selectedCompany,
+              companyParam,
               selectedYear !== "Todos" ? selectedYear : undefined,
-              selectedMonth !== "Todos" ? selectedMonth : undefined,
+              undefined,
               selectedProducts.length ? selectedProducts : undefined,
               channelParam,
-              10
+              10,
+              monthRange
             ),
             getBottomMarginProducts(
-              selectedCompany,
+              companyParam,
               selectedYear !== "Todos" ? selectedYear : undefined,
-              selectedMonth !== "Todos" ? selectedMonth : undefined,
+              undefined,
               selectedProducts.length ? selectedProducts : undefined,
               channelParam,
-              10
+              10,
+              monthRange
             ),
             getMostExpensiveProducts(
-              selectedCompany,
+              companyParam,
               selectedYear !== "Todos" ? selectedYear : undefined,
-              selectedMonth !== "Todos" ? selectedMonth : undefined,
+              undefined,
               selectedProducts.length ? selectedProducts : undefined,
               channelParam,
-              10
+              10,
+              monthRange
             ),
           ])
         setTopSelling(selling)
@@ -152,17 +164,29 @@ export default function DashboardPage() {
       }
     }
     loadDashboardData()
-  }, [selectedCompany, selectedYear, selectedMonth, selectedProducts, selectedChannel])
+  }, [
+    companies.length,
+    companyParam,
+    selectedYear,
+    monthRange,
+    selectedProducts,
+    selectedChannel,
+  ])
 
   // Cargar evolución mensual 2025 vs 2026 (usa el filtro de producto de la gráfica)
   useEffect(() => {
     async function loadEvolution() {
       setIsEvolutionLoading(true)
       try {
-        const company =
-          selectedCompany === "Todas las compañías" ? undefined : selectedCompany
+        let evoCompany: string | string[] | undefined
+        if (typeof companyParam === "string") {
+          evoCompany =
+            companyParam === "Todas las compañías" ? undefined : companyParam
+        } else {
+          evoCompany = companyParam
+        }
         const product = chartSelectedProducts.length ? chartSelectedProducts : undefined
-        const { year2025, year2026 } = await getMonthlySalesEvolution(company, product)
+        const { year2025, year2026 } = await getMonthlySalesEvolution(evoCompany, product)
         setMonthlyEvolution2025(year2025)
         setMonthlyEvolution2026(year2026)
       } catch (error) {
@@ -172,7 +196,7 @@ export default function DashboardPage() {
       }
     }
     loadEvolution()
-  }, [selectedCompany, chartSelectedProducts])
+  }, [companyParam, chartSelectedProducts])
 
   // Calcular métricas agregadas
   const metrics = useMemo(() => {
@@ -236,15 +260,19 @@ export default function DashboardPage() {
             companies={companies}
             products={products}
             availableYears={availableYears}
-            selectedCompany={selectedCompany}
+            selectedCompanies={selectedCompanies}
             selectedProducts={selectedProducts}
             selectedYear={selectedYear}
-            selectedMonth={selectedMonth}
+            monthFrom={monthFrom}
+            monthTo={monthTo}
             selectedChannel={selectedChannel}
-            onCompanyChange={setSelectedCompany}
+            onCompaniesChange={setSelectedCompanies}
             onProductsChange={setSelectedProducts}
             onYearChange={setSelectedYear}
-            onMonthChange={setSelectedMonth}
+            onMonthRangeChange={({ fromMonth, toMonth }) => {
+              setMonthFrom(fromMonth)
+              setMonthTo(toMonth)
+            }}
             onChannelChange={setSelectedChannel}
             showAllCompanies={isAdmin}
           />

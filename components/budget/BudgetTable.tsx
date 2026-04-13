@@ -5,7 +5,7 @@ import Link from "next/link"
 import { ChevronDown, ChevronRight, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
-import { formatCurrency, formatNumber, productNameSortKey, displayProductName } from "@/lib/utils"
+import { formatCurrency, formatNumber, productNameSortKey, displayProductLabelFromName } from "@/lib/utils"
 import { useProductCreateDialog } from "@/components/products/ProductCreateDialogProvider"
 
 interface BudgetRow {
@@ -39,6 +39,7 @@ interface BudgetRow {
 
 interface BudgetTableProps {
   year: number
+  budgetName: string
   countries: string[]
   /** Array vacío = todos. */
   products: string[]
@@ -117,22 +118,29 @@ function getMarginColor(margin: number): string {
   return "text-red-300"
 }
 
-export function BudgetTable({ year, countries, products, months, channels, canEdit }: BudgetTableProps) {
+export function BudgetTable({ year, budgetName, countries, products, months, channels, canEdit }: BudgetTableProps) {
   const [data, setData] = useState<BudgetRow[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [creatingProductFor, setCreatingProductFor] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const [aliasByName, setAliasByName] = useState<Record<string, string>>({})
   const { openCreateProductDialog } = useProductCreateDialog()
 
   useEffect(() => {
     fetchBudgetData()
-  }, [year, countries, products, months, channels])
+  }, [year, budgetName, countries, products, months, channels])
 
   const fetchBudgetData = async () => {
     setLoading(true)
     try {
+      const { data: prods } = await supabase.from("products").select("name, alias")
+      const map: Record<string, string> = {}
+      for (const p of (prods || []) as any[]) map[p.name] = p.alias || ""
+      setAliasByName(map)
+
       let query = supabase.from("budget").select("*").eq("year", year)
+        .eq("budget_name", budgetName)
 
       if (countries.length > 0) {
         query = query.in("country_code", countries)
@@ -506,12 +514,12 @@ export function BudgetTable({ year, countries, products, months, channels, canEd
                           href={`/productos/${row.product_id}`}
                           className="text-blue-300 hover:text-blue-200 hover:underline text-sm font-medium"
                         >
-                          {displayProductName(row.product_name)}
+                          {displayProductLabelFromName(row.product_name, aliasByName)}
                         </Link>
                       ) : (
                         <>
                           <span className="text-white/70 text-sm">
-                            {displayProductName(row.product_name)}
+                            {displayProductLabelFromName(row.product_name, aliasByName)}
                           </span>
                           {canEdit && (
                             <Button

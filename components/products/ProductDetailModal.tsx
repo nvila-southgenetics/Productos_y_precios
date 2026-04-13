@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
-import { formatCurrency, formatPercentage, cn } from "@/lib/utils"
+import { formatCurrency, formatPercentage, cn, formatUSDNumber } from "@/lib/utils"
 import type { ProductWithOverrides, ProductCountryOverride } from "@/lib/supabase-mcp"
 import { updateProductCountryOverride } from "@/lib/supabase-mcp"
 
@@ -420,7 +420,7 @@ export function ProductDetailModal({
                           className="cursor-pointer hover:bg-muted px-2 py-1 rounded"
                           onDoubleClick={() => handleDoubleClick(costRows[0])}
                         >
-                          {formatCurrency(grossSales)}
+                          {formatUSDNumber(grossSales)}
                         </span>
                       )}
                     </td>
@@ -457,7 +457,7 @@ export function ProductDetailModal({
                           className="cursor-pointer hover:bg-muted px-2 py-1 rounded"
                           onDoubleClick={() => handleDoubleClick(costRows[1])}
                         >
-                          {formatCurrency(commercialDiscount)}
+                          {formatUSDNumber(commercialDiscount)}
                         </span>
                       )}
                     </td>
@@ -470,7 +470,7 @@ export function ProductDetailModal({
                   {/* Sales Revenue (calculado) */}
                   <tr className="border-b bg-muted/30">
                     <td className="p-4 font-medium">Sales Revenue</td>
-                    <td className="p-4 text-right font-medium">{formatCurrency(salesRevenue)}</td>
+                    <td className="p-4 text-right font-medium">{formatUSDNumber(salesRevenue)}</td>
                     <td className="p-4 text-right font-medium">
                       {formatPercentage(grossSales > 0 ? salesRevenue / grossSales : 0)}
                     </td>
@@ -519,7 +519,7 @@ export function ProductDetailModal({
                               )}
                               onDoubleClick={() => row.editable && handleDoubleClick(row)}
                             >
-                              {formatCurrency(row.getValue(overrides))}
+                  {formatUSDNumber(row.getValue(overrides))}
                             </span>
                           )}
                         </td>
@@ -534,7 +534,7 @@ export function ProductDetailModal({
                   {/* Total Cost of Sales */}
                   <tr className="border-b bg-muted/30">
                     <td className="p-4 font-medium">Total Cost of Sales</td>
-                    <td className="p-4 text-right font-medium">{formatCurrency(totalCostOfSales)}</td>
+                    <td className="p-4 text-right font-medium">{formatUSDNumber(totalCostOfSales)}</td>
                     <td className="p-4 text-right font-medium">
                       {formatPercentage(grossSales > 0 ? totalCostOfSales / grossSales : 0)}
                     </td>
@@ -545,7 +545,7 @@ export function ProductDetailModal({
                   <tr className="border-b bg-green-50">
                     <td className="p-4 font-semibold text-green-900">Gross Profit</td>
                     <td className="p-4 text-right font-semibold text-green-900">
-                      {formatCurrency(grossProfit)}
+                      {formatUSDNumber(grossProfit)}
                     </td>
                     <td className="p-4 text-right font-semibold text-green-900">
                       {formatPercentage(grossSales > 0 ? grossProfit / grossSales : 0)}

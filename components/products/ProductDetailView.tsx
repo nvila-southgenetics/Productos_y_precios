@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
-import { formatCurrency, formatPercentage, cn, productNameSortKey, displayProductName } from "@/lib/utils"
+import { formatCurrency, formatPercentage, cn, productNameSortKey, displayProductName, formatUSDNumber } from "@/lib/utils"
 import type { ProductWithOverrides, ProductCountryOverride } from "@/lib/supabase-mcp"
 import { updateProductCountryOverride, getProductsWithOverrides, CHANNELS, updateProductMeta } from "@/lib/supabase-mcp"
 import { Info, AlertTriangle, GitCompare, ChevronDown, Search } from "lucide-react"
@@ -669,7 +669,7 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
                   <span className="font-medium text-white/90 text-sm">Gross Sales</span>
                 </td>
                 <td className="p-3 text-right font-semibold text-blue-300 text-sm">
-                  {formatCurrency(countryGrossSales)}
+                  {formatUSDNumber(countryGrossSales)}
                 </td>
                 <td className="p-3 text-right font-medium text-white/70 text-sm">100.00%</td>
               </tr>
@@ -680,7 +680,7 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
                   <span className="text-white/90 text-sm">Commercial Discount</span>
                 </td>
                 <td className="p-3 text-right font-medium text-white/90 text-sm">
-                  {formatCurrency(countryCommercialDiscount)}
+                  {formatUSDNumber(countryCommercialDiscount)}
                 </td>
                 <td className="p-3 text-right text-white/70 text-sm">
                   {formatPercentage(countryGrossSales > 0 ? countryCommercialDiscount / countryGrossSales : 0)}
@@ -690,7 +690,7 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
               {/* Sales Revenue */}
               <tr className="border-b border-white/10 bg-white/5">
                 <td className="p-3 font-medium text-sm text-white/90">Sales Revenue</td>
-                <td className="p-3 text-right font-medium text-sm text-white">{formatCurrency(countrySalesRevenue)}</td>
+                <td className="p-3 text-right font-medium text-sm text-white">{formatUSDNumber(countrySalesRevenue)}</td>
                 <td className="p-3 text-right font-medium text-sm text-white/70">
                   {formatPercentage(countryGrossSales > 0 ? countrySalesRevenue / countryGrossSales : 0)}
                 </td>
@@ -711,7 +711,7 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
                   <tr key={row.concept} className="border-b border-white/10">
                     <td className="p-3 text-white/90 text-sm">{row.concept}</td>
                     <td className="p-3 text-right font-medium text-white/90 text-sm">
-                      {formatCurrency(row.getValue(countryOverrides))}
+                      {formatUSDNumber(row.getValue(countryOverrides))}
                     </td>
                     <td className="p-3 text-right text-white/70 text-sm">
                       {formatPercentage(row.getPct(countryOverrides, countryGrossSales) / 100)}
@@ -723,7 +723,7 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
               {/* Total Cost of Sales */}
               <tr className="border-t-2 border-white/20 bg-white/5">
                 <td className="p-3 font-semibold text-white text-sm">Total Cost of Sales</td>
-                <td className="p-3 text-right font-semibold text-white text-sm">{formatCurrency(countryTotalCostOfSales)}</td>
+                <td className="p-3 text-right font-semibold text-white text-sm">{formatUSDNumber(countryTotalCostOfSales)}</td>
                 <td className="p-3 text-right font-semibold text-white text-sm">
                   {formatPercentage(countryGrossSales > 0 ? countryTotalCostOfSales / countryGrossSales : 0)}
                 </td>
@@ -733,7 +733,7 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
               <tr className="border-t-2 border-white/30 bg-white/10">
                 <td className="p-3 font-bold text-white text-sm">Gross Profit</td>
                 <td className="p-3 text-right font-bold text-emerald-300 text-sm">
-                  {formatCurrency(countryGrossProfit)}
+                  {formatUSDNumber(countryGrossProfit)}
                 </td>
                 <td className="p-3 text-right font-bold text-white text-sm">
                   {formatPercentage(countryGrossSales > 0 ? countryGrossProfit / countryGrossSales : 0)}
@@ -1077,7 +1077,7 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
                       className="cursor-pointer hover:bg-white/10 px-3 py-1.5 rounded-md transition-all font-semibold text-blue-300 hover:text-blue-200 hover:shadow-sm"
                       onDoubleClick={() => handleDoubleClick(costRows[0])}
                     >
-                      {formatCurrency(grossSales)}
+                      {formatUSDNumber(grossSales)}
                     </span>
                   )}
                 </td>
@@ -1121,7 +1121,7 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
                       className="cursor-pointer hover:bg-white/10 px-3 py-1.5 rounded-md transition-all font-medium text-white/90 hover:text-white hover:shadow-sm"
                       onDoubleClick={() => handleDoubleClick(costRows[1])}
                     >
-                      {formatCurrency(commercialDiscount)}
+                      {formatUSDNumber(commercialDiscount)}
                     </span>
                   )}
                 </td>
@@ -1159,7 +1159,7 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
               {/* Sales Revenue (calculado) */}
               <tr className="border-b border-white/10 bg-white/5">
                 <td className="p-4 font-medium text-white/90">Sales Revenue</td>
-                <td className="p-4 text-right font-medium text-white">{formatCurrency(salesRevenue)}</td>
+                <td className="p-4 text-right font-medium text-white">{formatUSDNumber(salesRevenue)}</td>
                 <td className="p-4 text-right font-medium text-white/70">
                   {formatPercentage(grossSales > 0 ? salesRevenue / grossSales : 0)}
                 </td>
@@ -1215,7 +1215,7 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
                           )}
                           onDoubleClick={() => row.editable && handleDoubleClick(row)}
                         >
-                          {formatCurrency(row.getValue(displayOverrides))}
+                          {formatUSDNumber(row.getValue(displayOverrides))}
                         </span>
                       )}
                     </td>
@@ -1258,7 +1258,7 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
               {/* Total Cost of Sales */}
               <tr className="border-t-2 border-white/20 bg-white/5">
                 <td className="p-4 font-semibold text-white">Total Cost of Sales</td>
-                <td className="p-4 text-right font-semibold text-white">{formatCurrency(totalCostOfSales)}</td>
+                <td className="p-4 text-right font-semibold text-white">{formatUSDNumber(totalCostOfSales)}</td>
                 <td className="p-4 text-right font-semibold text-white">
                   {formatPercentage(grossSales > 0 ? totalCostOfSales / grossSales : 0)}
                 </td>
@@ -1269,7 +1269,7 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
               <tr className="border-t-2 border-white/30 bg-white/10">
                 <td className="p-4 font-bold text-white">Gross Profit</td>
                 <td className="p-4 text-right font-bold text-emerald-300">
-                  {formatCurrency(grossProfit)}
+                  {formatUSDNumber(grossProfit)}
                 </td>
                 <td className="p-4 text-right font-bold text-white">
                   {formatPercentage(grossSales > 0 ? grossProfit / grossSales : 0)}

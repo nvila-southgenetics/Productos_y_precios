@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { ArrowUp, ArrowDown, Minus, ChevronDown } from 'lucide-react';
-import { cn, displayProductName, formatCurrency, formatNumber } from '@/lib/utils';
+import { cn, displayProductLabelFromName, formatCurrency, formatNumber, formatUSDNumber } from '@/lib/utils';
 import { getCountryForCompany } from '@/lib/auth-constants';
 
 interface BudgetMonthItem {
@@ -31,6 +31,7 @@ interface ComparisonRow {
 }
 
 interface ComparisonTableProps {
+  budgetName: string;
   months: string[];
   countries: string[];
   /** Array vacío = todos. */
@@ -153,9 +154,10 @@ const productNamesMatch = (name1: string, name2: string): boolean => {
   return false;
 };
 
-export function ComparisonTable({ months, countries, products }: ComparisonTableProps) {
+export function ComparisonTable({ budgetName, months, countries, products }: ComparisonTableProps) {
   const [data, setData] = useState<ComparisonRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [aliasByName, setAliasByName] = useState<Record<string, string>>({});
   const [sortBy, setSortBy] = useState<'deltaBudgetVsReal2026' | 'deltaReal2026VsReal2025'>('deltaBudgetVsReal2026');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [openBudgetDropdownIdx, setOpenBudgetDropdownIdx] = useState<number | null>(null);
@@ -175,16 +177,22 @@ export function ComparisonTable({ months, countries, products }: ComparisonTable
 
   useEffect(() => {
     fetchComparisonData();
-  }, [months, countries, products]);
+  }, [budgetName, months, countries, products]);
 
   const fetchComparisonData = async () => {
     setLoading(true);
     try {
+      const { data: prods } = await supabase.from('products').select('name, alias');
+      const map: Record<string, string> = {};
+      for (const p of (prods || []) as any[]) map[p.name] = p.alias || '';
+      setAliasByName(map);
+
       // 1. Fetch Budget 2026
       let budgetQuery = supabase
         .from('budget')
         .select('*')
-        .eq('year', 2026);
+        .eq('year', 2026)
+        .eq('budget_name', budgetName);
 
       if (countries.length > 0) {
         budgetQuery = budgetQuery.in('country_code', countries);
@@ -705,10 +713,10 @@ export function ComparisonTable({ months, countries, products }: ComparisonTable
                       href={`/productos/${row.product_id}`}
                       className="text-blue-300 hover:text-blue-200 hover:underline text-sm font-medium"
                     >
-                      {displayProductName(row.product_name)}
+                      {displayProductLabelFromName(row.product_name, aliasByName)}
                     </Link>
                   ) : (
-                    <span className="text-white/70 text-sm">{displayProductName(row.product_name)}</span>
+                    <span className="text-white/70 text-sm">{displayProductLabelFromName(row.product_name, aliasByName)}</span>
                   )}
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-sm text-blue-300">
@@ -746,19 +754,19 @@ export function ComparisonTable({ months, countries, products }: ComparisonTable
                   )}
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-sm text-emerald-300">
-                  {formatCurrency(row.budgetAmountUSD)}
+                  {formatUSDNumber(row.budgetAmountUSD)}
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-sm text-emerald-300">
                   {formatNumber(row.real2026, 'es-UY')}
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-sm text-emerald-300">
-                  {formatCurrency(row.real2026AmountUSD)}
+                  {formatUSDNumber(row.real2026AmountUSD)}
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-sm text-purple-300">
                   {formatNumber(row.real2025, 'es-UY')}
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-sm text-purple-300">
-                  {formatCurrency(row.real2025AmountUSD)}
+                  {formatUSDNumber(row.real2025AmountUSD)}
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-sm text-white/90">
                   {row.deltaBudgetVsReal2026 >= 0 ? '+' : ''}{formatNumber(row.deltaBudgetVsReal2026, 'es-UY')}

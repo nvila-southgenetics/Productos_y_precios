@@ -10,9 +10,10 @@ import { supabase } from "@/lib/supabase"
 interface ImportBudgetDialogProps {
   open: boolean
   onClose: () => void
+  budgetName: string
 }
 
-export function ImportBudgetDialog({ open, onClose }: ImportBudgetDialogProps) {
+export function ImportBudgetDialog({ open, onClose, budgetName }: ImportBudgetDialogProps) {
   const [file, setFile] = useState<File | null>(null)
   const [importing, setImporting] = useState(false)
   const [progress, setProgress] = useState({ current: 0, total: 0 })
@@ -67,6 +68,7 @@ export function ImportBudgetDialog({ open, onClose }: ImportBudgetDialogProps) {
         const productId = productMap.get(entry.product_name) || null
 
         return {
+          budget_name: budgetName,
           country: entry.country,
           country_code: entry.country_code,
           product_id: productId,
@@ -96,7 +98,7 @@ export function ImportBudgetDialog({ open, onClose }: ImportBudgetDialogProps) {
         const { error: upsertError } = await supabase
           .from("budget")
           .upsert(batch, {
-            onConflict: "product_name,country_code,year",
+            onConflict: "budget_name,product_name,country_code,year,channel",
           })
 
         if (upsertError) {

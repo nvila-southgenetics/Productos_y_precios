@@ -10,14 +10,18 @@ import { ImportBudgetDialog } from "@/components/budget/ImportBudgetDialog"
 import { supabase } from "@/lib/supabase"
 import { usePermissions } from "@/lib/use-permissions"
 import { productNameSortKey } from "@/lib/utils"
+import { monthsFromRange } from "@/components/filters/MonthRangeFilter"
 
 export default function BudgetPage() {
   const { allowedCountries, canEdit, isAdmin, loading: permLoading } = usePermissions()
   const [selectedYear, setSelectedYear] = useState(2026)
+  const [selectedBudgetName, setSelectedBudgetName] = useState<string>("budget")
+  const [budgetNames, setBudgetNames] = useState<string[]>(["budget"])
   const [selectedCountries, setSelectedCountries] = useState<string[]>([])
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
-  const allMonths = Array.from({ length: 12 }, (_, i) => String(i + 1))
-  const [selectedMonths, setSelectedMonths] = useState<string[]>(allMonths)
+  const [monthFrom, setMonthFrom] = useState<number>(1)
+  const [monthTo, setMonthTo] = useState<number>(12)
+  const selectedMonths = monthsFromRange({ fromMonth: monthFrom, toMonth: monthTo })
   const [selectedChannels, setSelectedChannels] = useState<string[]>([])
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [products, setProducts] = useState<string[]>([])
@@ -45,8 +49,28 @@ export default function BudgetPage() {
   }, [])
 
   useEffect(() => {
+    fetchBudgetNames()
     fetchProducts()
-  }, [selectedYear])
+  }, [selectedYear, selectedBudgetName])
+
+  const fetchBudgetNames = async () => {
+    try {
+      const { data } = await supabase.from("budget").select("budget_name").eq("year", selectedYear)
+      const rows = (data ?? []) as any[]
+      const names: string[] = [...new Set(
+        rows
+          .map((r) => String(r?.budget_name || "").trim())
+          .filter((x) => Boolean(x))
+      )].sort()
+      const finalNames: string[] = names.length ? names : ["budget"]
+      setBudgetNames(finalNames)
+      setSelectedBudgetName((prev) => (finalNames.includes(prev) ? prev : finalNames[0]))
+    } catch (error) {
+      console.error("Error fetching budget names:", error)
+      setBudgetNames(["budget"])
+      setSelectedBudgetName("budget")
+    }
+  }
 
   const fetchProducts = async () => {
     try {
@@ -54,6 +78,7 @@ export default function BudgetPage() {
         .from("budget")
         .select("product_name")
         .eq("year", selectedYear)
+        .eq("budget_name", selectedBudgetName)
 
       if (budgetData) {
         const uniqueProducts = ([...new Set(budgetData.map((b: { product_name: string }) => b.product_name))] as string[]).sort((a, b) => productNameSortKey(a).localeCompare(productNameSortKey(b), 'es', { sensitivity: 'base' }))
@@ -72,7 +97,7 @@ export default function BudgetPage() {
           <div>
             <h1 className="text-3xl font-bold text-white">Budget - Proyección de Ventas</h1>
             <p className="text-white/80 mt-1">
-              Visualiza y analiza las proyecciones de ventas por producto, país y mes
+              Visualiza y analiza las proyecciones de ventas por producto, compañía y mes
             </p>
           </div>
 
@@ -107,14 +132,21 @@ export default function BudgetPage() {
         <div className="mb-6 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4 shadow-sm">
           <BudgetFilters
             selectedYear={selectedYear}
+            selectedBudgetName={selectedBudgetName}
+            budgetNames={budgetNames}
             selectedCountries={selectedCountries}
             selectedProducts={selectedProducts}
-            selectedMonths={selectedMonths}
+            monthFrom={monthFrom}
+            monthTo={monthTo}
             selectedChannels={selectedChannels}
             onYearChange={setSelectedYear}
+            onBudgetNameChange={setSelectedBudgetName}
             onCountriesChange={setSelectedCountries}
             onProductsChange={setSelectedProducts}
-            onMonthsChange={setSelectedMonths}
+            onMonthRangeChange={({ fromMonth, toMonth }) => {
+              setMonthFrom(fromMonth)
+              setMonthTo(toMonth)
+            }}
             onChannelsChange={setSelectedChannels}
             products={products}
             allowedCountries={allowedCountries}
@@ -126,6 +158,7 @@ export default function BudgetPage() {
         <div className="mb-6">
           <BudgetSummary
             year={selectedYear}
+          budgetName={selectedBudgetName}
             countries={selectedCountries}
             products={selectedProducts}
             months={selectedMonths}
@@ -136,6 +169,7 @@ export default function BudgetPage() {
         {/* Tabla de datos */}
         <BudgetTable
           year={selectedYear}
+          budgetName={selectedBudgetName}
             countries={selectedCountries}
           products={selectedProducts}
             months={selectedMonths}
@@ -144,7 +178,7 @@ export default function BudgetPage() {
         />
 
         {/* Dialog de importación */}
-        <ImportBudgetDialog open={showImportDialog} onClose={() => setShowImportDialog(false)} />
+        <ImportBudgetDialog open={showImportDialog} onClose={() => setShowImportDialog(false)} budgetName={selectedBudgetName} />
       </div>
     </div>
   )

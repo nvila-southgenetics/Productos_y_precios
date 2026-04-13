@@ -274,13 +274,11 @@ export function ProductTable({
                   <td className="p-4">
                   <div className="flex flex-col gap-2">
                     <div className="font-semibold text-white hover:text-blue-300 transition-colors">
+                      {product.alias || "—"}
+                    </div>
+                    <div className="text-[11px] text-white/50 font-mono">
                       {displayProductName(product.name)}
                     </div>
-                    {product.alias && (
-                      <div className="text-[11px] text-white/50 font-mono">
-                        {product.alias}
-                      </div>
-                    )}
                     <div className="flex gap-2 flex-wrap">
                       {product.category && (
                         <Badge

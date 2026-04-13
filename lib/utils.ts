@@ -28,6 +28,18 @@ export function formatCurrency(amount: number): string {
   return amount < 0 ? `(${formatted} US$)` : `${formatted} US$`
 }
 
+/** Formatea montos USD como número (sin "US$"). */
+export function formatUSDNumber(amount: number): string {
+  const formatted = new Intl.NumberFormat("es-ES", {
+    style: "decimal",
+    useGrouping: true,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(Math.abs(amount))
+
+  return amount < 0 ? `(${formatted})` : `${formatted}`
+}
+
 export function formatNumber(
   value: number,
   locale: string = "es-UY",
@@ -58,6 +70,28 @@ export function displayProductName(name: string | null | undefined): string {
   }
 
   return trimmed
+}
+
+/** Label visible para usuarios: preferir alias por sobre name. */
+export function displayProductLabel(input: {
+  name: string | null | undefined
+  alias?: string | null | undefined
+}): string {
+  const alias = (input.alias ?? "").trim()
+  if (alias) return alias
+  return displayProductName(input.name)
+}
+
+/** Label visible a partir de `name` usando un map name→alias. */
+export function displayProductLabelFromName(
+  name: string | null | undefined,
+  aliasByName: Record<string, string | null | undefined> | Map<string, string | null | undefined> | null | undefined
+): string {
+  const n = displayProductName(name)
+  if (!aliasByName || !n) return n
+  const alias =
+    aliasByName instanceof Map ? (aliasByName.get(n) ?? "") : (aliasByName[n] ?? "")
+  return displayProductLabel({ name: n, alias })
 }
 
 

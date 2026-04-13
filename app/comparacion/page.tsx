@@ -7,11 +7,16 @@ import { ComparisonFilters } from '@/components/comparacion/ComparisonFilters';
 import { ComparisonSummary } from '@/components/comparacion/ComparisonSummary';
 import { ComparisonTable } from '@/components/comparacion/ComparisonTable';
 import { usePermissions } from '@/lib/use-permissions';
+import { supabase } from '@/lib/supabase';
+import { monthsFromRange } from "@/components/filters/MonthRangeFilter"
 
 export default function ComparacionPage() {
   const { allowedCountries, isAdmin, loading: permLoading } = usePermissions();
-  const allMonths = Array.from({ length: 12 }, (_, i) => String(i + 1));
-  const [selectedMonths, setSelectedMonths] = useState<string[]>(allMonths);
+  const [selectedBudgetName, setSelectedBudgetName] = useState<string>('budget');
+  const [budgetNames, setBudgetNames] = useState<string[]>(['budget']);
+  const [monthFrom, setMonthFrom] = useState<number>(1);
+  const [monthTo, setMonthTo] = useState<number>(12);
+  const selectedMonths = monthsFromRange({ fromMonth: monthFrom, toMonth: monthTo });
   const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
 
@@ -21,6 +26,30 @@ export default function ComparacionPage() {
       setSelectedCountries(allowedCountries);
     }
   }, [permLoading, isAdmin, allowedCountries]);
+
+  useEffect(() => {
+    const fetchBudgetNames = async () => {
+      try {
+        let q = supabase.from('budget').select('budget_name').eq('year', 2026)
+        if (selectedCountries.length > 0) q = q.in('country_code', selectedCountries)
+        const { data } = await q
+        const rows = (data ?? []) as any[]
+        const names: string[] = [...new Set(
+          rows
+            .map((r) => String(r?.budget_name || '').trim())
+            .filter((x) => Boolean(x))
+        )].sort()
+        const finalNames: string[] = names.length ? names : ['budget']
+        setBudgetNames(finalNames)
+        setSelectedBudgetName((prev) => (finalNames.includes(prev) ? prev : finalNames[0]))
+      } catch (e) {
+        console.error('Error fetching budget names:', e)
+        setBudgetNames(['budget'])
+        setSelectedBudgetName('budget')
+      }
+    }
+    fetchBudgetNames()
+  }, [selectedCountries])
 
   return (
     <div className="min-h-screen bg-gradient-to-r from-blue-900 via-blue-950 to-slate-900">
@@ -67,10 +96,17 @@ export default function ComparacionPage() {
 
       {/* Filtros */}
       <ComparisonFilters
-        selectedMonths={selectedMonths}
+        selectedBudgetName={selectedBudgetName}
+        budgetNames={budgetNames}
+        monthFrom={monthFrom}
+        monthTo={monthTo}
         selectedCountries={selectedCountries}
         selectedProducts={selectedProducts}
-        onMonthsChange={setSelectedMonths}
+        onBudgetNameChange={setSelectedBudgetName}
+        onMonthRangeChange={({ fromMonth, toMonth }) => {
+          setMonthFrom(fromMonth)
+          setMonthTo(toMonth)
+        }}
         onCountriesChange={setSelectedCountries}
         onProductsChange={setSelectedProducts}
         allowedCountries={allowedCountries}
@@ -79,6 +115,7 @@ export default function ComparacionPage() {
 
       {/* Resumen comparativo */}
       <ComparisonSummary
+        budgetName={selectedBudgetName}
         months={selectedMonths}
         countries={selectedCountries}
         products={selectedProducts}
@@ -86,6 +123,7 @@ export default function ComparacionPage() {
 
       {/* Tabla comparativa */}
       <ComparisonTable
+        budgetName={selectedBudgetName}
         months={selectedMonths}
         countries={selectedCountries}
         products={selectedProducts}

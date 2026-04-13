@@ -7,6 +7,7 @@ import { formatCurrency, formatNumber } from "@/lib/utils"
 
 interface BudgetSummaryProps {
   year: number
+  budgetName: string
   countries: string[]
   /** Array vacío = todos. */
   products: string[]
@@ -70,7 +71,7 @@ function calculateGrossProfit(overrides: any): number {
   return salesRevenueUSD - totalCosts
 }
 
-export function BudgetSummary({ year, countries, products, months, channels }: BudgetSummaryProps) {
+export function BudgetSummary({ year, budgetName, countries, products, months, channels }: BudgetSummaryProps) {
   const [summary, setSummary] = useState<SummaryData>({
     totalUnits: 0,
     totalGrossSale: 0,
@@ -81,12 +82,13 @@ export function BudgetSummary({ year, countries, products, months, channels }: B
 
   useEffect(() => {
     fetchSummary()
-  }, [year, countries, products, months, channels])
+  }, [year, budgetName, countries, products, months, channels])
 
   const fetchSummary = async () => {
     setLoading(true)
     try {
       let query = supabase.from("budget").select("*").eq("year", year)
+        .eq("budget_name", budgetName)
 
       if (countries.length > 0) {
         query = query.in("country_code", countries)

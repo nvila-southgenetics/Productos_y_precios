@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, type ReactNode } from "react"
 import { supabase } from "@/lib/supabase"
 import { ChevronDown, ChevronRight, Plus, Table2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { displayProductName, formatNumber } from "@/lib/utils"
+import { displayProductName, displayProductLabelFromName, formatNumber } from "@/lib/utils"
 import { useProductCreateDialog } from "@/components/products/ProductCreateDialogProvider"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -18,10 +18,13 @@ interface PLTableProps {
   products: string[]
   channels: string[]
   canEdit: boolean
-  /** Mes hasta el cual calcular el YTD (1-12) */
-  ytdMonth: number
+  /** Rango de meses (1-12) para cálculos y totales. */
+  monthFrom: number
+  monthTo: number
   /** Modo test: permite simular unidades manualmente */
   testMode?: boolean
+  /** Identificador del budget seleccionado (solo aplica en modelo budget). */
+  budgetName?: string
 }
 
 interface OverrideData {
@@ -138,10 +141,11 @@ function normalizeProductKey(name: string): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function PLTable({ modelo, year, countries, categories, products, channels, canEdit, ytdMonth, testMode }: PLTableProps) {
+export function PLTable({ modelo, year, countries, categories, products, channels, canEdit, monthFrom, monthTo, testMode, budgetName = "budget" }: PLTableProps) {
   const [loading, setLoading] = useState(true)
   const [quantities, setQuantities] = useState<Record<string, number[]>>({})
   const [productCategories, setProductCategories] = useState<Record<string, string>>({})
+  const [productAliases, setProductAliases] = useState<Record<string, string>>({})
   const [overrides, setOverrides] = useState<Record<string, OverrideData>>({})
   // Budget-mode raw rows (product_id, product_name, channel, months) to compute precio * unidades por canal
   const [budgetRows, setBudgetRows] = useState<Record<string, unknown>[]>([])
@@ -183,9 +187,9 @@ export function PLTable({ modelo, year, countries, categories, products, channel
   // Taxes are stored at country-level (one country_code row), so allow editing only when a single country is selected.
   const canEditTax = canEdit && financialEnabled && countries.length === 1
 
-  // Mes índice (0-11) hasta el cual se calcula el YTD
-  const ytdIndex = Math.min(Math.max(ytdMonth - 1, 0), 11)
-  const monthIndices = Array.from({ length: ytdIndex + 1 }, (_, i) => i)
+  const startIndex = Math.min(Math.max(Math.min(monthFrom, monthTo) - 1, 0), 11)
+  const endIndex = Math.min(Math.max(Math.max(monthFrom, monthTo) - 1, 0), 11)
+  const monthIndices = Array.from({ length: endIndex - startIndex + 1 }, (_, k) => startIndex + k)
 
   // Inicializar cantidades de test cuando se activa el modo o cambian cantidades base
   useEffect(() => {
@@ -241,15 +245,20 @@ export function PLTable({ modelo, year, countries, categories, products, channel
   const fetchQuantities = async () => {
     const qtys: Record<string, number[]> = {}
     const cats: Record<string, string> = {}
+    const aliases: Record<string, string> = {}
 
-    const { data: allProds } = await supabase.from("products").select("name, category")
-    for (const p of allProds || []) cats[p.name] = p.category || ""
+    const { data: allProds } = await supabase.from("products").select("name, category, alias")
+    for (const p of allProds || []) {
+      cats[(p as any).name] = (p as any).category || ""
+      aliases[(p as any).name] = (p as any).alias || ""
+    }
 
     if (modelo === "budget") {
       let q = supabase
         .from("budget")
         .select("product_id, product_name, jan,feb,mar,apr,may,jun,jul,aug,sep,oct,nov,dec, channel, country_code")
         .eq("year", year)
+        .eq("budget_name", budgetName)
 
       if (countries.length) q = q.in("country_code", countries)
       if (products.length > 0) {
@@ -260,7 +269,7 @@ export function PLTable({ modelo, year, countries, categories, products, channel
       if (channels.length) q = q.in("channel", channels)
 
       const { data } = await q
-      if (!data) { setProductCategories(cats); setBudgetRows([]); return }
+      if (!data) { setProductCategories(cats); setProductAliases(aliases); setBudgetRows([]); return }
 
       const categorySet = shouldFilterCategories ? categoriesSet : null
       const allowedProds = categorySet
@@ -290,7 +299,7 @@ export function PLTable({ modelo, year, countries, categories, products, channel
         .eq("año", year)
         .in("compañia", companies)
 
-      if (!data) { setProductCategories(cats); return }
+      if (!data) { setProductCategories(cats); setProductAliases(aliases); return }
 
       // IMPORTANTE (Real):
       // Si el producto no existe en `public.products` (no está en `cats`),
@@ -325,6 +334,7 @@ export function PLTable({ modelo, year, countries, categories, products, channel
 
     setQuantities(qtys)
     setProductCategories(cats)
+    setProductAliases(aliases)
   }
 
   // Overrides específicos para modo Budget (por producto+canal) para poder hacer precio * unidades por canal
@@ -641,7 +651,7 @@ export function PLTable({ modelo, year, countries, categories, products, channel
   const incomeTax = incomeTaxBase.map((v, i) => Math.max(0, v) * (taxRates[i].income_tax_pct / 100))
   const netIncome = grossProfit.map((v, i) => v - totalSGA[i] - iibbAmount[i] - incomeTax[i])
 
-  const ytd = (arr: number[]) => arr.slice(0, ytdIndex + 1).reduce((a, b) => a + b, 0)
+  const periodSum = (arr: number[]) => monthIndices.reduce((s, i) => s + (arr[i] || 0), 0)
   const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0)
 
   // ── Editing ───────────────────────────────────────────────────────────────
@@ -722,7 +732,7 @@ export function PLTable({ modelo, year, countries, categories, products, channel
     // Forzar color gris/neutral en totales clave.
     forceGray?: boolean
   }) => {
-    const ytdVal = ytd(values)
+    const ytdVal = periodSum(values)
     const totalVal = sum(values)
     const rowCls = forceGray
       ? "bg-slate-700/40 border-y border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
@@ -777,7 +787,7 @@ export function PLTable({ modelo, year, countries, categories, products, channel
   // Render an editable SGA row (negative display)
   const SGARow = ({ field, label }: { field: keyof SGAData; label: string }) => {
     const values = sgaMonthly[field]
-    const ytdVal = ytd(values)
+    const ytdVal = periodSum(values)
     const totalVal = sum(values)
 
     return (
@@ -922,15 +932,13 @@ export function PLTable({ modelo, year, countries, categories, products, channel
               {monthIndices.map((i) => (
                 <th
                   key={i}
-                  className={`px-2 py-2.5 text-right text-xs font-semibold min-w-[72px] ${
-                    i <= ytdIndex ? "text-white" : "text-white/40"
-                  }`}
+                  className="px-2 py-2.5 text-right text-xs font-semibold min-w-[72px] text-white"
                 >
                   {SHORT_LABELS[i]}
                 </th>
               ))}
                 <th className="px-2 py-2.5 text-right text-xs font-semibold text-blue-300 min-w-[80px] border-l border-white/20">
-                  YTD
+                  PERIODO
                 </th>
                 <th className="px-2 py-2.5 text-right text-xs font-semibold text-blue-300 min-w-[80px]">
                   TOTAL
@@ -953,7 +961,7 @@ export function PLTable({ modelo, year, countries, categories, products, channel
                   )
                 })}
                 <td className={`${cellCls} font-bold text-blue-200 border-l border-white/10`}>
-                  {formatNumber(ytd(totalUnits), "es-AR") || "-"}
+                  {formatNumber(periodSum(totalUnits), "es-AR") || "-"}
                 </td>
                 <td className={`${cellCls} font-bold text-blue-200`}>
                   {formatNumber(sum(totalUnits), "es-AR") || "-"}
@@ -1120,7 +1128,7 @@ export function PLTable({ modelo, year, countries, categories, products, channel
         {/* Footer */}
         <div className="flex items-center justify-between px-4 py-2 bg-white/5 border-t border-white/10">
           <span className="text-xs text-white/40">
-            YTD = acumulado hasta {MONTH_LABELS[ytdIndex]} {year} · Valores entre () = negativos
+            Periodo = {MONTH_LABELS[startIndex]}–{MONTH_LABELS[endIndex]} {year} · Valores entre () = negativos
           </span>
           <Button
             variant="ghost"
@@ -1155,13 +1163,13 @@ export function PLTable({ modelo, year, countries, categories, products, channel
               >
                 Todos
               </button>
-              {SHORT_LABELS.map((lbl, i) => (
+              {monthIndices.map((i) => (
                 <button
                   key={i}
                   onClick={() => setDetailMonth(detailMonth === i ? null : i)}
                   className={`px-2 py-0.5 text-[11px] rounded transition-colors ${detailMonth === i ? "bg-blue-500 text-white" : "text-white/50 hover:text-white hover:bg-white/10"}`}
                 >
-                  {lbl}
+                  {SHORT_LABELS[i]}
                 </button>
               ))}
             </div>
@@ -1195,13 +1203,13 @@ export function PLTable({ modelo, year, countries, categories, products, channel
                       </th>
                     ) : (
                       <>
-                        {SHORT_LABELS.map((m, i) => (
-                          <th key={i} className={`px-2 py-2.5 text-right text-xs font-semibold min-w-[52px] ${i <= ytdIndex ? "text-white" : "text-white/40"}`}>
-                            {m}
+                        {monthIndices.map((i) => (
+                          <th key={i} className="px-2 py-2.5 text-right text-xs font-semibold text-white min-w-[52px]">
+                            {SHORT_LABELS[i]}
                           </th>
                         ))}
                         <th className="px-2 py-2.5 text-right text-xs font-semibold text-blue-300 min-w-[60px] border-l border-white/20">
-                          TOTAL
+                          YTD
                         </th>
                       </>
                     )}
@@ -1216,7 +1224,7 @@ export function PLTable({ modelo, year, countries, categories, products, channel
                   {Object.entries(activeQuantities)
                     .sort(([a], [b]) => {
                       const keyA = ((name: string) => {
-                        const s = displayProductName(name) || ""
+                        const s = displayProductLabelFromName(name, productAliases) || ""
                         const firstLetterIdx = s.search(/\p{L}/u)
                         if (firstLetterIdx < 0) return ""
                         const tail = s.slice(firstLetterIdx)
@@ -1224,7 +1232,7 @@ export function PLTable({ modelo, year, countries, categories, products, channel
                         return tail.replace(/[^\p{L}]+/gu, "")
                       })(a)
                       const keyB = ((name: string) => {
-                        const s = displayProductName(name) || ""
+                        const s = displayProductLabelFromName(name, productAliases) || ""
                         const firstLetterIdx = s.search(/\p{L}/u)
                         if (firstLetterIdx < 0) return ""
                         const tail = s.slice(firstLetterIdx)
@@ -1236,14 +1244,14 @@ export function PLTable({ modelo, year, countries, categories, products, channel
                     .map(([name, qtArr]) => {
                       const cat = productCategories[name] || ""
                       const isKnownProduct = Object.prototype.hasOwnProperty.call(productCategories, name)
-                      const rowTotal = qtArr.reduce((s, v) => s + v, 0)
+                      const rowTotal = monthIndices.reduce((s, i) => s + (qtArr[i] || 0), 0)
                       const ov = overrides[name]
                       const totalGS = rowTotal * (ov?.grossSalesUSD || 0)
                       return (
                       <tr key={name} className="hover:bg-white/5 transition-colors">
                           <td className="sticky left-0 bg-slate-800/95 px-3 py-2 text-xs text-white/90 whitespace-nowrap z-10">
                           <div className="flex items-center gap-2">
-                            <span>{displayProductName(name)}</span>
+                            <span>{displayProductLabelFromName(name, productAliases)}</span>
                             {!isKnownProduct && canEdit && (
                               <Button
                                 size="icon"
@@ -1291,7 +1299,9 @@ export function PLTable({ modelo, year, countries, categories, products, channel
                             </td>
                           ) : (
                             <>
-                              {qtArr.map((v, i) => (
+                              {monthIndices.map((i) => {
+                                const v = qtArr[i] || 0
+                                return (
                                 <td key={i} className={`px-2 py-2 text-right text-xs tabular-nums ${v > 0 ? "text-white/80 font-medium" : "text-white/25"}`}>
                                   {testMode ? (
                                     <input
@@ -1314,7 +1324,8 @@ export function PLTable({ modelo, year, countries, categories, products, channel
                                     v > 0 ? v : "-"
                                   )}
                                 </td>
-                              ))}
+                                )
+                              })}
                               <td className="px-2 py-2 text-right text-xs font-bold text-white tabular-nums border-l border-white/10">
                                 {rowTotal}
                               </td>
@@ -1343,14 +1354,14 @@ export function PLTable({ modelo, year, countries, categories, products, channel
                       </td>
                     ) : (
                       <>
-                        {Array.from({ length: 12 }, (_, i) => (
+                        {monthIndices.map((i) => (
                           <td key={i} className="px-2 py-2 text-right text-xs font-bold text-white tabular-nums">
                             {Object.values(activeQuantities).reduce((s, arr) => s + (arr[i] || 0), 0) || "-"}
                           </td>
                         ))}
                         <td className="px-2 py-2 text-right text-xs font-bold text-white tabular-nums border-l border-white/10">
                           {Object.values(activeQuantities).reduce(
-                            (s, arr) => s + arr.reduce((a, b) => a + b, 0),
+                            (s, arr) => s + monthIndices.reduce((a, i) => a + (arr[i] || 0), 0),
                             0
                           )}
                         </td>
@@ -1360,7 +1371,7 @@ export function PLTable({ modelo, year, countries, categories, products, channel
                       <td className="px-2 py-2 text-right text-xs font-bold text-blue-300 tabular-nums">
                         ${formatNumber(Object.entries(quantities).reduce((s, [name, arr]) => {
                           const gs = overrides[name]?.grossSalesUSD || 0
-                          return s + arr.reduce((a, b) => a + b, 0) * gs
+                          return s + monthIndices.reduce((a, i) => a + (arr[i] || 0), 0) * gs
                         }, 0), "es-AR", { maximumFractionDigits: 0 })}
                       </td>
                     )}

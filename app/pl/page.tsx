@@ -9,6 +9,7 @@ import { ChevronDown } from "lucide-react"
 import { cn, productNameSortKey } from "@/lib/utils"
 import { PLTable } from "@/components/pl/PLTable"
 import { ProductMultiSearchFilter } from "@/components/dashboard/ProductMultiSearchFilter"
+import { MonthRangeFilter } from "@/components/filters/MonthRangeFilter"
 
 const BASE_COUNTRIES = [
   { code: "AR", name: "Argentina" },
@@ -120,17 +121,19 @@ function MultiCheckboxDropdown({
 
 export default function PLPage() {
   const { allowedCountries, isAdmin, canEdit, loading: permLoading } = usePermissions()
-  const [modelo, setModelo] = useState<"budget" | "real">("budget")
+  const [modelo, setModelo] = useState<"budget" | "real_2026" | "real_2025">("budget")
+  const [selectedBudgetName, setSelectedBudgetName] = useState<string>("budget")
+  const [budgetNames, setBudgetNames] = useState<string[]>(["budget"])
   // Arrays con multi-selección: si elegís "Todos", guardamos todos los valores posibles.
   const [selectedCountries, setSelectedCountries] = useState<string[]>([])
   const [selectedCategories, setSelectedCategories] = useState<string[]>(CATEGORIES)
   const [productsSelected, setProductsSelected] = useState<string[]>([])
   const [selectedChannels, setSelectedChannels] = useState<string[]>(CHANNELS)
   const [products, setProducts] = useState<string[]>([])
-  // YTD por defecto: hasta diciembre
-  const [ytdMonth, setYtdMonth] = useState<number>(12)
+  const [monthFrom, setMonthFrom] = useState<number>(1)
+  const [monthTo, setMonthTo] = useState<number>(12)
   const [testMode, setTestMode] = useState<boolean>(false)
-  const year = 2026
+  const year = modelo === "real_2025" ? 2025 : 2026
 
   const allowedCountryCodes = isAdmin
     ? [...BASE_COUNTRIES.map((c) => c.code)]
@@ -138,19 +141,43 @@ export default function PLPage() {
 
   useEffect(() => {
     if (!permLoading && allowedCountryCodes.length > 0) {
-      setSelectedCountries([allowedCountryCodes[0]])
+      setSelectedCountries([...allowedCountryCodes])
     }
   }, [permLoading, isAdmin, allowedCountries])
 
   useEffect(() => {
+    fetchBudgetNames()
     fetchProducts()
     setProductsSelected([])
-  }, [selectedCountries, selectedCategories, modelo, year])
+  }, [selectedCountries, selectedCategories, modelo, year, selectedBudgetName])
+
+  const fetchBudgetNames = async () => {
+    if (modelo !== "budget") return
+    try {
+      let q = supabase.from("budget").select("budget_name").eq("year", year)
+      if (selectedCountries.length) q = q.in("country_code", selectedCountries)
+      const { data } = await q
+      const rows = (data ?? []) as any[]
+      const names: string[] = [...new Set(
+        rows
+          .map((r) => String(r?.budget_name || "").trim())
+          .filter((x) => Boolean(x))
+      )].sort()
+      const finalNames: string[] = names.length ? names : ["budget"]
+      setBudgetNames(finalNames)
+      setSelectedBudgetName((prev) => (finalNames.includes(prev) ? prev : finalNames[0]))
+    } catch (e) {
+      console.error("Error fetching budget names:", e)
+      setBudgetNames(["budget"])
+      setSelectedBudgetName("budget")
+    }
+  }
 
   const fetchProducts = async () => {
     try {
       if (modelo === "budget") {
         let q = supabase.from("budget").select("product_name").eq("year", year)
+        q = q.eq("budget_name", selectedBudgetName)
         if (selectedCountries.length) q = q.in("country_code", selectedCountries)
         const { data } = await q
         if (!data) return
@@ -201,7 +228,7 @@ export default function PLPage() {
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-white">P&L</h1>
           <p className="text-white/80 mt-1">
-            Estado de resultados por producto, país y canal
+            Estado de resultados por producto, compañía y canal
           </p>
         </div>
 
@@ -213,25 +240,46 @@ export default function PLPage() {
               <label className="text-sm font-medium text-white/90">Modelo</label>
               <Select
                 value={modelo}
-                onChange={(e) => setModelo(e.target.value as "budget" | "real")}
+                onChange={(e) => setModelo(e.target.value as "budget" | "real_2026" | "real_2025")}
                 className={selectClass}
               >
                 <option value="budget" className="bg-blue-900 text-white">
                   Budget
                 </option>
-                <option value="real" className="bg-blue-900 text-white">
+                <option value="real_2026" className="bg-blue-900 text-white">
                   Real 2026
+                </option>
+                <option value="real_2025" className="bg-blue-900 text-white">
+                  Real 2025
                 </option>
               </Select>
             </div>
 
-            {/* Países (multi) */}
+            {/* Budget name (solo en modo budget) */}
+            {modelo === "budget" && (
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-white/90">Budget</label>
+                <Select
+                  value={selectedBudgetName}
+                  onChange={(e) => setSelectedBudgetName(e.target.value)}
+                  className={selectClass}
+                >
+                  {budgetNames.map((n) => (
+                    <option key={n} value={n} className="bg-blue-900 text-white">
+                      {n}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
+
+            {/* Compañía (multi) */}
             <MultiCheckboxDropdown
-              label="Países"
+              label="Compañía"
               options={countryOptions}
               selectedValues={countriesForUI}
               onSelectedValuesChange={setSelectedCountries}
-              allLabel={isAdmin ? "Todos los países" : "Todos (mis países)"}
+              allLabel={isAdmin ? "Todas las compañías" : "Todas (mis compañías)"}
             />
 
             {/* Categoría */}
@@ -262,21 +310,15 @@ export default function PLPage() {
               allLabel="Todos los canales"
             />
 
-            {/* Hasta mes (YTD) */}
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-white/90">Hasta mes (YTD)</label>
-              <Select
-                value={ytdMonth.toString()}
-                onChange={(e) => setYtdMonth(parseInt(e.target.value) || 12)}
-                className={selectClass}
-              >
-                {Array.from({ length: 12 }, (_, i) => (
-                  <option key={i + 1} value={i + 1} className="bg-blue-900 text-white">
-                    {new Date(2000, i, 1).toLocaleDateString("es-UY", { month: "long" }).replace(/^\w/, (c) => c.toUpperCase())}
-                  </option>
-                ))}
-              </Select>
-            </div>
+            <MonthRangeFilter
+              label="Mes"
+              fromMonth={monthFrom}
+              toMonth={monthTo}
+              onChange={({ fromMonth, toMonth }) => {
+                setMonthFrom(fromMonth)
+                setMonthTo(toMonth)
+              }}
+            />
 
             {/* Test toggle */}
             <div className="flex flex-col gap-2">
@@ -305,15 +347,17 @@ export default function PLPage() {
 
         {/* P&L Table */}
         <PLTable
-          modelo={modelo}
+          modelo={modelo === "budget" ? "budget" : "real"}
           year={year}
           countries={countriesForUI}
           categories={selectedCategories}
           products={productsSelected}
           channels={selectedChannels}
           canEdit={canEdit}
-          ytdMonth={ytdMonth}
+          monthFrom={monthFrom}
+          monthTo={monthTo}
           testMode={testMode}
+          budgetName={selectedBudgetName}
         />
       </div>
     </div>

@@ -7,6 +7,7 @@ import { getCountryForCompany } from '@/lib/auth-constants';
 import { formatNumber } from '@/lib/utils';
 
 interface ComparisonSummaryProps {
+  budgetName: string;
   months: string[];
   countries: string[];
   /** Array vacío = todos. */
@@ -108,7 +109,7 @@ const productNamesMatch = (name1: string, name2: string): boolean => {
   return false;
 };
 
-export function ComparisonSummary({ months, countries, products }: ComparisonSummaryProps) {
+export function ComparisonSummary({ budgetName, months, countries, products }: ComparisonSummaryProps) {
   const [summary, setSummary] = useState<SummaryData>({
     budget2026: 0,
     real2026: 0,
@@ -122,7 +123,7 @@ export function ComparisonSummary({ months, countries, products }: ComparisonSum
 
   useEffect(() => {
     fetchSummary();
-  }, [months, countries, products]);
+  }, [budgetName, months, countries, products]);
 
   const fetchSummary = async () => {
     setLoading(true);
@@ -131,7 +132,8 @@ export function ComparisonSummary({ months, countries, products }: ComparisonSum
       let budgetQuery = supabase
         .from('budget')
         .select('*')
-        .eq('year', 2026);
+        .eq('year', 2026)
+        .eq('budget_name', budgetName);
 
       if (countries.length > 0) {
         budgetQuery = budgetQuery.in('country_code', countries);

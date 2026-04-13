@@ -132,6 +132,7 @@ function ProductosContent() {
             .from("budget")
             .select(["product_id", "product_name", ...MONTH_KEYS].join(","))
             .eq("year", 2026)
+            .eq("budget_name", "budget")
             .eq("country_code", selectedCountry)
             .in("product_name", productNames)
 
@@ -348,7 +349,7 @@ function ProductosContent() {
               Productos
             </h1>
             <p className="text-white/80 mt-1">
-              Gestiona tus productos y configura precios por país
+              Gestiona tus productos y configura precios por compañía (mercado)
             </p>
           </div>
           <Button
@@ -360,9 +361,9 @@ function ProductosContent() {
           </Button>
         </div>
 
-        {/* Filtro por País */}
+        {/* Mercado = compañía / país en BD */}
         <div className="mb-6 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4 shadow-sm">
-          <label className="text-sm font-semibold mb-3 block text-white/90">Vista por País</label>
+          <label className="text-sm font-semibold mb-3 block text-white/90">Vista por compañía</label>
           <CountryPills
             selectedCountry={selectedCountry}
             onCountryChange={setSelectedCountry}

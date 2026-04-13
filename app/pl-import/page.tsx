@@ -1,12 +1,13 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { BarChart3, Package, CalendarDays } from "lucide-react"
-import { CompanyFilter } from "@/components/pl-import/CompanyFilter"
-import { ProductFilter } from "@/components/pl-import/ProductFilter"
-import { YearFilter } from "@/components/pl-import/YearFilter"
+import { MultiCheckboxDropdown, type MultiSelectOption } from "@/components/filters/MultiCheckboxDropdown"
+import { MonthRangeFilter, monthsFromRange } from "@/components/filters/MonthRangeFilter"
+import { Select } from "@/components/ui/select"
+import { ProductMultiSearchFilter } from "@/components/dashboard/ProductMultiSearchFilter"
 import { YearSection } from "@/components/pl-import/YearSection"
 import { MonthDropdown } from "@/components/pl-import/MonthDropdown"
 import { SalesCalendar } from "@/components/pl-import/SalesCalendar"
@@ -22,14 +23,17 @@ import {
 } from "@/lib/supabase-mcp"
 import { usePermissions } from "@/lib/use-permissions"
 import { filterCompaniesByCountries } from "@/lib/auth-constants"
+import { companyQueryFromSelection } from "@/lib/company-filter"
 
 export default function PLImportPage() {
   const { allowedCountries, isAdmin, loading: permLoading } = usePermissions()
   const [companies, setCompanies] = useState<string[]>([])
   const [products, setProducts] = useState<string[]>([])
-  const [selectedCompany, setSelectedCompany] = useState("Todas las compañías")
+  const [selectedCompanies, setSelectedCompanies] = useState<string[]>([])
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [selectedYear, setSelectedYear] = useState("Todos")
+  const [monthFrom, setMonthFrom] = useState(1)
+  const [monthTo, setMonthTo] = useState(12)
   const [periods, setPeriods] = useState<string[]>([])
   const [availableYears, setAvailableYears] = useState<string[]>([])
   const [monthlyData, setMonthlyData] = useState<Record<string, MonthlySalesWithProduct[]>>({})
@@ -37,6 +41,16 @@ export default function PLImportPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [loadingPeriods, setLoadingPeriods] = useState<Set<string>>(new Set())
   const loadingRef = useRef<Set<string>>(new Set()) // Ref para rastrear períodos en carga
+
+  const companyParam = useMemo(
+    () => companyQueryFromSelection(companies, selectedCompanies, isAdmin),
+    [companies, selectedCompanies, isAdmin]
+  )
+
+  const companyLabelForUi =
+    typeof companyParam === "string"
+      ? companyParam
+      : companyParam.join(" · ")
 
   // Calendario: ventas por fecha
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null)
@@ -55,10 +69,7 @@ export default function PLImportPage() {
         const filtered = filterCompaniesByCountries(companiesData, allowedCountries)
         setCompanies(filtered)
         setProducts(productsData)
-        // Para no-admins, auto-seleccionar la primera compañía permitida
-        if (!isAdmin && filtered.length > 0) {
-          setSelectedCompany(filtered[0])
-        }
+        setSelectedCompanies(isAdmin ? [...filtered] : filtered.length ? [filtered[0]] : [])
       } catch (error) {
         console.error("Error loading initial data:", error)
       } finally {
@@ -88,7 +99,7 @@ export default function PLImportPage() {
     setLoadingPeriods((prev) => new Set(prev).add(periodo))
 
     try {
-      const data = await getMonthlySales(selectedCompany, periodo, selectedProducts.length ? selectedProducts : undefined)
+      const data = await getMonthlySales(companyParam, periodo, selectedProducts.length ? selectedProducts : undefined)
       setMonthlyData((prev) => {
         // Solo actualizar si no existe
         if (prev[periodo] && prev[periodo].length > 0) {
@@ -107,12 +118,12 @@ export default function PLImportPage() {
         return newSet
       })
     }
-  }, [selectedCompany, selectedProducts])
+  }, [companyParam, selectedProducts])
 
   // Cargar períodos cuando cambia la compañía
   useEffect(() => {
     async function loadPeriods() {
-      if (!selectedCompany) return
+      if (!companies.length) return
       try {
         // Limpiar datos anteriores al cambiar compañía
         setMonthlyData({})
@@ -120,8 +131,8 @@ export default function PLImportPage() {
         loadingRef.current.clear() // Limpiar ref también
         setLoadingPeriods(new Set())
         
-        const periodsData = await getAvailablePeriods(selectedCompany)
-        console.log(`📊 Períodos cargados para ${selectedCompany}:`, periodsData)
+        const periodsData = await getAvailablePeriods(companyParam)
+        console.log(`📊 Períodos cargados para ${companyLabelForUi}:`, periodsData)
         setPeriods(periodsData)
         
         // Extraer años únicos de los períodos
@@ -138,11 +149,11 @@ export default function PLImportPage() {
       }
     }
     loadPeriods()
-  }, [selectedCompany])
+  }, [companies.length, companyParam])
 
   // Cargar datos de todos los períodos automáticamente cuando cambian los períodos o el producto
   useEffect(() => {
-    if (periods.length === 0 || !selectedCompany) {
+    if (periods.length === 0 || !companies.length) {
       return () => {
         // Cleanup cuando no hay períodos o compañía
       }
@@ -156,21 +167,21 @@ export default function PLImportPage() {
       }, index * 50)
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [periods, selectedProducts])
+  }, [periods, selectedProducts, companyParam])
 
   // Cargar total anual cuando cambian los filtros
   useEffect(() => {
     async function loadTotal() {
-      if (!selectedCompany) return
+      if (!companies.length) return
       try {
-        const total = await getAnnualTotal(selectedCompany, selectedProducts.length ? selectedProducts : undefined)
+        const total = await getAnnualTotal(companyParam, selectedProducts.length ? selectedProducts : undefined)
         setTotalData(total)
       } catch (error) {
         console.error("Error loading total:", error)
       }
     }
     loadTotal()
-  }, [selectedCompany, selectedProducts])
+  }, [companies.length, companyParam, selectedProducts])
   
   // Limpiar datos cuando cambia el producto
   useEffect(() => {
@@ -266,28 +277,54 @@ export default function PLImportPage() {
             <h2 className="text-xl font-bold text-white">Filtros de Visualización</h2>
           </div>
           <p className="text-sm text-white/80">
-            Selecciona una compañía para filtrar las ventas
+            Elegí una o varias compañías, productos, año y rango de meses (mismo formato que Budget y P&L).
           </p>
         </div>
 
         {/* Filtros */}
         <div className="mb-6 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4 shadow-sm">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <CompanyFilter
-          companies={companies}
-          selectedCompany={selectedCompany}
-          onCompanyChange={setSelectedCompany}
-          showAllCompanies={isAdmin}
-        />
-        <ProductFilter
-          products={products}
-          selectedProducts={selectedProducts}
-          onProductsChange={setSelectedProducts}
-        />
-            <YearFilter
-              years={availableYears}
-              selectedYear={selectedYear}
-              onYearChange={setSelectedYear}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <MultiCheckboxDropdown
+              label="Compañía"
+              options={companies.map((c): MultiSelectOption => ({ value: c, label: c }))}
+              selectedValues={
+                selectedCompanies.length ? selectedCompanies : companies.map((c) => c)
+              }
+              onSelectedValuesChange={setSelectedCompanies}
+              allLabel={isAdmin ? "Todas las compañías" : "Todas (mis compañías)"}
+            />
+            <ProductMultiSearchFilter
+              products={products}
+              selectedProducts={selectedProducts}
+              onSelectedProductsChange={setSelectedProducts}
+              disabled={products.length === 0}
+              allLabel="Todos los productos"
+            />
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-white/90">Año</label>
+              <Select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="w-full bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-white/30"
+              >
+                <option value="Todos" className="bg-blue-900 text-white">
+                  Todos
+                </option>
+                {availableYears.map((y) => (
+                  <option key={y} value={y} className="bg-blue-900 text-white">
+                    {y}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <MonthRangeFilter
+              label="Mes"
+              fromMonth={monthFrom}
+              toMonth={monthTo}
+              onChange={({ fromMonth: f, toMonth: t }) => {
+                setMonthFrom(f)
+                setMonthTo(t)
+              }}
             />
           </div>
         </div>
@@ -324,17 +361,25 @@ export default function PLImportPage() {
               ? sortedYears 
               : sortedYears.filter(y => y === selectedYear)
 
+            const allowedMonthNums = new Set(
+              monthsFromRange({ fromMonth: monthFrom, toMonth: monthTo }).map((m) => parseInt(m, 10))
+            )
+
             return yearsToShow.map((year) => {
-              const yearPeriods = periodsByYear[year]
+              const yearPeriods = periodsByYear[year].filter((periodo) => {
+                const m = parseInt(periodo.split("-")[1] || "0", 10)
+                return allowedMonthNums.has(m)
+              })
               
-              // Calcular total anual para este año específico
-              const isAllCompanies = selectedCompany === "Todas las compañías"
+              const showAggregateBreakdown =
+                (typeof companyParam === "string" && companyParam === "Todas las compañías") ||
+                (Array.isArray(companyParam) && companyParam.length > 1)
               
               // Si es "Todas las compañías", usar totalData de getAnnualTotal que ya tiene el desglose completo
               // Si no, calcular desde los períodos mensuales
               let finalTotalData: MonthlySalesWithProduct[]
               
-              if (isAllCompanies && totalData.length > 0) {
+              if (showAggregateBreakdown && totalData.length > 0) {
                 finalTotalData = totalData.filter((item) => String(item.año) === year)
               } else {
                 // Calcular total anual desde los períodos mensuales
@@ -350,8 +395,8 @@ export default function PLImportPage() {
                         existing.precio_promedio = existing.monto_total / existing.cantidad_ventas
                       }
                       
-                      // Si es "Todas las compañías" y el sale tiene companyBreakdown, combinarlo
-                      if (isAllCompanies && sale.companyBreakdown) {
+                      // Si hay agregación multi-compañía y el sale tiene companyBreakdown, combinarlo
+                      if (showAggregateBreakdown && sale.companyBreakdown) {
                         if (!existing.companyBreakdown) {
                           existing.companyBreakdown = []
                         }
@@ -374,7 +419,7 @@ export default function PLImportPage() {
                       }
                       
                       // Si es "Todas las compañías" y tiene companyBreakdown, copiarlo
-                      if (isAllCompanies && sale.companyBreakdown) {
+                      if (showAggregateBreakdown && sale.companyBreakdown) {
                         newItem.companyBreakdown = sale.companyBreakdown.map((cb: any) => ({ ...cb }))
                       }
                       
@@ -386,7 +431,7 @@ export default function PLImportPage() {
               }
               
               // Solo mostrar total si hay datos cargados
-              const hasData = yearPeriods.some(p => (monthlyData[p] || []).length > 0) || (isAllCompanies && finalTotalData.length > 0)
+              const hasData = yearPeriods.some(p => (monthlyData[p] || []).length > 0) || (showAggregateBreakdown && finalTotalData.length > 0)
 
               return (
                 <YearSection
@@ -395,10 +440,10 @@ export default function PLImportPage() {
                   periods={yearPeriods}
                   monthlyData={monthlyData}
                   loadingPeriods={loadingPeriods}
-                  selectedCompany={selectedCompany}
+                  selectedCompany={companyLabelForUi}
                   onExpandPeriod={loadPeriodData}
                   totalData={finalTotalData.length > 0 && hasData ? finalTotalData : undefined}
-                  isAllCompanies={isAllCompanies}
+                  isAllCompanies={showAggregateBreakdown}
                 />
               )
             })
@@ -407,7 +452,7 @@ export default function PLImportPage() {
           {/* Si no hay períodos, mostrar mensaje */}
           {periods.length === 0 && !isLoading && (
             <div className="text-center py-8 text-white/60">
-              <p>No hay períodos disponibles para la compañía seleccionada.</p>
+              <p>No hay períodos disponibles para la selección de compañía(es).</p>
             </div>
           )}
         </div>

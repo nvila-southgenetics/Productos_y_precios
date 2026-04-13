@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { AlertTriangle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { formatCurrency, formatNumber } from "@/lib/utils"
+import { displayProductLabel, formatCurrency, formatNumber } from "@/lib/utils"
 import { CompanyBreakdown } from "./CompanyBreakdown"
 import type { MonthlySalesWithProduct } from "@/lib/supabase-mcp"
 
@@ -111,10 +111,10 @@ export function ProductSalesTable({ sales, isAllCompanies = false, isTotal = fal
                         href={`/productos/${sale.product_id}`}
                         className="font-medium text-white hover:text-white/80 hover:underline text-sm"
                       >
-                        {sale.producto}
+                        {displayProductLabel({ name: sale.producto, alias: (sale as any).alias })}
                       </Link>
                     ) : (
-                      <span className="font-medium text-sm text-white/90">{sale.producto}</span>
+                      <span className="font-medium text-sm text-white/90">{displayProductLabel({ name: sale.producto, alias: (sale as any).alias })}</span>
                     )}
                     <div className="flex gap-1 flex-wrap">
                       {sale.category && (

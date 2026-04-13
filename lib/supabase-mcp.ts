@@ -73,6 +73,7 @@ export interface MonthlySalesWithProduct extends MonthlySales {
   product_id?: string
   category?: string | null
   tipo?: string | null
+  alias?: string | null
   overrides?: ProductCountryOverride['overrides']
   companyBreakdown?: Array<{
     compañia: string
@@ -745,7 +746,7 @@ function isAllCompaniesLabel(company: string): boolean {
  * Opcionalmente filtra por compañía y producto.
  */
 export async function getMonthlySalesEvolution(
-  company?: string,
+  company?: string | string[],
   productName?: string | string[]
 ): Promise<{ year2025: MonthlyEvolutionPoint[]; year2026: MonthlyEvolutionPoint[] }> {
   let query = supabase
@@ -773,14 +774,21 @@ export async function getMonthlySalesEvolution(
     }
   }
 
-  const normalizedCompany = company?.trim()
+  const normalizedCompany = typeof company === 'string' ? company.trim() : undefined
+  const companyList = Array.isArray(company)
+    ? company.map((c) => c.trim()).filter(Boolean)
+    : null
   const normalizedProduct =
     typeof productName === 'string' ? productName.trim() : undefined
   const normalizedProducts =
     Array.isArray(productName) ? productName.map((p) => p.trim()).filter(Boolean) : undefined
 
   const filtered = (data as any[]).filter((row) => {
-    if (normalizedCompany && !isAllCompaniesLabel(normalizedCompany) && row.compañia !== normalizedCompany) return false
+    if (companyList && companyList.length > 0) {
+      if (!companyList.includes(row.compañia)) return false
+    } else if (normalizedCompany && !isAllCompaniesLabel(normalizedCompany) && row.compañia !== normalizedCompany) {
+      return false
+    }
     if (normalizedProducts && normalizedProducts.length > 0) {
       if (!normalizedProducts.includes(row.producto)) return false
     } else if (normalizedProduct && normalizedProduct !== 'Todos' && row.producto !== normalizedProduct) {
@@ -823,21 +831,36 @@ export async function getMonthlySalesEvolution(
  * Obtiene las ventas mensuales por compañía y período
  */
 export async function getMonthlySales(
-  company: string,
+  company: string | string[],
   periodo?: string,
   productName?: string | string[]
 ): Promise<MonthlySalesWithProduct[]> {
-  // Normalizar nombre de compañía (trim espacios)
-  const normalizedCompany = company.trim()
-  
+  let normalizedCompany = ""
+  let aggregateMultiCompanies = false
+
   let query = supabase
     .from('ventas_mensuales_view')
     .select('*')
     .order('cantidad_ventas', { ascending: false })
-  
-  // Solo filtrar por compañía si no es "Todas las compañías"
-  if (!isAllCompaniesLabel(normalizedCompany)) {
-    query = query.eq('compañia', normalizedCompany) // ✅ Usar compañía normalizada
+
+  if (Array.isArray(company)) {
+    const list = company.map((c) => c.trim()).filter(Boolean)
+    if (list.length === 0) return []
+    if (list.length === 1) {
+      normalizedCompany = list[0]
+      if (!isAllCompaniesLabel(normalizedCompany)) {
+        query = query.eq('compañia', normalizedCompany)
+      }
+    } else {
+      aggregateMultiCompanies = true
+      query = query.in('compañia', list)
+      normalizedCompany = list.join(", ")
+    }
+  } else {
+    normalizedCompany = company.trim()
+    if (!isAllCompaniesLabel(normalizedCompany)) {
+      query = query.eq('compañia', normalizedCompany)
+    }
   }
 
   // ✅ Filtro por período es OBLIGATORIO si se proporciona
@@ -870,7 +893,7 @@ export async function getMonthlySales(
   // Obtener productos para hacer join
   const { data: products } = await supabase
     .from('products')
-    .select('id, name, category, tipo')
+    .select('id, name, alias, category, tipo')
 
   const productIdsForOverrides = collectProductIdsFromSaleRows(
     sales as { producto: string }[],
@@ -891,10 +914,10 @@ export async function getMonthlySales(
     'SouthGenetics LLC Venezuela': 'VE',
   }
 
-  // Si es "Todas las compañías", agrupar por producto y crear desglose por compañía
-  const isAllCompanies = isAllCompaniesLabel(normalizedCompany)
-  
-  if (isAllCompanies) {
+  const isAllCompanies = !aggregateMultiCompanies && isAllCompaniesLabel(normalizedCompany)
+  const shouldAggregateCompanies = isAllCompanies || aggregateMultiCompanies
+
+  if (shouldAggregateCompanies) {
     // Agrupar por producto
     const groupedByProduct = sales.reduce((acc: any, sale: any) => {
       const productKey = sale.producto
@@ -945,6 +968,7 @@ export async function getMonthlySales(
       return {
         ...sale,
         product_id: product?.id,
+        alias: (product as any)?.alias || null,
         category: product?.category || null,
         tipo: product?.tipo || null,
         overrides: productOverrides?.overrides,
@@ -964,6 +988,7 @@ export async function getMonthlySales(
     return {
       ...sale,
       product_id: product?.id,
+      alias: (product as any)?.alias || null,
       category: product?.category || null,
       tipo: product?.tipo || null,
       overrides: productOverrides?.overrides,
@@ -975,28 +1000,41 @@ export async function getMonthlySales(
  * Obtiene los períodos únicos disponibles para una compañía
  * Ordenados de forma ascendente (enero primero)
  */
-export async function getAvailablePeriods(company: string): Promise<string[]> {
-  // Normalizar nombre de compañía (trim espacios)
-  const normalizedCompany = company.trim()
-  
+export async function getAvailablePeriods(company: string | string[]): Promise<string[]> {
   let query = supabase
     .from('ventas_mensuales_view')
     .select('periodo')
     .order('periodo', { ascending: true }) // ✅ Cambiado a true para orden ascendente
-  
-  // Solo filtrar por compañía si no es "Todas las compañías"
-  if (!isAllCompaniesLabel(normalizedCompany)) {
-    query = query.eq('compañia', normalizedCompany) // ✅ Usar compañía normalizada
+
+  let logLabel = ""
+  if (Array.isArray(company)) {
+    const list = company.map((c) => c.trim()).filter(Boolean)
+    logLabel = list.join(", ")
+    if (list.length === 0) return []
+    if (list.length === 1) {
+      const only = list[0]
+      if (!isAllCompaniesLabel(only)) {
+        query = query.eq('compañia', only)
+      }
+    } else {
+      query = query.in('compañia', list)
+    }
+  } else {
+    const normalizedCompany = company.trim()
+    logLabel = normalizedCompany
+    if (!isAllCompaniesLabel(normalizedCompany)) {
+      query = query.eq('compañia', normalizedCompany)
+    }
   }
-  
+
   const { data, error } = await query
 
   if (error) {
-    console.error('Error en getAvailablePeriods:', { error, company: normalizedCompany })
+    console.error('Error en getAvailablePeriods:', { error, company: logLabel })
     throw error
   }
   if (!data) {
-    console.warn(`⚠️ No se encontraron períodos para la compañía: ${normalizedCompany}`)
+    console.warn(`⚠️ No se encontraron períodos para: ${logLabel}`)
     return []
   }
 
@@ -1007,9 +1045,8 @@ export async function getAvailablePeriods(company: string): Promise<string[]> {
         .filter((p: any) => typeof p === "string" && p.trim().length > 0)
     )
   )
-  
-  // Debug: mostrar períodos encontrados
-  console.log(`📅 Períodos encontrados para ${normalizedCompany}:`, uniquePeriods)
+
+  console.log(`📅 Períodos encontrados para ${logLabel}:`, uniquePeriods)
   
   // Ordenar numéricamente para asegurar orden correcto (2025-01, 2025-02, etc.)
   return uniquePeriods.sort((a, b) => {
@@ -1025,19 +1062,34 @@ export async function getAvailablePeriods(company: string): Promise<string[]> {
  * Calcula el total anual agregado por producto
  */
 export async function getAnnualTotal(
-  company: string,
+  company: string | string[],
   productName?: string | string[]
 ): Promise<MonthlySalesWithProduct[]> {
-  // Normalizar nombre de compañía
-  const normalizedCompany = company.trim()
-  
+  let normalizedCompany = ""
+  let aggregateMultiCompanies = false
+
   let query = supabase
     .from('ventas_mensuales_view')
     .select('producto, compañia, cantidad_ventas, monto_total, año')
-  
-  // Solo filtrar por compañía si no es "Todas las compañías"
-  if (!isAllCompaniesLabel(normalizedCompany)) {
-    query = query.eq('compañia', normalizedCompany) // ✅ Usar compañía normalizada
+
+  if (Array.isArray(company)) {
+    const list = company.map((c) => c.trim()).filter(Boolean)
+    if (list.length === 0) return []
+    if (list.length === 1) {
+      normalizedCompany = list[0]
+      if (!isAllCompaniesLabel(normalizedCompany)) {
+        query = query.eq('compañia', normalizedCompany)
+      }
+    } else {
+      aggregateMultiCompanies = true
+      query = query.in('compañia', list)
+      normalizedCompany = list.join(", ")
+    }
+  } else {
+    normalizedCompany = company.trim()
+    if (!isAllCompaniesLabel(normalizedCompany)) {
+      query = query.eq('compañia', normalizedCompany)
+    }
   }
 
   if (Array.isArray(productName) && productName.length > 0) {
@@ -1051,7 +1103,8 @@ export async function getAnnualTotal(
   if (error) throw error
   if (!sales) return []
 
-  const isAllCompanies = isAllCompaniesLabel(normalizedCompany)
+  const isAllCompanies = !aggregateMultiCompanies && isAllCompaniesLabel(normalizedCompany)
+  const shouldAggregateCompanies = isAllCompanies || aggregateMultiCompanies
   type SaleRow = { producto: string; compañia: string; cantidad_ventas: number; monto_total: number | null; año: number }
   type CompanyBreakdownItem = { compañia: string; cantidad_ventas: number; monto_total: number | null }
 
@@ -1062,8 +1115,7 @@ export async function getAnnualTotal(
       existing.cantidad_ventas += sale.cantidad_ventas
       existing.monto_total = (existing.monto_total || 0) + (sale.monto_total || 0)
       
-      // Si es "Todas las compañías", mantener el desglose por compañía
-      if (isAllCompanies) {
+      if (shouldAggregateCompanies) {
         if (!existing.companyBreakdown) {
           existing.companyBreakdown = []
         }
@@ -1086,7 +1138,7 @@ export async function getAnnualTotal(
         año: sale.año,
         periodo: `Total ${sale.año}`,
         precio_promedio: null,
-        ...(isAllCompanies ? { companyBreakdown: [{ compañia: sale.compañia, cantidad_ventas: sale.cantidad_ventas, monto_total: sale.monto_total || 0 }] } : {}),
+        ...(shouldAggregateCompanies ? { companyBreakdown: [{ compañia: sale.compañia, cantidad_ventas: sale.cantidad_ventas, monto_total: sale.monto_total || 0 }] } : {}),
       }
       acc.push(newItem)
     }
@@ -1125,12 +1177,12 @@ export async function getAnnualTotal(
     'SouthGenetics LLC Venezuela': 'VE',
   }
 
-  const countryCode = isAllCompanies ? null : (companyToCountry[normalizedCompany] || 'UY')
+  const countryCode = shouldAggregateCompanies ? null : (companyToCountry[normalizedCompany] || 'UY')
 
   // Combinar datos
   return aggregated.map((sale: MonthlySalesWithProduct) => {
     const product = resolveProductForSale(products || [], sale.producto, ventasTestToProductId)
-    const productOverrides = isAllCompanies
+    const productOverrides = shouldAggregateCompanies
       ? pickOverrideAllCompaniesFirst(overrides || [], product?.id || "")
       : product?.id && countryCode
         ? pickOverrideForCountry(overrides || [], product.id, countryCode)
@@ -1150,31 +1202,54 @@ export async function getAnnualTotal(
  * Función auxiliar para obtener productos con métricas calculadas
  */
 async function getProductsWithMetrics(
-  company: string,
+  company: string | string[],
   year?: string,
   month?: string,
   productName?: string | string[],
-  channel?: string
+  channel?: string,
+  monthRange?: { from: number; to: number }
 ): Promise<DashboardProduct[]> {
-  const normalizedCompany = company.trim()
-  const isAllCompanies = isAllCompaniesLabel(normalizedCompany)
-  
+  let normalizedSingle: string | null = null
+  let multiIn: string[] | null = null
+  let isAllCompanies = false
+
   let query = supabase
     .from('ventas_mensuales_view')
     .select('producto, compañia, cantidad_ventas, monto_total, mes, año, periodo')
-  
-  if (!isAllCompanies) {
-    query = query.eq('compañia', normalizedCompany)
+
+  if (Array.isArray(company)) {
+    const list = company.map((c) => c.trim()).filter(Boolean)
+    if (list.length === 0) return []
+    if (list.length === 1) {
+      normalizedSingle = list[0]
+      isAllCompanies = isAllCompaniesLabel(normalizedSingle)
+      if (!isAllCompanies) {
+        query = query.eq('compañia', normalizedSingle)
+      }
+    } else {
+      multiIn = list
+      query = query.in('compañia', list)
+    }
+  } else {
+    normalizedSingle = company.trim()
+    isAllCompanies = isAllCompaniesLabel(normalizedSingle)
+    if (!isAllCompanies) {
+      query = query.eq('compañia', normalizedSingle)
+    }
   }
-  
+
   if (year && year !== "Todos") {
     query = query.eq('año', parseInt(year))
   }
-  
-  if (month && month !== "Todos") {
+
+  if (monthRange && monthRange.from >= 1 && monthRange.to >= 1) {
+    const a = Math.min(monthRange.from, monthRange.to)
+    const b = Math.max(monthRange.from, monthRange.to)
+    query = query.gte('mes', a).lte('mes', b)
+  } else if (month && month !== "Todos") {
     query = query.eq('mes', parseInt(month))
   }
-  
+
   if (Array.isArray(productName) && productName.length > 0) {
     query = query.in('producto', productName)
   } else if (typeof productName === 'string' && productName !== 'Todos') {
@@ -1235,10 +1310,11 @@ async function getProductsWithMetrics(
   Array.from(productMap.values()).forEach((product: ProductAgg) => {
     const productInfo = resolveProductForSale(products || [], product.producto, ventasTestToProductId)
 
-    const countryCode = isAllCompanies 
-      ? null 
-      : (companyToCountry[normalizedCompany] || 'UY')
-    
+    const countryCode =
+      isAllCompanies || multiIn
+        ? null
+        : (normalizedSingle ? companyToCountry[normalizedSingle] || 'UY' : null)
+
     const matchesChannel = (o: ProductCountryOverride) => {
       if (!channel || channel === 'Todos los canales') return true
       return (o.channel || 'Paciente') === channel
@@ -1246,7 +1322,7 @@ async function getProductsWithMetrics(
 
     const productOverrideCandidates = (overrides || []).filter((o: ProductCountryOverride) => {
       if (o.product_id !== productInfo?.id) return false
-      if (!isAllCompanies && countryCode && o.country_code !== countryCode) return false
+      if (countryCode !== null && o.country_code !== countryCode) return false
       return matchesChannel(o)
     })
     const productOverride =
@@ -1305,14 +1381,15 @@ async function getProductsWithMetrics(
  * Obtiene los productos más vendidos para el dashboard
  */
 export async function getTopSellingProducts(
-  company: string,
+  company: string | string[],
   year?: string,
   month?: string,
   productName?: string | string[],
   channel?: string,
-  limit: number = 10
+  limit: number = 10,
+  monthRange?: { from: number; to: number }
 ): Promise<DashboardProduct[]> {
-  const products = await getProductsWithMetrics(company, year, month, productName, channel)
+  const products = await getProductsWithMetrics(company, year, month, productName, channel, monthRange)
   
   // Ordenar por cantidad de ventas y limitar
   return products
@@ -1324,14 +1401,15 @@ export async function getTopSellingProducts(
  * Obtiene los productos con mayor margen de ganancia para el dashboard
  */
 export async function getTopMarginProducts(
-  company: string,
+  company: string | string[],
   year?: string,
   month?: string,
   productName?: string | string[],
   channel?: string,
-  limit: number = 10
+  limit: number = 10,
+  monthRange?: { from: number; to: number }
 ): Promise<DashboardProduct[]> {
-  const products = await getProductsWithMetrics(company, year, month, productName, channel)
+  const products = await getProductsWithMetrics(company, year, month, productName, channel, monthRange)
   
   // Filtrar productos con margen válido (> 0) y ordenar por margen descendente
   return products
@@ -1344,14 +1422,15 @@ export async function getTopMarginProducts(
  * Obtiene los productos con menor margen de ganancia para el dashboard
  */
 export async function getBottomMarginProducts(
-  company: string,
+  company: string | string[],
   year?: string,
   month?: string,
   productName?: string | string[],
   channel?: string,
-  limit: number = 10
+  limit: number = 10,
+  monthRange?: { from: number; to: number }
 ): Promise<DashboardProduct[]> {
-  const products = await getProductsWithMetrics(company, year, month, productName, channel)
+  const products = await getProductsWithMetrics(company, year, month, productName, channel, monthRange)
   
   // Filtrar productos con margen válido (> 0) y ordenar por margen ascendente
   return products
@@ -1364,14 +1443,15 @@ export async function getBottomMarginProducts(
  * Obtiene los productos más caros (mayor grossSalesUSD) para el dashboard
  */
 export async function getMostExpensiveProducts(
-  company: string,
+  company: string | string[],
   year?: string,
   month?: string,
   productName?: string | string[],
   channel?: string,
-  limit: number = 10
+  limit: number = 10,
+  monthRange?: { from: number; to: number }
 ): Promise<DashboardProduct[]> {
-  const products = await getProductsWithMetrics(company, year, month, productName, channel)
+  const products = await getProductsWithMetrics(company, year, month, productName, channel, monthRange)
   
   // Ordenar por grossSalesUSD (precio unitario) descendente
   return products
