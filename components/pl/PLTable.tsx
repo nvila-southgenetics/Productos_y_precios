@@ -1257,6 +1257,11 @@ export function PLTable({
     real_2025: modelLines.real_2025?.netIncome || Array(12).fill(0),
   })
 
+  // Solo se usa para mostrar el detalle por campo cuando no estamos combinando.
+  const sgaMonthly: Record<keyof SGAData, number[]> = Object.fromEntries(
+    SGA_FIELDS.map(({ key }) => [key, sga.map((x) => x[key])])
+  ) as Record<keyof SGAData, number[]>
+
   const periodSum = (arr: number[]) => monthIndices.reduce((s, i) => s + (arr[i] || 0), 0)
   const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0)
 
