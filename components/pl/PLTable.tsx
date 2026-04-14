@@ -25,6 +25,11 @@ interface PLTableProps {
   testMode?: boolean
   /** Identificador del budget seleccionado (solo aplica en modelo budget). */
   budgetName?: string
+  /** Si está activo, cada mes puede mostrar un modelo distinto. */
+  combineEnabled?: boolean
+  /** Modelo por mes (0..11). Solo se usa si combineEnabled. */
+  monthModels?: ("budget" | "real_2026" | "real_2025")[]
+  onMonthModelChange?: (monthIdx0Based: number, model: "budget" | "real_2026" | "real_2025") => void
 }
 
 interface OverrideData {
@@ -141,7 +146,22 @@ function normalizeProductKey(name: string): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function PLTable({ modelo, year, countries, categories, products, channels, canEdit, monthFrom, monthTo, testMode, budgetName = "budget" }: PLTableProps) {
+export function PLTable({
+  modelo,
+  year,
+  countries,
+  categories,
+  products,
+  channels,
+  canEdit,
+  monthFrom,
+  monthTo,
+  testMode,
+  budgetName = "budget",
+  combineEnabled = false,
+  monthModels,
+  onMonthModelChange,
+}: PLTableProps) {
   const [loading, setLoading] = useState(true)
   const [quantities, setQuantities] = useState<Record<string, number[]>>({})
   const [productCategories, setProductCategories] = useState<Record<string, string>>({})
@@ -183,13 +203,194 @@ export function PLTable({ modelo, year, countries, categories, products, channel
   const financialEnabled = true
   // Can edit SGA amounts only when both product AND channel are specific (exactly one product)
   // En multi-selección: podemos editar solo cuando se seleccionó un único canal.
-  const canEditSGA = canEdit && financialEnabled && products.length === 1 && channels.length === 1 && countries.length === 1
+  const canEditSGA =
+    canEdit && financialEnabled && products.length === 1 && channels.length === 1 && countries.length === 1
   // Taxes are stored at country-level (one country_code row), so allow editing only when a single country is selected.
   const canEditTax = canEdit && financialEnabled && countries.length === 1
 
   const startIndex = Math.min(Math.max(Math.min(monthFrom, monthTo) - 1, 0), 11)
   const endIndex = Math.min(Math.max(Math.max(monthFrom, monthTo) - 1, 0), 11)
   const monthIndices = Array.from({ length: endIndex - startIndex + 1 }, (_, k) => startIndex + k)
+
+  type MonthModel = "budget" | "real_2026" | "real_2025"
+  const baseMonthModel: MonthModel =
+    modelo === "budget" ? "budget" : (year === 2025 ? "real_2025" : "real_2026")
+  const effectiveMonthModels: MonthModel[] =
+    (monthModels && monthModels.length === 12 ? monthModels : Array(12).fill(baseMonthModel)) as MonthModel[]
+
+  type ModelSnapshot = {
+    model: MonthModel
+    // Budget data
+    budgetRows?: Record<string, unknown>[]
+    budgetOverrides?: Record<string, OverrideData>
+    // Real data
+    quantities?: Record<string, number[]>
+    overrides?: Record<string, OverrideData>
+    // Shared
+    sga: SGAData[]
+    tax: TaxData[]
+  }
+
+  const [combinedSnapshots, setCombinedSnapshots] = useState<Partial<Record<MonthModel, ModelSnapshot>>>({})
+  const [combineError, setCombineError] = useState<string | null>(null)
+  const neededMonthModels = Array.from(new Set(effectiveMonthModels))
+  const combineReady = !combineEnabled || neededMonthModels.every((m) => Boolean(combinedSnapshots[m]))
+
+  const computeNetIncomeChain = (
+    grossSales: number[],
+    commercialDiscount: number[],
+    productCost: number[],
+    kitCost: number[],
+    paymentFee: number[],
+    bloodDraw: number[],
+    sanitary: number[],
+    extCourier: number[],
+    intCourier: number[],
+    physiciansFees: number[],
+    salesCommission: number[],
+    sgaMonth: SGAData[],
+    taxRates: TaxData[]
+  ) => {
+    const salesRevenue = grossSales.map((v, i) => v - commercialDiscount[i])
+    const totalCOS = Array.from({ length: 12 }, (_, i) =>
+      productCost[i] + kitCost[i] + paymentFee[i] + bloodDraw[i] + sanitary[i] +
+      extCourier[i] + intCourier[i] + physiciansFees[i] + salesCommission[i]
+    )
+    const grossProfit = salesRevenue.map((v, i) => v - totalCOS[i])
+    const totalSGA = Array.from({ length: 12 }, (_, i) =>
+      SGA_FIELDS.reduce((s, f) => s + sgaMonth[i][f.key], 0)
+    )
+    const iibbAmount = salesRevenue.map((v, i) => v * (taxRates[i].iibb_pct / 100))
+    const incomeTaxBase = grossProfit.map((v, i) => v - totalSGA[i])
+    const incomeTax = incomeTaxBase.map((v, i) => Math.max(0, v) * (taxRates[i].income_tax_pct / 100))
+    const netIncome = grossProfit.map((v, i) => v - totalSGA[i] - iibbAmount[i] - incomeTax[i])
+    return { salesRevenue, grossProfit, netIncome, totalSGA, iibbAmount, incomeTax }
+  }
+
+  const fetchTaxesFor = async (modelTag: "real" | "budget", forYear: number): Promise<TaxData[]> => {
+    const taxArr: TaxData[] = Array.from({ length: 12 }, emptyTax)
+    let taxQuery = supabase
+      .from("pl_sga")
+      .select("month, iibb_pct, income_tax_pct")
+      .eq("year", forYear)
+      .eq("modelo", modelTag)
+      .eq("product_name", "")
+      .eq("channel", "")
+    if (countries.length) taxQuery = taxQuery.in("country_code", countries)
+    const { data, error } = await taxQuery
+    if (error) throw error
+    for (const row of data || []) {
+      const idx = (row as any).month - 1
+      if (idx >= 0 && idx < 12) {
+        taxArr[idx] = {
+          iibb_pct: Math.abs(Number((row as any).iibb_pct || 0)),
+          income_tax_pct: Math.abs(Number((row as any).income_tax_pct || 0)),
+        }
+      }
+    }
+    return taxArr
+  }
+
+  const fetchSGAFor = async (modelTag: "real" | "budget", forYear: number): Promise<SGAData[]> => {
+    const sgaArr: SGAData[] = Array.from({ length: 12 }, emptySGA)
+    let sgaQuery = supabase
+      .from("pl_sga")
+      .select(
+        "month, salaries_wages, professional_fees, contracted_services, travel_lodging_meals, rent_expenses, advertising_promotion, financial_expenses, other_expenses, product_name, channel, country_code"
+      )
+      .eq("year", forYear)
+      .eq("modelo", modelTag)
+    if (countries.length) sgaQuery = sgaQuery.in("country_code", countries)
+    if (channels.length) sgaQuery = sgaQuery.in("channel", channels)
+
+    if (products.length === 1 && channels.length === 1) {
+      sgaQuery = sgaQuery.eq("product_name", product).eq("channel", channels[0])
+    } else {
+      sgaQuery = sgaQuery.neq("product_name", "").neq("channel", "")
+    }
+
+    const { data, error } = await sgaQuery
+    if (error) throw error
+
+    let allowedProductsByCategory: Set<string> | null = null
+    if (shouldFilterCategories) {
+      const { data: allProds } = await supabase.from("products").select("name, category")
+      allowedProductsByCategory = new Set(
+        (allProds || [])
+          .filter((p: { name: string; category: string | null }) => categoriesSet.has(p.category || ""))
+          .map((p: { name: string }) => p.name)
+      )
+    }
+
+    const selectedProducts = products.length > 0 ? new Set(products) : null
+    for (const row of data || []) {
+      const rowProduct = String((row as any).product_name || "")
+      if (!rowProduct) continue
+      if (selectedProducts && !selectedProducts.has(rowProduct)) continue
+      if (allowedProductsByCategory && !allowedProductsByCategory.has(rowProduct)) continue
+      const idx = Number((row as any).month) - 1
+      if (idx < 0 || idx >= 12) continue
+      for (const f of SGA_FIELDS) {
+        sgaArr[idx][f.key] += Math.abs(Number((row as any)[f.key] || 0))
+      }
+    }
+
+    return sgaArr
+  }
+
+  const computeMonthlyRealField = (
+    quantities: Record<string, number[]>,
+    overrides: Record<string, OverrideData>,
+    field: keyof OverrideData
+  ): number[] => {
+    return Array.from({ length: 12 }, (_, mIdx) =>
+      Object.entries(quantities).reduce((sum, [name, qtArr]) => {
+        const ov = overrides[name] || emptyOverride()
+        return sum + ov[field] * (qtArr[mIdx] || 0)
+      }, 0)
+    )
+  }
+
+  const computeMonthlyBudgetField = (
+    rows: Record<string, unknown>[],
+    ovs: Record<string, OverrideData>,
+    field: keyof OverrideData
+  ): number[] => {
+    return Array.from({ length: 12 }, (_, mIdx) =>
+      (rows || []).reduce((sum, row) => {
+        const prodId = ((row as any).product_id as string | null) || ""
+        const name = (row as any).product_name as string
+        const rowChannel = ((row as any).channel as string) || ""
+
+        const idChannelKey = prodId ? `${prodId}|${rowChannel}` : ""
+        const idPacienteKey = prodId ? `${prodId}|Paciente` : ""
+        const idBaseKey = prodId ? `${prodId}|` : ""
+        const nameChannelKey = `${name}|${rowChannel}`
+        const namePacienteKey = `${name}|Paciente`
+        const nameBaseKey = `${name}|`
+
+        const ov =
+          (idChannelKey && ovs[idChannelKey]) ||
+          (idPacienteKey && ovs[idPacienteKey]) ||
+          (idBaseKey && ovs[idBaseKey]) ||
+          ovs[nameChannelKey] ||
+          ovs[namePacienteKey] ||
+          ovs[nameBaseKey] ||
+          emptyOverride()
+
+        const units = Number((row as any)[MONTH_KEYS[mIdx] as any] || 0)
+        return sum + ov[field] * units
+      }, 0)
+    )
+  }
+
+  const totalUnitsFromBudgetRows = (rows: Record<string, unknown>[]) =>
+    Array.from({ length: 12 }, (_, i) =>
+      (rows || []).reduce((s, row) => s + Number((row as any)[MONTH_KEYS[i] as any] || 0), 0)
+    )
+
+  const totalUnitsFromRealQty = (qty: Record<string, number[]>) =>
+    Array.from({ length: 12 }, (_, i) => Object.values(qty).reduce((s, arr) => s + (arr[i] || 0), 0))
 
   // Inicializar cantidades de test cuando se activa el modo o cambian cantidades base
   useEffect(() => {
@@ -219,12 +420,215 @@ export function PLTable({ modelo, year, countries, categories, products, channel
 
   const fetchData = useCallback(async () => {
     setLoading(true)
+    setCombineError(null)
     // En Real queremos "limpiar" únicamente SG&A/Impuestos (no el resto).
     // Los costos de producto (Gross Sales / Gross Profit) se calculan desde overrides + cantidades,
     // por eso NO debemos tocarlos.
     setSga(Array.from({ length: 12 }, emptySGA))
     setTaxRates(Array.from({ length: 12 }, emptyTax))
     try {
+      if (countries.length === 0) {
+        setQuantities({})
+        setBudgetRows([])
+        setOverrides({})
+        setBudgetOverrides({})
+        setCombinedSnapshots({})
+        setCombineError(null)
+        return
+      }
+
+      // Modo combinar: pre-cargar todos los modelos necesarios y dejar que cada mes elija.
+      if (combineEnabled) {
+        const neededModels = new Set<MonthModel>(effectiveMonthModels)
+        const snapshots: Partial<Record<MonthModel, ModelSnapshot>> = {}
+
+        const fetchBudgetSnapshot = async (): Promise<ModelSnapshot> => {
+          // Budget rows (unidades) filtradas
+          let q = supabase
+            .from("budget")
+            .select("product_id, product_name, jan,feb,mar,apr,may,jun,jul,aug,sep,oct,nov,dec, channel, country_code")
+            .eq("year", year)
+            .eq("budget_name", budgetName)
+          if (countries.length) q = q.in("country_code", countries)
+          if (products.length > 0) q = q.in("product_name", products)
+          if (channels.length) q = q.in("channel", channels)
+          const { data: budData } = await q
+
+          // Filtrado por categoría (solo si categoría filtra)
+          const rowsForBudget: Record<string, unknown>[] = []
+          if (shouldFilterCategories) {
+            const { data: allProds } = await supabase.from("products").select("name, category")
+            const allowed = new Set(
+              (allProds || [])
+                .filter((p: { name: string; category: string | null }) => categoriesSet.has(p.category || ""))
+                .map((p: { name: string }) => p.name)
+            )
+            for (const row of budData || []) {
+              const name = (row as any).product_name as string
+              if (!allowed.has(name)) continue
+              rowsForBudget.push(row as any)
+            }
+          } else {
+            for (const row of budData || []) rowsForBudget.push(row as any)
+          }
+
+          // Budget overrides (por product_id|channel)
+          const ovs: Record<string, OverrideData> = {}
+          let qo = supabase.from("product_country_overrides").select("overrides, product_id, country_code, channel")
+          if (countries.length) qo = qo.in("country_code", countries)
+          const { data: overrideRows } = await qo
+          if (overrideRows && overrideRows.length > 0) {
+            const productIds = (overrideRows as any[]).map((r) => r.product_id).filter(Boolean)
+            const { data: productRows } = await supabase
+              .from("products")
+              .select("id, name, category")
+              .in("id", productIds)
+            const idToName: Record<string, string> = {}
+            const idToCat: Record<string, string> = {}
+            for (const p of productRows || []) { idToName[p.id] = p.name; idToCat[p.id] = p.category || "" }
+
+            for (const row of overrideRows as any[]) {
+              const prodId = row.product_id as string
+              const name = idToName[prodId]
+              if (!name) continue
+              if (shouldFilterCategories && idToCat[prodId] && !categoriesSet.has(idToCat[prodId])) continue
+              if (products.length > 0 && !products.includes(name)) continue
+
+              const o = row.overrides || {}
+              const key = `${prodId}|${row.channel || ""}`
+              const prev = ovs[key] || emptyOverride()
+              ovs[key] = {
+                grossSalesUSD: prev.grossSalesUSD + (o.grossSalesUSD || 0),
+                commercialDiscountUSD: prev.commercialDiscountUSD + (o.commercialDiscountUSD || 0),
+                productCostUSD: prev.productCostUSD + (o.productCostUSD || 0),
+                kitCostUSD: prev.kitCostUSD + (o.kitCostUSD || 0),
+                paymentFeeUSD: prev.paymentFeeUSD + (o.paymentFeeUSD || 0),
+                bloodDrawSampleUSD: prev.bloodDrawSampleUSD + (o.bloodDrawSampleUSD || 0),
+                sanitaryPermitsUSD: prev.sanitaryPermitsUSD + (o.sanitaryPermitsUSD || 0),
+                externalCourierUSD: prev.externalCourierUSD + (o.externalCourierUSD || 0),
+                internalCourierUSD: prev.internalCourierUSD + (o.internalCourierUSD || 0),
+                physiciansFeesUSD: prev.physiciansFeesUSD + (o.physiciansFeesUSD || 0),
+                salesCommissionUSD: prev.salesCommissionUSD + (o.salesCommissionUSD || 0),
+              }
+            }
+          }
+
+          const [tax, sga] = await Promise.all([fetchTaxesFor("budget", year), fetchSGAFor("budget", year)])
+          return { model: "budget", budgetRows: rowsForBudget, budgetOverrides: ovs, tax, sga }
+        }
+
+        const fetchRealSnapshot = async (m: "real_2026" | "real_2025"): Promise<ModelSnapshot> => {
+          const forYear = m === "real_2025" ? 2025 : 2026
+          // Quantities
+          const qtys: Record<string, number[]> = {}
+          const cats: Record<string, string> = {}
+          const aliases: Record<string, string> = {}
+          const { data: allProds } = await supabase.from("products").select("name, category, alias")
+          for (const p of allProds || []) {
+            cats[(p as any).name] = (p as any).category || ""
+            aliases[(p as any).name] = (p as any).alias || ""
+          }
+
+          const companies = countries.flatMap((c) => COUNTRY_TO_COMPANIES[c] || [])
+          if (companies.length) {
+            const { data } = await supabase
+              .from("ventas_mensuales_view")
+              .select("producto, mes, cantidad_ventas, compañia")
+              .eq("año", forYear)
+              .in("compañia", companies)
+
+            const categorySet = shouldFilterCategories ? categoriesSet : null
+            const selectedProductKeys = new Set((products || []).map((p) => normalizeProductKey(p)))
+            for (const row of (data || []) as any[]) {
+              const name = row.producto as string
+              if (!name) continue
+              if (selectedProductKeys.size > 0 && !selectedProductKeys.has(normalizeProductKey(name))) continue
+              if (categorySet) {
+                const knownCategory = cats[name]
+                if (knownCategory && !categorySet.has(knownCategory)) continue
+              }
+              if (!qtys[name]) qtys[name] = Array(12).fill(0)
+              const mIdx = Number(row.mes) - 1
+              if (mIdx >= 0 && mIdx < 12) qtys[name][mIdx] += Number(row.cantidad_ventas || 0)
+            }
+            if (channels.length > 0 && !channels.includes("Paciente")) {
+              for (const k of Object.keys(qtys)) qtys[k] = Array(12).fill(0)
+            }
+          }
+
+          // Overrides (Paciente)
+          const ovs: Record<string, OverrideData> = {}
+          let q = supabase.from("product_country_overrides").select("overrides, product_id, country_code").eq("channel", "Paciente")
+          if (countries.length) q = q.in("country_code", countries)
+          const { data: overrideRows } = await q
+          if (overrideRows && overrideRows.length > 0) {
+            const productIds = (overrideRows as any[]).map((r) => r.product_id).filter(Boolean)
+            const { data: productRows } = await supabase.from("products").select("id, name, category").in("id", productIds)
+            const idToName: Record<string, string> = {}
+            const idToCat: Record<string, string> = {}
+            for (const p of productRows || []) { idToName[p.id] = p.name; idToCat[p.id] = p.category || "" }
+
+            for (const row of overrideRows as any[]) {
+              const name = idToName[row.product_id]
+              if (!name) continue
+              if (shouldFilterCategories && idToCat[row.product_id] && !categoriesSet.has(idToCat[row.product_id])) continue
+              if (products.length > 0 && !products.includes(name)) continue
+              const o = row.overrides || {}
+              const prev = ovs[name] || emptyOverride()
+              ovs[name] = {
+                grossSalesUSD: prev.grossSalesUSD + (o.grossSalesUSD || 0),
+                commercialDiscountUSD: prev.commercialDiscountUSD + (o.commercialDiscountUSD || 0),
+                productCostUSD: prev.productCostUSD + (o.productCostUSD || 0),
+                kitCostUSD: prev.kitCostUSD + (o.kitCostUSD || 0),
+                paymentFeeUSD: prev.paymentFeeUSD + (o.paymentFeeUSD || 0),
+                bloodDrawSampleUSD: prev.bloodDrawSampleUSD + (o.bloodDrawSampleUSD || 0),
+                sanitaryPermitsUSD: prev.sanitaryPermitsUSD + (o.sanitaryPermitsUSD || 0),
+                externalCourierUSD: prev.externalCourierUSD + (o.externalCourierUSD || 0),
+                internalCourierUSD: prev.internalCourierUSD + (o.internalCourierUSD || 0),
+                physiciansFeesUSD: prev.physiciansFeesUSD + (o.physiciansFeesUSD || 0),
+                salesCommissionUSD: prev.salesCommissionUSD + (o.salesCommissionUSD || 0),
+              }
+            }
+          }
+
+          const [tax, sga] = await Promise.all([fetchTaxesFor("real", forYear), fetchSGAFor("real", forYear)])
+          // Reutilizamos categorías/alias del modelo base para UI (ya se cargan en el path normal).
+          return { model: m, quantities: qtys, overrides: ovs, tax, sga }
+        }
+
+        // Fetch in parallel (tolerante a fallos: no colgar en "Cargando datos...")
+        const taskList: { model: MonthModel; promise: Promise<ModelSnapshot> }[] = []
+        if (neededModels.has("budget")) taskList.push({ model: "budget", promise: fetchBudgetSnapshot() })
+        if (neededModels.has("real_2026")) taskList.push({ model: "real_2026", promise: fetchRealSnapshot("real_2026") })
+        if (neededModels.has("real_2025")) taskList.push({ model: "real_2025", promise: fetchRealSnapshot("real_2025") })
+
+        const settled = await Promise.allSettled(taskList.map((t) => t.promise))
+        const failures: string[] = []
+        for (let idx = 0; idx < settled.length; idx++) {
+          const res = settled[idx]
+          const m = taskList[idx].model
+          if (res.status === "fulfilled") {
+            snapshots[m] = res.value
+          } else {
+            failures.push(m)
+            console.error("PLTable combine fetch failed:", m, res.reason)
+          }
+        }
+
+        setCombinedSnapshots(snapshots)
+        const missing = Array.from(neededModels).filter((m) => !snapshots[m])
+        if (missing.length > 0) setCombineError(`No se pudieron cargar: ${missing.join(", ")}`)
+        if (failures.length > 0 && missing.length === 0) setCombineError(`Fallaron: ${failures.join(", ")}`)
+
+        // Mantener la UI base cargada para el detalle (no se usa en combinar, pero evita flashes raros).
+        if (modelo === "budget") {
+          await Promise.all([fetchQuantities(), fetchBudgetOverrides(), fetchSGA()])
+        } else {
+          await Promise.all([fetchQuantities(), fetchOverrides(), fetchSGA()])
+        }
+        return
+      }
+
       if (modelo === "budget") {
         if (testMode) {
           // En modo Test usamos overrides agregados por producto, igual que en REAL
@@ -235,10 +639,13 @@ export function PLTable({ modelo, year, countries, categories, products, channel
       } else {
         await Promise.all([fetchQuantities(), fetchOverrides(), fetchSGA()])
       }
+    } catch (e) {
+      console.error("PLTable fetchData:", e)
+      if (combineEnabled) setCombineError("Error cargando datos para combinar")
     } finally {
       setLoading(false)
     }
-  }, [modelo, year, countries, categories, products, channels, testMode])
+  }, [modelo, year, countries, categories, products, channels, testMode, budgetName, combineEnabled, effectiveMonthModels.join("|")])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -607,6 +1014,16 @@ export function PLTable({ modelo, year, countries, categories, products, channel
       return Object.values(activeQuantities).reduce((s, arr) => s + (arr[i] || 0), 0)
     }
 
+    if (combineEnabled) {
+      const m = effectiveMonthModels[i]
+      const snap = combinedSnapshots[m]
+      if (!snap) return 0
+      if (m === "budget") {
+        return (snap.budgetRows || []).reduce((s, row) => s + Number((row as any)[MONTH_KEYS[i] as any] || 0), 0)
+      }
+      return Object.values(snap.quantities || {}).reduce((s, arr) => s + (arr[i] || 0), 0)
+    }
+
     if (modelo === "budget") {
       // Unidades directas desde la tabla budget (respetando canal seleccionado o todos)
       return (budgetRows || []).reduce(
@@ -619,37 +1036,226 @@ export function PLTable({ modelo, year, countries, categories, products, channel
     return Object.values(quantities).reduce((s, arr) => s + (arr[i] || 0), 0)
   })
 
-  const grossSales = computeMonthly("grossSalesUSD")
-  const commercialDiscount = computeMonthly("commercialDiscountUSD")
-  const salesRevenue = grossSales.map((v, i) => v - commercialDiscount[i])
-  const productCost = computeMonthly("productCostUSD")
-  const kitCost = computeMonthly("kitCostUSD")
-  const paymentFee = computeMonthly("paymentFeeUSD")
-  const bloodDraw = computeMonthly("bloodDrawSampleUSD")
-  const sanitary = computeMonthly("sanitaryPermitsUSD")
-  const extCourier = computeMonthly("externalCourierUSD")
-  const intCourier = computeMonthly("internalCourierUSD")
-  const physiciansFees = computeMonthly("physiciansFeesUSD")
-  const salesCommission = computeMonthly("salesCommissionUSD")
+  const mergeMonthlyMetric = (perModel: Record<MonthModel, number[]>): number[] => {
+    return Array.from({ length: 12 }, (_, i) => {
+      const m = combineEnabled ? effectiveMonthModels[i] : baseMonthModel
+      return (perModel[m] || Array(12).fill(0))[i] || 0
+    })
+  }
+
+  const computeAllModelLines = () => {
+    const out: Partial<Record<MonthModel, ReturnType<typeof computeNetIncomeChain> & {
+      grossSales: number[]
+      commercialDiscount: number[]
+      productCost: number[]
+      kitCost: number[]
+      paymentFee: number[]
+      bloodDraw: number[]
+      sanitary: number[]
+      extCourier: number[]
+      intCourier: number[]
+      physiciansFees: number[]
+      salesCommission: number[]
+    }>> = {}
+
+    const models: MonthModel[] = combineEnabled ? Array.from(new Set(effectiveMonthModels)) : [baseMonthModel]
+    for (const m of models) {
+      const snap = combineEnabled ? combinedSnapshots[m] : null
+      if (combineEnabled && !snap) continue
+
+      if (m === "budget") {
+        const rows = combineEnabled ? (snap!.budgetRows || []) : (budgetRows || [])
+        const ovs = combineEnabled ? (snap!.budgetOverrides || {}) : (budgetOverrides || {})
+        const sgaArr = combineEnabled ? snap!.sga : sga
+        const taxArr = combineEnabled ? snap!.tax : taxRates
+
+        const grossSales = computeMonthlyBudgetField(rows, ovs, "grossSalesUSD")
+        const commercialDiscount = computeMonthlyBudgetField(rows, ovs, "commercialDiscountUSD")
+        const productCost = computeMonthlyBudgetField(rows, ovs, "productCostUSD")
+        const kitCost = computeMonthlyBudgetField(rows, ovs, "kitCostUSD")
+        const paymentFee = computeMonthlyBudgetField(rows, ovs, "paymentFeeUSD")
+        const bloodDraw = computeMonthlyBudgetField(rows, ovs, "bloodDrawSampleUSD")
+        const sanitary = computeMonthlyBudgetField(rows, ovs, "sanitaryPermitsUSD")
+        const extCourier = computeMonthlyBudgetField(rows, ovs, "externalCourierUSD")
+        const intCourier = computeMonthlyBudgetField(rows, ovs, "internalCourierUSD")
+        const physiciansFees = computeMonthlyBudgetField(rows, ovs, "physiciansFeesUSD")
+        const salesCommission = computeMonthlyBudgetField(rows, ovs, "salesCommissionUSD")
+
+        out[m] = {
+          grossSales,
+          commercialDiscount,
+          productCost,
+          kitCost,
+          paymentFee,
+          bloodDraw,
+          sanitary,
+          extCourier,
+          intCourier,
+          physiciansFees,
+          salesCommission,
+          ...computeNetIncomeChain(
+            grossSales,
+            commercialDiscount,
+            productCost,
+            kitCost,
+            paymentFee,
+            bloodDraw,
+            sanitary,
+            extCourier,
+            intCourier,
+            physiciansFees,
+            salesCommission,
+            sgaArr,
+            taxArr
+          ),
+        }
+      } else {
+        const qty = combineEnabled ? (snap!.quantities || {}) : quantities
+        const ovs = combineEnabled ? (snap!.overrides || {}) : overrides
+        const sgaArr = combineEnabled ? snap!.sga : sga
+        const taxArr = combineEnabled ? snap!.tax : taxRates
+
+        const grossSales = computeMonthlyRealField(qty, ovs, "grossSalesUSD")
+        const commercialDiscount = computeMonthlyRealField(qty, ovs, "commercialDiscountUSD")
+        const productCost = computeMonthlyRealField(qty, ovs, "productCostUSD")
+        const kitCost = computeMonthlyRealField(qty, ovs, "kitCostUSD")
+        const paymentFee = computeMonthlyRealField(qty, ovs, "paymentFeeUSD")
+        const bloodDraw = computeMonthlyRealField(qty, ovs, "bloodDrawSampleUSD")
+        const sanitary = computeMonthlyRealField(qty, ovs, "sanitaryPermitsUSD")
+        const extCourier = computeMonthlyRealField(qty, ovs, "externalCourierUSD")
+        const intCourier = computeMonthlyRealField(qty, ovs, "internalCourierUSD")
+        const physiciansFees = computeMonthlyRealField(qty, ovs, "physiciansFeesUSD")
+        const salesCommission = computeMonthlyRealField(qty, ovs, "salesCommissionUSD")
+
+        out[m] = {
+          grossSales,
+          commercialDiscount,
+          productCost,
+          kitCost,
+          paymentFee,
+          bloodDraw,
+          sanitary,
+          extCourier,
+          intCourier,
+          physiciansFees,
+          salesCommission,
+          ...computeNetIncomeChain(
+            grossSales,
+            commercialDiscount,
+            productCost,
+            kitCost,
+            paymentFee,
+            bloodDraw,
+            sanitary,
+            extCourier,
+            intCourier,
+            physiciansFees,
+            salesCommission,
+            sgaArr,
+            taxArr
+          ),
+        }
+      }
+    }
+
+    return out as Record<MonthModel, (ReturnType<typeof computeNetIncomeChain> & any)>
+  }
+
+  const modelLines = computeAllModelLines()
+
+  const grossSales = mergeMonthlyMetric({
+    budget: modelLines.budget?.grossSales || Array(12).fill(0),
+    real_2026: modelLines.real_2026?.grossSales || Array(12).fill(0),
+    real_2025: modelLines.real_2025?.grossSales || Array(12).fill(0),
+  })
+  const commercialDiscount = mergeMonthlyMetric({
+    budget: modelLines.budget?.commercialDiscount || Array(12).fill(0),
+    real_2026: modelLines.real_2026?.commercialDiscount || Array(12).fill(0),
+    real_2025: modelLines.real_2025?.commercialDiscount || Array(12).fill(0),
+  })
+  const salesRevenue = mergeMonthlyMetric({
+    budget: modelLines.budget?.salesRevenue || Array(12).fill(0),
+    real_2026: modelLines.real_2026?.salesRevenue || Array(12).fill(0),
+    real_2025: modelLines.real_2025?.salesRevenue || Array(12).fill(0),
+  })
+
+  const productCost = mergeMonthlyMetric({
+    budget: modelLines.budget?.productCost || Array(12).fill(0),
+    real_2026: modelLines.real_2026?.productCost || Array(12).fill(0),
+    real_2025: modelLines.real_2025?.productCost || Array(12).fill(0),
+  })
+  const kitCost = mergeMonthlyMetric({
+    budget: modelLines.budget?.kitCost || Array(12).fill(0),
+    real_2026: modelLines.real_2026?.kitCost || Array(12).fill(0),
+    real_2025: modelLines.real_2025?.kitCost || Array(12).fill(0),
+  })
+  const paymentFee = mergeMonthlyMetric({
+    budget: modelLines.budget?.paymentFee || Array(12).fill(0),
+    real_2026: modelLines.real_2026?.paymentFee || Array(12).fill(0),
+    real_2025: modelLines.real_2025?.paymentFee || Array(12).fill(0),
+  })
+  const bloodDraw = mergeMonthlyMetric({
+    budget: modelLines.budget?.bloodDraw || Array(12).fill(0),
+    real_2026: modelLines.real_2026?.bloodDraw || Array(12).fill(0),
+    real_2025: modelLines.real_2025?.bloodDraw || Array(12).fill(0),
+  })
+  const sanitary = mergeMonthlyMetric({
+    budget: modelLines.budget?.sanitary || Array(12).fill(0),
+    real_2026: modelLines.real_2026?.sanitary || Array(12).fill(0),
+    real_2025: modelLines.real_2025?.sanitary || Array(12).fill(0),
+  })
+  const extCourier = mergeMonthlyMetric({
+    budget: modelLines.budget?.extCourier || Array(12).fill(0),
+    real_2026: modelLines.real_2026?.extCourier || Array(12).fill(0),
+    real_2025: modelLines.real_2025?.extCourier || Array(12).fill(0),
+  })
+  const intCourier = mergeMonthlyMetric({
+    budget: modelLines.budget?.intCourier || Array(12).fill(0),
+    real_2026: modelLines.real_2026?.intCourier || Array(12).fill(0),
+    real_2025: modelLines.real_2025?.intCourier || Array(12).fill(0),
+  })
+  const physiciansFees = mergeMonthlyMetric({
+    budget: modelLines.budget?.physiciansFees || Array(12).fill(0),
+    real_2026: modelLines.real_2026?.physiciansFees || Array(12).fill(0),
+    real_2025: modelLines.real_2025?.physiciansFees || Array(12).fill(0),
+  })
+  const salesCommission = mergeMonthlyMetric({
+    budget: modelLines.budget?.salesCommission || Array(12).fill(0),
+    real_2026: modelLines.real_2026?.salesCommission || Array(12).fill(0),
+    real_2025: modelLines.real_2025?.salesCommission || Array(12).fill(0),
+  })
 
   const totalCOS = Array.from({ length: 12 }, (_, i) =>
     productCost[i] + kitCost[i] + paymentFee[i] + bloodDraw[i] + sanitary[i] +
     extCourier[i] + intCourier[i] + physiciansFees[i] + salesCommission[i]
   )
-  const grossProfit = salesRevenue.map((v, i) => v - totalCOS[i])
+  const grossProfit = mergeMonthlyMetric({
+    budget: modelLines.budget?.grossProfit || Array(12).fill(0),
+    real_2026: modelLines.real_2026?.grossProfit || Array(12).fill(0),
+    real_2025: modelLines.real_2025?.grossProfit || Array(12).fill(0),
+  })
 
-  const sgaMonthly: Record<keyof SGAData, number[]> = Object.fromEntries(
-    SGA_FIELDS.map(({ key }) => [key, sga.map((s) => s[key])])
-  ) as Record<keyof SGAData, number[]>
+  const totalSGA = mergeMonthlyMetric({
+    budget: modelLines.budget?.totalSGA || Array(12).fill(0),
+    real_2026: modelLines.real_2026?.totalSGA || Array(12).fill(0),
+    real_2025: modelLines.real_2025?.totalSGA || Array(12).fill(0),
+  })
 
-  const totalSGA = Array.from({ length: 12 }, (_, i) =>
-    SGA_FIELDS.reduce((s, f) => s + sgaMonthly[f.key][i], 0)
-  )
-
-  const iibbAmount = salesRevenue.map((v, i) => v * (taxRates[i].iibb_pct / 100))
-  const incomeTaxBase = grossProfit.map((v, i) => v - totalSGA[i])
-  const incomeTax = incomeTaxBase.map((v, i) => Math.max(0, v) * (taxRates[i].income_tax_pct / 100))
-  const netIncome = grossProfit.map((v, i) => v - totalSGA[i] - iibbAmount[i] - incomeTax[i])
+  const iibbAmount = mergeMonthlyMetric({
+    budget: modelLines.budget?.iibbAmount || Array(12).fill(0),
+    real_2026: modelLines.real_2026?.iibbAmount || Array(12).fill(0),
+    real_2025: modelLines.real_2025?.iibbAmount || Array(12).fill(0),
+  })
+  const incomeTax = mergeMonthlyMetric({
+    budget: modelLines.budget?.incomeTax || Array(12).fill(0),
+    real_2026: modelLines.real_2026?.incomeTax || Array(12).fill(0),
+    real_2025: modelLines.real_2025?.incomeTax || Array(12).fill(0),
+  })
+  const netIncome = mergeMonthlyMetric({
+    budget: modelLines.budget?.netIncome || Array(12).fill(0),
+    real_2026: modelLines.real_2026?.netIncome || Array(12).fill(0),
+    real_2025: modelLines.real_2025?.netIncome || Array(12).fill(0),
+  })
 
   const periodSum = (arr: number[]) => monthIndices.reduce((s, i) => s + (arr[i] || 0), 0)
   const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0)
@@ -873,21 +1479,48 @@ export function PLTable({ modelo, year, countries, categories, products, channel
     </tr>
   )
 
+  const vCellCls = `${cellCls} text-cyan-200/95`
+  const renderVarianceRow = (label: string, values: (number | null)[]) => {
+    const periodVar = monthIndices.reduce((s, mi) => s + (values[mi] ?? 0), 0)
+    const totalVar = values.reduce((s: number, v) => s + (v ?? 0), 0)
+    return (
+      <tr className="hover:bg-white/5 transition-colors bg-slate-900/25">
+        <td className={stickyLabel()}>
+          <span className="ml-2 text-xs font-medium text-cyan-100/90">{label}</span>
+        </td>
+        {monthIndices.map((mi) => {
+          const v = values[mi]
+          return (
+            <td
+              key={mi}
+              className={`${vCellCls} ${v != null && v < 0 ? "text-rose-300" : v != null && v > 0 ? "text-emerald-300/90" : ""}`}
+            >
+              {v == null ? "—" : fmt(v)}
+            </td>
+          )
+        })}
+        <td className={`${vCellCls} border-l border-white/10`}>{fmt(periodVar)}</td>
+        <td className={vCellCls}>{fmt(totalVar)}</td>
+      </tr>
+    )
+  }
+
   // Booleans del desglose según filas expandidas (independientes).
   const zero12 = Array.from({ length: 12 }, () => 0)
 
   const showGrossSalesAndDiscount =
     expandedSalesRevenue || expandedGrossProfit || expandedNetIncome
   const showCostOfSales = expandedGrossProfit || expandedNetIncome
-  const showSGAFields = financialEnabled && (expandedSGA || expandedNetIncome)
-  const showTaxRows = financialEnabled && expandedNetIncome
+  // En modo combinar, deshabilitamos desglose editable por campo (SGA/tasas) porque el modelo puede cambiar por mes.
+  const showSGAFields = !combineEnabled && financialEnabled && (expandedSGA || expandedNetIncome)
+  const showTaxRows = !combineEnabled && financialEnabled && expandedNetIncome
 
   // ── Loading ───────────────────────────────────────────────────────────────
 
-  if (loading) {
+  if (loading || (combineEnabled && !combineReady)) {
     return (
       <div className="flex items-center justify-center py-20 text-white/60 text-sm">
-        Cargando datos...
+        {combineError ? `Error en combinar: ${combineError}` : "Cargando datos..."}
       </div>
     )
   }
@@ -932,9 +1565,23 @@ export function PLTable({ modelo, year, countries, categories, products, channel
               {monthIndices.map((i) => (
                 <th
                   key={i}
-                  className="px-2 py-2.5 text-right text-xs font-semibold min-w-[72px] text-white"
+                  className="px-2 py-2.5 text-right text-xs font-semibold min-w-[92px] text-white"
                 >
-                  {SHORT_LABELS[i]}
+                  <div className="flex flex-col items-end gap-1">
+                    <span>{SHORT_LABELS[i]}</span>
+                    {combineEnabled && (
+                      <select
+                        value={effectiveMonthModels[i]}
+                        onChange={(e) => onMonthModelChange?.(i, e.target.value as MonthModel)}
+                        className="h-7 w-[86px] rounded-md border border-white/20 bg-white/10 px-2 text-[11px] text-white"
+                        title="Modelo del mes"
+                      >
+                        <option value="budget" className="bg-blue-900 text-white">Budget</option>
+                        <option value="real_2026" className="bg-blue-900 text-white">Real 2026</option>
+                        <option value="real_2025" className="bg-blue-900 text-white">Real 2025</option>
+                      </select>
+                    )}
+                  </div>
                 </th>
               ))}
                 <th className="px-2 py-2.5 text-right text-xs font-semibold text-blue-300 min-w-[80px] border-l border-white/20">
