@@ -28,8 +28,8 @@ interface PLTableProps {
   /** Si está activo, cada mes puede mostrar un modelo distinto. */
   combineEnabled?: boolean
   /** Modelo por mes (0..11). Solo se usa si combineEnabled. */
-  monthModels?: ("budget" | "real_2026" | "real_2025")[]
-  onMonthModelChange?: (monthIdx0Based: number, model: "budget" | "real_2026" | "real_2025") => void
+  monthModels?: ("real_2026" | "real_2025" | `budget:${string}`)[]
+  onMonthModelChange?: (monthIdx0Based: number, model: "real_2026" | "real_2025" | `budget:${string}`) => void
 }
 
 interface OverrideData {
@@ -212,9 +212,9 @@ export function PLTable({
   const endIndex = Math.min(Math.max(Math.max(monthFrom, monthTo) - 1, 0), 11)
   const monthIndices = Array.from({ length: endIndex - startIndex + 1 }, (_, k) => startIndex + k)
 
-  type MonthModel = "budget" | "real_2026" | "real_2025"
+  type MonthModel = "real_2026" | "real_2025" | `budget:${string}`
   const baseMonthModel: MonthModel =
-    modelo === "budget" ? "budget" : (year === 2025 ? "real_2025" : "real_2026")
+    modelo === "budget" ? `budget:${budgetName}` : (year === 2025 ? "real_2025" : "real_2026")
   const effectiveMonthModels: MonthModel[] =
     (monthModels && monthModels.length === 12 ? monthModels : Array(12).fill(baseMonthModel)) as MonthModel[]
 
@@ -442,13 +442,13 @@ export function PLTable({
         const neededModels = new Set<MonthModel>(effectiveMonthModels)
         const snapshots: Partial<Record<MonthModel, ModelSnapshot>> = {}
 
-        const fetchBudgetSnapshot = async (): Promise<ModelSnapshot> => {
+        const fetchBudgetSnapshot = async (forBudgetName: string): Promise<ModelSnapshot> => {
           // Budget rows (unidades) filtradas
           let q = supabase
             .from("budget")
             .select("product_id, product_name, jan,feb,mar,apr,may,jun,jul,aug,sep,oct,nov,dec, channel, country_code")
             .eq("year", year)
-            .eq("budget_name", budgetName)
+            .eq("budget_name", forBudgetName)
           if (countries.length) q = q.in("country_code", countries)
           if (products.length > 0) q = q.in("product_name", products)
           if (channels.length) q = q.in("channel", channels)
@@ -514,7 +514,7 @@ export function PLTable({
           }
 
           const [tax, sga] = await Promise.all([fetchTaxesFor("budget", year), fetchSGAFor("budget", year)])
-          return { model: "budget", budgetRows: rowsForBudget, budgetOverrides: ovs, tax, sga }
+          return { model: `budget:${forBudgetName}`, budgetRows: rowsForBudget, budgetOverrides: ovs, tax, sga }
         }
 
         const fetchRealSnapshot = async (m: "real_2026" | "real_2025"): Promise<ModelSnapshot> => {
@@ -598,9 +598,14 @@ export function PLTable({
 
         // Fetch in parallel (tolerante a fallos: no colgar en "Cargando datos...")
         const taskList: { model: MonthModel; promise: Promise<ModelSnapshot> }[] = []
-        if (neededModels.has("budget")) taskList.push({ model: "budget", promise: fetchBudgetSnapshot() })
-        if (neededModels.has("real_2026")) taskList.push({ model: "real_2026", promise: fetchRealSnapshot("real_2026") })
-        if (neededModels.has("real_2025")) taskList.push({ model: "real_2025", promise: fetchRealSnapshot("real_2025") })
+        for (const m of neededModels) {
+          if (m === "real_2026") taskList.push({ model: m, promise: fetchRealSnapshot("real_2026") })
+          else if (m === "real_2025") taskList.push({ model: m, promise: fetchRealSnapshot("real_2025") })
+          else if (m.startsWith("budget:")) {
+            const forName = m.slice("budget:".length)
+            taskList.push({ model: m, promise: fetchBudgetSnapshot(forName) })
+          }
+        }
 
         const settled = await Promise.allSettled(taskList.map((t) => t.promise))
         const failures: string[] = []
@@ -1018,7 +1023,7 @@ export function PLTable({
       const m = effectiveMonthModels[i]
       const snap = combinedSnapshots[m]
       if (!snap) return 0
-      if (m === "budget") {
+      if (m.startsWith("budget:")) {
         return (snap.budgetRows || []).reduce((s, row) => s + Number((row as any)[MONTH_KEYS[i] as any] || 0), 0)
       }
       return Object.values(snap.quantities || {}).reduce((s, arr) => s + (arr[i] || 0), 0)
@@ -1036,7 +1041,7 @@ export function PLTable({
     return Object.values(quantities).reduce((s, arr) => s + (arr[i] || 0), 0)
   })
 
-  const mergeMonthlyMetric = (perModel: Record<MonthModel, number[]>): number[] => {
+  const mergeMonthlyMetric = (perModel: Record<string, number[]>): number[] => {
     return Array.from({ length: 12 }, (_, i) => {
       const m = combineEnabled ? effectiveMonthModels[i] : baseMonthModel
       return (perModel[m] || Array(12).fill(0))[i] || 0
@@ -1044,7 +1049,7 @@ export function PLTable({
   }
 
   const computeAllModelLines = () => {
-    const out: Partial<Record<MonthModel, ReturnType<typeof computeNetIncomeChain> & {
+    const out: Partial<Record<string, ReturnType<typeof computeNetIncomeChain> & {
       grossSales: number[]
       commercialDiscount: number[]
       productCost: number[]
@@ -1063,7 +1068,7 @@ export function PLTable({
       const snap = combineEnabled ? combinedSnapshots[m] : null
       if (combineEnabled && !snap) continue
 
-      if (m === "budget") {
+      if (m.startsWith("budget:")) {
         const rows = combineEnabled ? (snap!.budgetRows || []) : (budgetRows || [])
         const ovs = combineEnabled ? (snap!.budgetOverrides || {}) : (budgetOverrides || {})
         const sgaArr = combineEnabled ? snap!.sga : sga
@@ -1158,104 +1163,35 @@ export function PLTable({
       }
     }
 
-    return out as Record<MonthModel, (ReturnType<typeof computeNetIncomeChain> & any)>
+    return out as Record<string, (ReturnType<typeof computeNetIncomeChain> & any)>
   }
 
   const modelLines = computeAllModelLines()
 
-  const grossSales = mergeMonthlyMetric({
-    budget: modelLines.budget?.grossSales || Array(12).fill(0),
-    real_2026: modelLines.real_2026?.grossSales || Array(12).fill(0),
-    real_2025: modelLines.real_2025?.grossSales || Array(12).fill(0),
-  })
-  const commercialDiscount = mergeMonthlyMetric({
-    budget: modelLines.budget?.commercialDiscount || Array(12).fill(0),
-    real_2026: modelLines.real_2026?.commercialDiscount || Array(12).fill(0),
-    real_2025: modelLines.real_2025?.commercialDiscount || Array(12).fill(0),
-  })
-  const salesRevenue = mergeMonthlyMetric({
-    budget: modelLines.budget?.salesRevenue || Array(12).fill(0),
-    real_2026: modelLines.real_2026?.salesRevenue || Array(12).fill(0),
-    real_2025: modelLines.real_2025?.salesRevenue || Array(12).fill(0),
-  })
+  const grossSales = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.grossSales])) as Record<string, number[]>)
+  const commercialDiscount = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.commercialDiscount])) as Record<string, number[]>)
+  const salesRevenue = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.salesRevenue])) as Record<string, number[]>)
 
-  const productCost = mergeMonthlyMetric({
-    budget: modelLines.budget?.productCost || Array(12).fill(0),
-    real_2026: modelLines.real_2026?.productCost || Array(12).fill(0),
-    real_2025: modelLines.real_2025?.productCost || Array(12).fill(0),
-  })
-  const kitCost = mergeMonthlyMetric({
-    budget: modelLines.budget?.kitCost || Array(12).fill(0),
-    real_2026: modelLines.real_2026?.kitCost || Array(12).fill(0),
-    real_2025: modelLines.real_2025?.kitCost || Array(12).fill(0),
-  })
-  const paymentFee = mergeMonthlyMetric({
-    budget: modelLines.budget?.paymentFee || Array(12).fill(0),
-    real_2026: modelLines.real_2026?.paymentFee || Array(12).fill(0),
-    real_2025: modelLines.real_2025?.paymentFee || Array(12).fill(0),
-  })
-  const bloodDraw = mergeMonthlyMetric({
-    budget: modelLines.budget?.bloodDraw || Array(12).fill(0),
-    real_2026: modelLines.real_2026?.bloodDraw || Array(12).fill(0),
-    real_2025: modelLines.real_2025?.bloodDraw || Array(12).fill(0),
-  })
-  const sanitary = mergeMonthlyMetric({
-    budget: modelLines.budget?.sanitary || Array(12).fill(0),
-    real_2026: modelLines.real_2026?.sanitary || Array(12).fill(0),
-    real_2025: modelLines.real_2025?.sanitary || Array(12).fill(0),
-  })
-  const extCourier = mergeMonthlyMetric({
-    budget: modelLines.budget?.extCourier || Array(12).fill(0),
-    real_2026: modelLines.real_2026?.extCourier || Array(12).fill(0),
-    real_2025: modelLines.real_2025?.extCourier || Array(12).fill(0),
-  })
-  const intCourier = mergeMonthlyMetric({
-    budget: modelLines.budget?.intCourier || Array(12).fill(0),
-    real_2026: modelLines.real_2026?.intCourier || Array(12).fill(0),
-    real_2025: modelLines.real_2025?.intCourier || Array(12).fill(0),
-  })
-  const physiciansFees = mergeMonthlyMetric({
-    budget: modelLines.budget?.physiciansFees || Array(12).fill(0),
-    real_2026: modelLines.real_2026?.physiciansFees || Array(12).fill(0),
-    real_2025: modelLines.real_2025?.physiciansFees || Array(12).fill(0),
-  })
-  const salesCommission = mergeMonthlyMetric({
-    budget: modelLines.budget?.salesCommission || Array(12).fill(0),
-    real_2026: modelLines.real_2026?.salesCommission || Array(12).fill(0),
-    real_2025: modelLines.real_2025?.salesCommission || Array(12).fill(0),
-  })
+  const productCost = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.productCost])) as Record<string, number[]>)
+  const kitCost = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.kitCost])) as Record<string, number[]>)
+  const paymentFee = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.paymentFee])) as Record<string, number[]>)
+  const bloodDraw = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.bloodDraw])) as Record<string, number[]>)
+  const sanitary = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.sanitary])) as Record<string, number[]>)
+  const extCourier = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.extCourier])) as Record<string, number[]>)
+  const intCourier = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.intCourier])) as Record<string, number[]>)
+  const physiciansFees = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.physiciansFees])) as Record<string, number[]>)
+  const salesCommission = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.salesCommission])) as Record<string, number[]>)
 
   const totalCOS = Array.from({ length: 12 }, (_, i) =>
     productCost[i] + kitCost[i] + paymentFee[i] + bloodDraw[i] + sanitary[i] +
     extCourier[i] + intCourier[i] + physiciansFees[i] + salesCommission[i]
   )
-  const grossProfit = mergeMonthlyMetric({
-    budget: modelLines.budget?.grossProfit || Array(12).fill(0),
-    real_2026: modelLines.real_2026?.grossProfit || Array(12).fill(0),
-    real_2025: modelLines.real_2025?.grossProfit || Array(12).fill(0),
-  })
+  const grossProfit = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.grossProfit])) as Record<string, number[]>)
 
-  const totalSGA = mergeMonthlyMetric({
-    budget: modelLines.budget?.totalSGA || Array(12).fill(0),
-    real_2026: modelLines.real_2026?.totalSGA || Array(12).fill(0),
-    real_2025: modelLines.real_2025?.totalSGA || Array(12).fill(0),
-  })
-
-  const iibbAmount = mergeMonthlyMetric({
-    budget: modelLines.budget?.iibbAmount || Array(12).fill(0),
-    real_2026: modelLines.real_2026?.iibbAmount || Array(12).fill(0),
-    real_2025: modelLines.real_2025?.iibbAmount || Array(12).fill(0),
-  })
-  const incomeTax = mergeMonthlyMetric({
-    budget: modelLines.budget?.incomeTax || Array(12).fill(0),
-    real_2026: modelLines.real_2026?.incomeTax || Array(12).fill(0),
-    real_2025: modelLines.real_2025?.incomeTax || Array(12).fill(0),
-  })
-  const netIncome = mergeMonthlyMetric({
-    budget: modelLines.budget?.netIncome || Array(12).fill(0),
-    real_2026: modelLines.real_2026?.netIncome || Array(12).fill(0),
-    real_2025: modelLines.real_2025?.netIncome || Array(12).fill(0),
-  })
+  const totalSGA = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.totalSGA])) as Record<string, number[]>)
+  const iibbAmount = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.iibbAmount])) as Record<string, number[]>)
+  const incomeTax = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.incomeTax])) as Record<string, number[]>)
+  const netIncome = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.netIncome])) as Record<string, number[]>)
 
   // Solo se usa para mostrar el detalle por campo cuando no estamos combinando.
   const sgaMonthly: Record<keyof SGAData, number[]> = Object.fromEntries(
@@ -1607,16 +1543,29 @@ export function PLTable({
                 {monthIndices.map((i) => {
                   const v = totalUnits[i] ?? 0
                   return (
-                    <td key={i} className={`${cellCls} font-bold ${v > 0 ? "text-blue-200" : "text-white/25"}`}>
-                      {v > 0 ? formatNumber(v, "es-AR") : "-"}
+                    <td
+                      key={i}
+                      className={`${cellCls} font-bold ${
+                        v > 0 ? "text-blue-200" : v < 0 ? "text-rose-300" : "text-white/25"
+                      }`}
+                    >
+                      {v !== 0 ? formatNumber(v, "es-AR") : "-"}
                     </td>
                   )
                 })}
-                <td className={`${cellCls} font-bold text-blue-200 border-l border-white/10`}>
-                  {formatNumber(periodSum(totalUnits), "es-AR") || "-"}
+                <td
+                  className={`${cellCls} font-bold border-l border-white/10 ${
+                    periodSum(totalUnits) > 0 ? "text-blue-200" : periodSum(totalUnits) < 0 ? "text-rose-300" : "text-white/25"
+                  }`}
+                >
+                  {periodSum(totalUnits) !== 0 ? formatNumber(periodSum(totalUnits), "es-AR") : "-"}
                 </td>
-                <td className={`${cellCls} font-bold text-blue-200`}>
-                  {formatNumber(sum(totalUnits), "es-AR") || "-"}
+                <td
+                  className={`${cellCls} font-bold ${
+                    sum(totalUnits) > 0 ? "text-blue-200" : sum(totalUnits) < 0 ? "text-rose-300" : "text-white/25"
+                  }`}
+                >
+                  {sum(totalUnits) !== 0 ? formatNumber(sum(totalUnits), "es-AR") : "-"}
                 </td>
               </tr>
 
@@ -1954,7 +1903,12 @@ export function PLTable({
                               {monthIndices.map((i) => {
                                 const v = qtArr[i] || 0
                                 return (
-                                <td key={i} className={`px-2 py-2 text-right text-xs tabular-nums ${v > 0 ? "text-white/80 font-medium" : "text-white/25"}`}>
+                                <td
+                                  key={i}
+                                  className={`px-2 py-2 text-right text-xs tabular-nums ${
+                                    v > 0 ? "text-white/80 font-medium" : v < 0 ? "text-rose-300 font-medium" : "text-white/25"
+                                  }`}
+                                >
                                   {testMode ? (
                                     <input
                                       type="number"
@@ -1973,7 +1927,7 @@ export function PLTable({
                                       }}
                                     />
                                   ) : (
-                                    v > 0 ? v : "-"
+                                    v !== 0 ? v : "-"
                                   )}
                                 </td>
                                 )
@@ -1985,7 +1939,7 @@ export function PLTable({
                           )}
                           {detailMonth === null && (
                             <td className="px-2 py-2 text-right text-xs text-blue-300 tabular-nums font-medium">
-                              {totalGS > 0 ? `$${formatNumber(totalGS, "es-AR", { maximumFractionDigits: 0 })}` : "-"}
+                              {totalGS !== 0 ? `$${formatNumber(totalGS, "es-AR", { maximumFractionDigits: 0 })}` : "-"}
                             </td>
                           )}
                         </tr>
@@ -2008,7 +1962,10 @@ export function PLTable({
                       <>
                         {monthIndices.map((i) => (
                           <td key={i} className="px-2 py-2 text-right text-xs font-bold text-white tabular-nums">
-                            {Object.values(activeQuantities).reduce((s, arr) => s + (arr[i] || 0), 0) || "-"}
+                            {(() => {
+                              const v = Object.values(activeQuantities).reduce((s, arr) => s + (arr[i] || 0), 0)
+                              return v !== 0 ? v : "-"
+                            })()}
                           </td>
                         ))}
                         <td className="px-2 py-2 text-right text-xs font-bold text-white tabular-nums border-l border-white/10">

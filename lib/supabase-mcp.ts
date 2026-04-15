@@ -884,11 +884,22 @@ export async function getMonthlySales(
   }
   if (!sales) return []
 
-  const saleProductNames = [...new Set((sales as { producto: string }[]).map((s) => s.producto).filter(Boolean))]
+  // Normalizar tipos: en Postgres `numeric` puede llegar como string.
+  // Con devoluciones, `cantidad_ventas` pasa a ser SUM(quantity) (numeric), no COUNT(*).
+  const normalizedSales = (sales as any[]).map((row) => ({
+    ...row,
+    mes: typeof row.mes === "string" ? parseInt(row.mes, 10) : row.mes,
+    año: typeof row.año === "string" ? parseInt(row.año, 10) : row.año,
+    cantidad_ventas: Number(row.cantidad_ventas || 0),
+    monto_total: row.monto_total == null ? null : Number(row.monto_total || 0),
+    precio_promedio: row.precio_promedio == null ? null : Number(row.precio_promedio || 0),
+  }))
+
+  const saleProductNames = [...new Set((normalizedSales as { producto: string }[]).map((s) => s.producto).filter(Boolean))]
   const ventasTestToProductId = await fetchProductIdMapFromVentasTable(saleProductNames)
   
   // Debug: verificar resultados
-  console.log(`📊 getMonthlySales: ${sales.length} ventas para ${normalizedCompany} - ${periodo || 'todos los períodos'}`)
+  console.log(`📊 getMonthlySales: ${normalizedSales.length} ventas para ${normalizedCompany} - ${periodo || 'todos los períodos'}`)
 
   // Obtener productos para hacer join
   const { data: products } = await supabase
@@ -896,7 +907,7 @@ export async function getMonthlySales(
     .select('id, name, alias, category, tipo')
 
   const productIdsForOverrides = collectProductIdsFromSaleRows(
-    sales as { producto: string }[],
+    normalizedSales as { producto: string }[],
     products || [],
     ventasTestToProductId
   )
@@ -919,7 +930,7 @@ export async function getMonthlySales(
 
   if (shouldAggregateCompanies) {
     // Agrupar por producto
-    const groupedByProduct = sales.reduce((acc: any, sale: any) => {
+    const groupedByProduct = normalizedSales.reduce((acc: any, sale: any) => {
       const productKey = sale.producto
       if (!acc[productKey]) {
         acc[productKey] = {
@@ -977,7 +988,7 @@ export async function getMonthlySales(
   }
   
   // Si no es "Todas las compañías", comportamiento normal
-  return sales.map((sale: MonthlySales) => {
+  return (normalizedSales as MonthlySales[]).map((sale: MonthlySales) => {
     const product = resolveProductForSale(products || [], sale.producto, ventasTestToProductId)
     const saleCompany = sale.compañia
     const saleCountryCode = companyToCountry[saleCompany] || 'UY'
@@ -1103,13 +1114,20 @@ export async function getAnnualTotal(
   if (error) throw error
   if (!sales) return []
 
+  const normalizedSales = (sales as any[]).map((row) => ({
+    ...row,
+    año: typeof row.año === "string" ? parseInt(row.año, 10) : row.año,
+    cantidad_ventas: Number(row.cantidad_ventas || 0),
+    monto_total: row.monto_total == null ? null : Number(row.monto_total || 0),
+  })) as any[]
+
   const isAllCompanies = !aggregateMultiCompanies && isAllCompaniesLabel(normalizedCompany)
   const shouldAggregateCompanies = isAllCompanies || aggregateMultiCompanies
   type SaleRow = { producto: string; compañia: string; cantidad_ventas: number; monto_total: number | null; año: number }
   type CompanyBreakdownItem = { compañia: string; cantidad_ventas: number; monto_total: number | null }
 
   // Agregar por producto y año (para mostrar totales correctos por caja anual)
-  const aggregated = sales.reduce((acc: MonthlySalesWithProduct[], sale: SaleRow) => {
+  const aggregated = normalizedSales.reduce((acc: MonthlySalesWithProduct[], sale: SaleRow) => {
     const existing = acc.find((item: MonthlySalesWithProduct) => item.producto === sale.producto && item.año === sale.año)
     if (existing) {
       existing.cantidad_ventas += sale.cantidad_ventas

@@ -36,7 +36,7 @@ const selectClass =
   "w-full bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-white/30"
 
 type Option = { value: string; label: string }
-type MonthModel = "budget" | "real_2026" | "real_2025"
+type ModelKey = "real_2026" | "real_2025" | `budget:${string}`
 
 function MultiCheckboxDropdown({
   label,
@@ -133,10 +133,9 @@ function MultiCheckboxDropdown({
 
 export default function PLPage() {
   const { allowedCountries, isAdmin, canEdit, loading: permLoading } = usePermissions()
-  const [modelo, setModelo] = useState<"budget" | "real_2026" | "real_2025">("budget")
+  const [modelKey, setModelKey] = useState<ModelKey>("budget:budget")
   const [combineEnabled, setCombineEnabled] = useState(false)
-  const [monthModels, setMonthModels] = useState<MonthModel[]>(Array(12).fill("budget"))
-  const [selectedBudgetName, setSelectedBudgetName] = useState<string>("budget")
+  const [monthModels, setMonthModels] = useState<ModelKey[]>(Array(12).fill("budget:budget"))
   const [budgetNames, setBudgetNames] = useState<string[]>(["budget"])
   // Arrays con multi-selección: si elegís "Todos", guardamos todos los valores posibles.
   const [selectedCountries, setSelectedCountries] = useState<string[]>([])
@@ -147,7 +146,10 @@ export default function PLPage() {
   const [monthFrom, setMonthFrom] = useState<number>(1)
   const [monthTo, setMonthTo] = useState<number>(12)
   const [testMode, setTestMode] = useState<boolean>(false)
-  const year = modelo === "real_2025" ? 2025 : 2026
+  const isBudgetModel = modelKey.startsWith("budget:")
+  const selectedBudgetName = isBudgetModel ? modelKey.slice("budget:".length) : "budget"
+  const year = modelKey === "real_2025" ? 2025 : 2026
+  const budgetYear = 2026
 
   const allowedCountryCodes = useMemo(
     () => (isAdmin ? [...BASE_COUNTRIES.map((c) => c.code)] : allowedCountries),
@@ -164,20 +166,19 @@ export default function PLPage() {
     fetchBudgetNames()
     fetchProducts()
     setProductsSelected([])
-  }, [selectedCountries, selectedCategories, modelo, year, selectedBudgetName])
+  }, [selectedCountries, selectedCategories, modelKey, year, selectedBudgetName])
 
   // Inicializar el mapeo por mes cuando se activa "Combinar"
   useEffect(() => {
     if (!combineEnabled) return
-    setMonthModels(Array(12).fill(modelo))
+    setMonthModels(Array(12).fill(modelKey))
     // En modo combinar, el "Test" no aplica (mezcla varios modelos).
     setTestMode(false)
-  }, [combineEnabled])
+  }, [combineEnabled, modelKey])
 
   const fetchBudgetNames = async () => {
-    if (modelo !== "budget") return
     try {
-      let q = supabase.from("budget").select("budget_name").eq("year", year)
+      let q = supabase.from("budget").select("budget_name").eq("year", budgetYear)
       if (selectedCountries.length) q = q.in("country_code", selectedCountries)
       const { data } = await q
       const rows = (data ?? []) as any[]
@@ -188,18 +189,22 @@ export default function PLPage() {
       )].sort()
       const finalNames: string[] = names.length ? names : ["budget"]
       setBudgetNames(finalNames)
-      setSelectedBudgetName((prev) => (finalNames.includes(prev) ? prev : finalNames[0]))
+      // Si el modelo actual es budget y el nombre ya no existe, saltar al primero disponible.
+      if (isBudgetModel) {
+        const nextName = finalNames.includes(selectedBudgetName) ? selectedBudgetName : finalNames[0]
+        setModelKey(`budget:${nextName}`)
+      }
     } catch (e) {
       console.error("Error fetching budget names:", e)
       setBudgetNames(["budget"])
-      setSelectedBudgetName("budget")
+      if (isBudgetModel) setModelKey("budget:budget")
     }
   }
 
   const fetchProducts = async () => {
     try {
-      if (modelo === "budget") {
-        let q = supabase.from("budget").select("product_name").eq("year", year)
+      if (isBudgetModel) {
+        let q = supabase.from("budget").select("product_name").eq("year", budgetYear)
         q = q.eq("budget_name", selectedBudgetName)
         if (selectedCountries.length) q = q.in("country_code", selectedCountries)
         const { data } = await q
@@ -267,39 +272,23 @@ export default function PLPage() {
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-white/90">Modelo</label>
               <Select
-                value={modelo}
-                onChange={(e) => setModelo(e.target.value as "budget" | "real_2026" | "real_2025")}
+                value={modelKey}
+                onChange={(e) => setModelKey(e.target.value as ModelKey)}
                 className={selectClass}
               >
-                <option value="budget" className="bg-blue-900 text-white">
-                  Budget
-                </option>
                 <option value="real_2026" className="bg-blue-900 text-white">
                   Real 2026
                 </option>
                 <option value="real_2025" className="bg-blue-900 text-white">
                   Real 2025
                 </option>
+                {budgetNames.map((n) => (
+                  <option key={n} value={`budget:${n}`} className="bg-blue-900 text-white">
+                    Budget: {n}
+                  </option>
+                ))}
               </Select>
             </div>
-
-            {/* Budget name (solo en modo budget) */}
-            {modelo === "budget" && (
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-white/90">Budget</label>
-                <Select
-                  value={selectedBudgetName}
-                  onChange={(e) => setSelectedBudgetName(e.target.value)}
-                  className={selectClass}
-                >
-                  {budgetNames.map((n) => (
-                    <option key={n} value={n} className="bg-blue-900 text-white">
-                      {n}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            )}
 
             {/* Compañía (multi) */}
             <MultiCheckboxDropdown
@@ -408,8 +397,8 @@ export default function PLPage() {
         {/* P&L Table: no montar hasta tener compañías — evita fetch con countries=[] y carga colgada */}
         {plDataReady ? (
           <PLTable
-            key={`${countriesForUI.slice().sort().join(",")}-${modelo}-${year}`}
-            modelo={modelo === "budget" ? "budget" : "real"}
+            key={`${countriesForUI.slice().sort().join(",")}-${modelKey}-${year}`}
+            modelo={isBudgetModel ? "budget" : "real"}
             year={year}
             countries={countriesForUI}
             categories={selectedCategories}
@@ -422,8 +411,8 @@ export default function PLPage() {
             budgetName={selectedBudgetName}
             combineEnabled={combineEnabled}
             monthModels={monthModels}
-            onMonthModelChange={(monthIdx0, nextModel) => {
-              setMonthModels((prev) => prev.map((m, i) => (i === monthIdx0 ? nextModel : m)))
+            onMonthModelChange={(monthIdx0, nextKey) => {
+              setMonthModels((prev) => prev.map((m, i) => (i === monthIdx0 ? nextKey : m)))
             }}
           />
         ) : permLoading ? (
