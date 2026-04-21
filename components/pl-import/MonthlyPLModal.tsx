@@ -91,8 +91,8 @@ export function MonthlyPLModal({
         const cantidad = product.cantidad_ventas
         const overrides = product.overrides || {}
 
-        // Sumar cada concepto multiplicado por la cantidad
-        totals.grossSalesUSD += (overrides.grossSalesUSD || 0) * cantidad
+        // Gross Sales real (Odoo): usar el monto importado desde Odoo (monto_total/amount)
+        totals.grossSalesUSD += Number(product.monto_total || 0)
         totals.commercialDiscountUSD += (overrides.commercialDiscountUSD || 0) * cantidad
         totals.productCostUSD += (overrides.productCostUSD || 0) * cantidad
         totals.kitCostUSD += (overrides.kitCostUSD || 0) * cantidad

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback, type ReactNode } from "react"
+import { useEffect, useState, useCallback, useMemo, type ReactNode } from "react"
 import { supabase } from "@/lib/supabase"
 import { ChevronDown, ChevronRight, Plus, Table2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -164,6 +164,8 @@ export function PLTable({
 }: PLTableProps) {
   const [loading, setLoading] = useState(true)
   const [quantities, setQuantities] = useState<Record<string, number[]>>({})
+  // Real-only: monto_total (Odoo) agregado por producto y mes (incluye devoluciones si vienen negativas)
+  const [odooAmounts, setOdooAmounts] = useState<Record<string, number[]>>({})
   const [productCategories, setProductCategories] = useState<Record<string, string>>({})
   const [productAliases, setProductAliases] = useState<Record<string, string>>({})
   const [overrides, setOverrides] = useState<Record<string, OverrideData>>({})
@@ -225,6 +227,7 @@ export function PLTable({
     budgetOverrides?: Record<string, OverrideData>
     // Real data
     quantities?: Record<string, number[]>
+    odooAmounts?: Record<string, number[]>
     overrides?: Record<string, OverrideData>
     // Shared
     sga: SGAData[]
@@ -235,6 +238,26 @@ export function PLTable({
   const [combineError, setCombineError] = useState<string | null>(null)
   const neededMonthModels = Array.from(new Set(effectiveMonthModels))
   const combineReady = !combineEnabled || neededMonthModels.every((m) => Boolean(combinedSnapshots[m]))
+
+  // Mapeo (normalizado) de texto de ventas/budget -> nombre canónico del catálogo.
+  // Evita duplicados en detalle cuando Odoo/budget usan alias/apodos o variantes.
+  const catalogKeyToName = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const name of Object.keys(productCategories)) {
+      const nk = normalizeProductKey(name)
+      if (nk) m.set(nk, name)
+      const alias = productAliases[name]
+      const ak = normalizeProductKey(alias || "")
+      if (ak) m.set(ak, name)
+    }
+    return m
+  }, [productCategories, productAliases])
+
+  const resolveToCatalogName = useCallback((raw: string) => {
+    const trimmed = String(raw || "").trim()
+    if (!trimmed) return ""
+    return catalogKeyToName.get(normalizeProductKey(trimmed)) || trimmed
+  }, [catalogKeyToName])
 
   const computeNetIncomeChain = (
     grossSales: number[],
@@ -351,6 +374,12 @@ export function PLTable({
     )
   }
 
+  const computeMonthlyRealGrossSalesFromOdoo = (amounts: Record<string, number[]>): number[] => {
+    return Array.from({ length: 12 }, (_, i) =>
+      Object.values(amounts).reduce((s, arr) => s + (arr[i] || 0), 0)
+    )
+  }
+
   const computeMonthlyBudgetField = (
     rows: Record<string, unknown>[],
     ovs: Record<string, OverrideData>,
@@ -429,6 +458,7 @@ export function PLTable({
     try {
       if (countries.length === 0) {
         setQuantities({})
+        setOdooAmounts({})
         setBudgetRows([])
         setOverrides({})
         setBudgetOverrides({})
@@ -521,38 +551,52 @@ export function PLTable({
           const forYear = m === "real_2025" ? 2025 : 2026
           // Quantities
           const qtys: Record<string, number[]> = {}
+          const amts: Record<string, number[]> = {}
           const cats: Record<string, string> = {}
           const aliases: Record<string, string> = {}
+          const saleKeyToCatalogName = new Map<string, string>()
           const { data: allProds } = await supabase.from("products").select("name, category, alias")
           for (const p of allProds || []) {
-            cats[(p as any).name] = (p as any).category || ""
-            aliases[(p as any).name] = (p as any).alias || ""
+            const name = String((p as any).name || "")
+            const alias = String((p as any).alias || "")
+            cats[name] = (p as any).category || ""
+            aliases[name] = alias || ""
+            const nameKey = normalizeProductKey(name)
+            if (nameKey) saleKeyToCatalogName.set(nameKey, name)
+            const aliasKey = normalizeProductKey(alias)
+            if (aliasKey) saleKeyToCatalogName.set(aliasKey, name)
           }
 
           const companies = countries.flatMap((c) => COUNTRY_TO_COMPANIES[c] || [])
           if (companies.length) {
             const { data } = await supabase
               .from("ventas_mensuales_view")
-              .select("producto, mes, cantidad_ventas, compañia")
+              .select("producto, mes, cantidad_ventas, monto_total, compañia")
               .eq("año", forYear)
               .in("compañia", companies)
 
             const categorySet = shouldFilterCategories ? categoriesSet : null
             const selectedProductKeys = new Set((products || []).map((p) => normalizeProductKey(p)))
             for (const row of (data || []) as any[]) {
-              const name = row.producto as string
-              if (!name) continue
-              if (selectedProductKeys.size > 0 && !selectedProductKeys.has(normalizeProductKey(name))) continue
+              const rawName = row.producto as string
+              if (!rawName) continue
+              const resolvedName = saleKeyToCatalogName.get(normalizeProductKey(rawName)) || rawName
+              if (selectedProductKeys.size > 0 && !selectedProductKeys.has(normalizeProductKey(resolvedName))) continue
               if (categorySet) {
-                const knownCategory = cats[name]
+                const knownCategory = cats[resolvedName]
                 if (knownCategory && !categorySet.has(knownCategory)) continue
               }
-              if (!qtys[name]) qtys[name] = Array(12).fill(0)
+              if (!qtys[resolvedName]) qtys[resolvedName] = Array(12).fill(0)
+              if (!amts[resolvedName]) amts[resolvedName] = Array(12).fill(0)
               const mIdx = Number(row.mes) - 1
-              if (mIdx >= 0 && mIdx < 12) qtys[name][mIdx] += Number(row.cantidad_ventas || 0)
+              if (mIdx >= 0 && mIdx < 12) {
+                qtys[resolvedName][mIdx] += Number(row.cantidad_ventas || 0)
+                amts[resolvedName][mIdx] += Number(row.monto_total || 0)
+              }
             }
             if (channels.length > 0 && !channels.includes("Paciente")) {
               for (const k of Object.keys(qtys)) qtys[k] = Array(12).fill(0)
+              for (const k of Object.keys(amts)) amts[k] = Array(12).fill(0)
             }
           }
 
@@ -593,7 +637,7 @@ export function PLTable({
 
           const [tax, sga] = await Promise.all([fetchTaxesFor("real", forYear), fetchSGAFor("real", forYear)])
           // Reutilizamos categorías/alias del modelo base para UI (ya se cargan en el path normal).
-          return { model: m, quantities: qtys, overrides: ovs, tax, sga }
+          return { model: m, quantities: qtys, odooAmounts: amts, overrides: ovs, tax, sga }
         }
 
         // Fetch in parallel (tolerante a fallos: no colgar en "Cargando datos...")
@@ -656,13 +700,23 @@ export function PLTable({
 
   const fetchQuantities = async () => {
     const qtys: Record<string, number[]> = {}
+    const amts: Record<string, number[]> = {}
     const cats: Record<string, string> = {}
     const aliases: Record<string, string> = {}
 
     const { data: allProds } = await supabase.from("products").select("name, category, alias")
+    // Resolver: texto de ventas (test/producto) -> nombre canónico en catálogo,
+    // soportando que Odoo envíe "alias/apodo" en vez de `products.name`.
+    const saleKeyToCatalogName = new Map<string, string>()
     for (const p of allProds || []) {
-      cats[(p as any).name] = (p as any).category || ""
-      aliases[(p as any).name] = (p as any).alias || ""
+      const name = String((p as any).name || "")
+      const alias = String((p as any).alias || "")
+      cats[name] = (p as any).category || ""
+      aliases[name] = alias || ""
+      const nameKey = normalizeProductKey(name)
+      if (nameKey) saleKeyToCatalogName.set(nameKey, name)
+      const aliasKey = normalizeProductKey(alias)
+      if (aliasKey) saleKeyToCatalogName.set(aliasKey, name)
     }
 
     if (modelo === "budget") {
@@ -703,11 +757,11 @@ export function PLTable({
       // Modo REAL: no usamos budgetRows
       setBudgetRows([])
       const companies = countries.flatMap((c) => COUNTRY_TO_COMPANIES[c] || [])
-      if (!companies.length) { setQuantities({}); setProductCategories(cats); return }
+      if (!companies.length) { setQuantities({}); setOdooAmounts({}); setProductCategories(cats); return }
 
       const { data } = await supabase
         .from("ventas_mensuales_view")
-        .select("producto, mes, cantidad_ventas, compañia")
+        .select("producto, mes, cantidad_ventas, monto_total, compañia")
         .eq("año", year)
         .in("compañia", companies)
 
@@ -719,20 +773,25 @@ export function PLTable({
       const categorySet = shouldFilterCategories ? categoriesSet : null
       const selectedProductKeys = new Set((products || []).map((p) => normalizeProductKey(p)))
 
-      for (const row of data as { producto: string; mes: number; cantidad_ventas: number | string | null; compañia: string | null }[]) {
-        const name = row.producto
-        if (!name) continue
-        if (selectedProductKeys.size > 0 && !selectedProductKeys.has(normalizeProductKey(name))) continue
+      for (const row of data as { producto: string; mes: number; cantidad_ventas: number | string | null; monto_total?: number | string | null; compañia: string | null }[]) {
+        const rawName = row.producto
+        if (!rawName) continue
+        const resolvedName = saleKeyToCatalogName.get(normalizeProductKey(rawName)) || rawName
+        if (selectedProductKeys.size > 0 && !selectedProductKeys.has(normalizeProductKey(resolvedName))) continue
 
         if (categorySet) {
-          const knownCategory = cats[name]
+          const knownCategory = cats[resolvedName]
           // Solo excluimos si es un producto CON categoría conocida y NO coincide.
           // Si `knownCategory` es undefined/"" (producto faltante), lo dejamos pasar.
           if (knownCategory && !categorySet.has(knownCategory)) continue
         }
-        if (!qtys[name]) qtys[name] = Array(12).fill(0)
+        if (!qtys[resolvedName]) qtys[resolvedName] = Array(12).fill(0)
+        if (!amts[resolvedName]) amts[resolvedName] = Array(12).fill(0)
         const mIdx = Number(row.mes) - 1
-        if (mIdx >= 0 && mIdx < 12) qtys[name][mIdx] += Number(row.cantidad_ventas || 0)
+        if (mIdx >= 0 && mIdx < 12) {
+          qtys[resolvedName][mIdx] += Number(row.cantidad_ventas || 0)
+          amts[resolvedName][mIdx] += Number((row as any).monto_total || 0)
+        }
       }
 
       // Ventas reales solo están cargadas en el canal Paciente; si el filtro no lo incluye,
@@ -741,10 +800,14 @@ export function PLTable({
         for (const k of Object.keys(qtys)) {
           qtys[k] = Array(12).fill(0)
         }
+        for (const k of Object.keys(amts)) {
+          amts[k] = Array(12).fill(0)
+        }
       }
     }
 
     setQuantities(qtys)
+    setOdooAmounts(amts)
     setProductCategories(cats)
     setProductAliases(aliases)
   }
@@ -1048,6 +1111,58 @@ export function PLTable({
     })
   }
 
+  const buildCombinedDetail = () => {
+    const qty: Record<string, number[]> = {}
+    const odoo: Record<string, number[]> = {}
+    const ensureArr = (m: Record<string, number[]>, key: string) => {
+      if (!m[key]) m[key] = Array(12).fill(0)
+      return m[key]
+    }
+
+    for (let i = 0; i < 12; i++) {
+      const m = effectiveMonthModels[i]
+      const snap = combinedSnapshots[m]
+      if (!snap) continue
+
+      if (m.startsWith("budget:")) {
+        for (const row of (snap.budgetRows || []) as any[]) {
+          const name = resolveToCatalogName(String(row.product_name || ""))
+          if (!name) continue
+          const v = Number(row[MONTH_KEYS[i] as any] || 0)
+          if (v === 0) continue
+          ensureArr(qty, name)[i] += v
+        }
+      } else {
+        for (const [rawName, arr] of Object.entries(snap.quantities || {})) {
+          const name = resolveToCatalogName(rawName)
+          if (!name) continue
+          const v = (arr[i] || 0) as number
+          if (v !== 0) ensureArr(qty, name)[i] += v
+        }
+        for (const [rawName, arr] of Object.entries(snap.odooAmounts || {})) {
+          const name = resolveToCatalogName(rawName)
+          if (!name) continue
+          const v = (arr[i] || 0) as number
+          if (v !== 0) ensureArr(odoo, name)[i] += v
+        }
+      }
+    }
+
+    return { qty, odoo }
+  }
+
+  const detailData = (() => {
+    if (combineEnabled) {
+      return buildCombinedDetail()
+    }
+    // No combinar: usar los estados actuales.
+    // En real, Gross Sales viene de Odoo (odooAmounts). En budget/test no tenemos Odoo.
+    return {
+      qty: activeQuantities,
+      odoo: modelo === "real" ? odooAmounts : {},
+    }
+  })()
+
   const computeAllModelLines = () => {
     const out: Partial<Record<string, ReturnType<typeof computeNetIncomeChain> & {
       grossSales: number[]
@@ -1116,11 +1231,12 @@ export function PLTable({
         }
       } else {
         const qty = combineEnabled ? (snap!.quantities || {}) : quantities
+        const amts = combineEnabled ? (snap!.odooAmounts || {}) : odooAmounts
         const ovs = combineEnabled ? (snap!.overrides || {}) : overrides
         const sgaArr = combineEnabled ? snap!.sga : sga
         const taxArr = combineEnabled ? snap!.tax : taxRates
 
-        const grossSales = computeMonthlyRealField(qty, ovs, "grossSalesUSD")
+        const grossSales = computeMonthlyRealGrossSalesFromOdoo(amts)
         const commercialDiscount = computeMonthlyRealField(qty, ovs, "commercialDiscountUSD")
         const productCost = computeMonthlyRealField(qty, ovs, "productCostUSD")
         const kitCost = computeMonthlyRealField(qty, ovs, "kitCostUSD")
@@ -1517,7 +1633,7 @@ export function PLTable({
                         className="h-7 w-[86px] rounded-md border border-white/20 bg-white/10 px-2 text-[11px] text-white"
                         title="Modelo del mes"
                       >
-                        <option value="budget" className="bg-blue-900 text-white">Budget</option>
+                        <option value={`budget:${budgetName}`} className="bg-blue-900 text-white">Budget</option>
                         <option value="real_2026" className="bg-blue-900 text-white">Real 2026</option>
                         <option value="real_2025" className="bg-blue-900 text-white">Real 2025</option>
                       </select>
@@ -1754,7 +1870,7 @@ export function PLTable({
                 Detalle de productos — {modelo === "budget" ? "Budget" : "Real"} {year}
               </span>
               <span className="text-xs text-white/50">
-                ({Object.keys(quantities).length} producto{Object.keys(quantities).length !== 1 ? "s" : ""})
+                ({Object.keys(detailData.qty).length} producto{Object.keys(detailData.qty).length !== 1 ? "s" : ""})
               </span>
             </div>
             <div className="flex items-center gap-1 flex-wrap justify-end">
@@ -1783,7 +1899,7 @@ export function PLTable({
             )}
           </div>
 
-          {Object.keys(quantities).length === 0 ? (
+          {Object.keys(detailData.qty).length === 0 ? (
             <div className="text-center py-8 text-white/40 text-sm">
               No hay datos para los filtros seleccionados
             </div>
@@ -1822,7 +1938,7 @@ export function PLTable({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {Object.entries(activeQuantities)
+                  {Object.entries(detailData.qty)
                     .sort(([a], [b]) => {
                       const keyA = ((name: string) => {
                         const s = displayProductLabelFromName(name, productAliases) || ""
@@ -1846,8 +1962,7 @@ export function PLTable({
                       const cat = productCategories[name] || ""
                       const isKnownProduct = Object.prototype.hasOwnProperty.call(productCategories, name)
                       const rowTotal = monthIndices.reduce((s, i) => s + (qtArr[i] || 0), 0)
-                      const ov = overrides[name]
-                      const totalGS = rowTotal * (ov?.grossSalesUSD || 0)
+                      const totalGS = monthIndices.reduce((s, i) => s + ((detailData.odoo[name]?.[i] || 0) as number), 0)
                       return (
                       <tr key={name} className="hover:bg-white/5 transition-colors">
                           <td className="sticky left-0 bg-slate-800/95 px-3 py-2 text-xs text-white/90 whitespace-nowrap z-10">
@@ -1952,24 +2067,24 @@ export function PLTable({
                       TOTAL
                     </td>
                     <td className="px-2 py-2 text-xs text-white/40">
-                      {Object.keys(quantities).length} productos
+                      {Object.keys(detailData.qty).length} productos
                     </td>
                     {detailMonth !== null ? (
                       <td className="px-2 py-2 text-right text-xs font-bold text-white tabular-nums">
-                        {Object.values(activeQuantities).reduce((s, arr) => s + (arr[detailMonth] || 0), 0)}
+                        {Object.values(detailData.qty).reduce((s, arr) => s + (arr[detailMonth] || 0), 0)}
                       </td>
                     ) : (
                       <>
                         {monthIndices.map((i) => (
                           <td key={i} className="px-2 py-2 text-right text-xs font-bold text-white tabular-nums">
                             {(() => {
-                              const v = Object.values(activeQuantities).reduce((s, arr) => s + (arr[i] || 0), 0)
+                              const v = Object.values(detailData.qty).reduce((s, arr) => s + (arr[i] || 0), 0)
                               return v !== 0 ? v : "-"
                             })()}
                           </td>
                         ))}
                         <td className="px-2 py-2 text-right text-xs font-bold text-white tabular-nums border-l border-white/10">
-                          {Object.values(activeQuantities).reduce(
+                          {Object.values(detailData.qty).reduce(
                             (s, arr) => s + monthIndices.reduce((a, i) => a + (arr[i] || 0), 0),
                             0
                           )}
@@ -1978,10 +2093,16 @@ export function PLTable({
                     )}
                     {detailMonth === null && (
                       <td className="px-2 py-2 text-right text-xs font-bold text-blue-300 tabular-nums">
-                        ${formatNumber(Object.entries(quantities).reduce((s, [name, arr]) => {
-                          const gs = overrides[name]?.grossSalesUSD || 0
-                          return s + monthIndices.reduce((a, i) => a + (arr[i] || 0), 0) * gs
-                        }, 0), "es-AR", { maximumFractionDigits: 0 })}
+                        {(() => {
+                          const total = Object.entries(detailData.qty).reduce((s, [name]) => {
+                            const amt = detailData.odoo[name]
+                            if (!amt) return s
+                            return s + monthIndices.reduce((a, i) => a + (amt[i] || 0), 0)
+                          }, 0)
+                          return total !== 0
+                            ? `$${formatNumber(total, "es-AR", { maximumFractionDigits: 0 })}`
+                            : "-"
+                        })()}
                       </td>
                     )}
                   </tr>
