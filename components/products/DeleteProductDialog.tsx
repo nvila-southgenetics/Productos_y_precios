@@ -18,7 +18,8 @@ const COUNTRY_NAMES: Record<string, string> = {
 interface DeleteProductDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  product: ProductWithOverrides | null
+  product?: ProductWithOverrides | null
+  products?: ProductWithOverrides[] | null
   selectedCountry: string
   onDeleteFromCountry: () => void
   onDeleteFromAll: () => void
@@ -29,12 +30,17 @@ export function DeleteProductDialog({
   open,
   onOpenChange,
   product,
+  products,
   selectedCountry,
   onDeleteFromCountry,
   onDeleteFromAll,
   isDeleting = false,
 }: DeleteProductDialogProps) {
-  if (!product) return null
+  const list: ProductWithOverrides[] = products?.length ? products : (product ? [product] : [])
+  if (list.length === 0) return null
+
+  const isBulk = list.length > 1
+  const firstName = list[0]?.name || ""
 
   const countryName = COUNTRY_NAMES[selectedCountry] || selectedCountry
 
@@ -70,7 +76,15 @@ export function DeleteProductDialog({
               </DialogTitle>
             </div>
             <p className="text-sm text-white/70 text-left mt-1">
-              ¿Cómo deseas eliminar <span className="font-medium text-white">{product.name}</span>?
+              {isBulk ? (
+                <>
+                  ¿Cómo deseas eliminar <span className="font-medium text-white">{list.length} productos</span>?
+                </>
+              ) : (
+                <>
+                  ¿Cómo deseas eliminar <span className="font-medium text-white">{firstName}</span>?
+                </>
+              )}
             </p>
           </DialogHeader>
 

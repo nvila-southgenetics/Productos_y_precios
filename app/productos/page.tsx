@@ -233,6 +233,7 @@ function ProductosContent() {
     } catch (error) {
       console.error("Error deleting product:", error)
       alert(`Error al eliminar el producto: ${error instanceof Error ? error.message : 'Error desconocido'}`)
+      throw error
     }
   }
 

@@ -66,6 +66,7 @@ export function ProductTable({
   const [updatingProducts, setUpdatingProducts] = useState<Set<string>>(new Set())
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [productToDelete, setProductToDelete] = useState<ProductWithOverrides | null>(null)
+  const [productsToDelete, setProductsToDelete] = useState<ProductWithOverrides[] | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [mergeSelection, setMergeSelection] = useState<Set<string>>(new Set())
 
@@ -99,28 +100,70 @@ export function ProductTable({
   const handleDeleteClick = (e: React.MouseEvent, product: ProductWithOverrides) => {
     e.stopPropagation()
     setProductToDelete(product)
+    setProductsToDelete(null)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleBulkDeleteClick = () => {
+    if (mergeSelection.size === 0) return
+    const selected = products.filter((p) => mergeSelection.has(p.id))
+    if (selected.length === 0) return
+    setProductsToDelete(selected)
+    setProductToDelete(null)
     setDeleteDialogOpen(true)
   }
 
   const handleDeleteFromCountry = async () => {
-    if (!productToDelete) return
+    const list = productsToDelete?.length ? productsToDelete : (productToDelete ? [productToDelete] : [])
+    if (list.length === 0) return
     setIsDeleting(true)
     try {
-      await onDeleteProduct(productToDelete, false)
+      const failures: Array<{ id: string; name: string; error: string }> = []
+      for (const p of list) {
+        try {
+          await onDeleteProduct(p, false)
+        } catch (e) {
+          failures.push({ id: p.id, name: p.name, error: e instanceof Error ? e.message : String(e) })
+        }
+      }
       setDeleteDialogOpen(false)
       setProductToDelete(null)
+      setProductsToDelete(null)
+      setMergeSelection(new Set())
+      if (failures.length) {
+        alert(
+          `Algunos productos no se pudieron eliminar de ${selectedCountry}:\n` +
+            failures.map((f) => `- ${f.name}: ${f.error}`).join("\n")
+        )
+      }
     } finally {
       setIsDeleting(false)
     }
   }
 
   const handleDeleteFromAll = async () => {
-    if (!productToDelete) return
+    const list = productsToDelete?.length ? productsToDelete : (productToDelete ? [productToDelete] : [])
+    if (list.length === 0) return
     setIsDeleting(true)
     try {
-      await onDeleteProduct(productToDelete, true)
+      const failures: Array<{ id: string; name: string; error: string }> = []
+      for (const p of list) {
+        try {
+          await onDeleteProduct(p, true)
+        } catch (e) {
+          failures.push({ id: p.id, name: p.name, error: e instanceof Error ? e.message : String(e) })
+        }
+      }
       setDeleteDialogOpen(false)
       setProductToDelete(null)
+      setProductsToDelete(null)
+      setMergeSelection(new Set())
+      if (failures.length) {
+        alert(
+          `Algunos productos no se pudieron eliminar de todos los países:\n` +
+            failures.map((f) => `- ${f.name}: ${f.error}`).join("\n")
+        )
+      }
     } finally {
       setIsDeleting(false)
     }
@@ -195,17 +238,27 @@ export function ProductTable({
       <div className="flex items-center justify-between px-4 pt-4 pb-2 gap-2">
         <p className="text-sm text-white/70">
           {products.length} productos
-          {mergeSelection.size > 0 && ` · ${mergeSelection.size} seleccionados para fusionar`}
+          {mergeSelection.size > 0 && ` · ${mergeSelection.size} seleccionados`}
         </p>
         {canEdit && (
-          <Button
-            size="sm"
-            className="bg-emerald-500 hover:bg-emerald-600 text-white disabled:bg-white/10 disabled:text-white/40 disabled:cursor-not-allowed"
-            disabled={mergeSelection.size < 2 || !onRequestMerge}
-            onClick={handleMergeClick}
-          >
-            Fusionar seleccionados
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              className="bg-red-500 hover:bg-red-600 text-white disabled:bg-white/10 disabled:text-white/40 disabled:cursor-not-allowed"
+              disabled={mergeSelection.size < 1}
+              onClick={handleBulkDeleteClick}
+            >
+              Eliminar seleccionados
+            </Button>
+            <Button
+              size="sm"
+              className="bg-emerald-500 hover:bg-emerald-600 text-white disabled:bg-white/10 disabled:text-white/40 disabled:cursor-not-allowed"
+              disabled={mergeSelection.size < 2 || !onRequestMerge}
+              onClick={handleMergeClick}
+            >
+              Fusionar seleccionados
+            </Button>
+          </div>
         )}
       </div>
       <table className="w-full">
@@ -230,7 +283,7 @@ export function ProductTable({
             </th>
             {canEdit && (
               <th className="h-12 px-4 text-center align-middle font-semibold text-white w-24">
-                Fusionar
+                Fusionar/Eliminar
               </th>
             )}
           </tr>
@@ -364,6 +417,7 @@ export function ProductTable({
             open={deleteDialogOpen}
             onOpenChange={setDeleteDialogOpen}
             product={productToDelete}
+            products={productsToDelete}
             selectedCountry={selectedCountry}
             onDeleteFromCountry={handleDeleteFromCountry}
             onDeleteFromAll={handleDeleteFromAll}
