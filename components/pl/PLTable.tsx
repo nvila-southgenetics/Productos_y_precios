@@ -745,11 +745,15 @@ export function PLTable({
       const rowsForBudget: Record<string, unknown>[] = []
 
       for (const row of data as Record<string, unknown>[]) {
-        const name = row.product_name as string
-        if (allowedProds && !allowedProds.has(name)) continue
-        rowsForBudget.push(row)
+        const rawName = row.product_name as string
+        const resolvedName = saleKeyToCatalogName.get(normalizeProductKey(rawName)) || rawName
+        if (allowedProds && !allowedProds.has(resolvedName)) continue
+        // Normalizar product_name al nombre canónico del catálogo para que:
+        // - no aparezca el "+" si el budget usa alias
+        // - los cálculos/joins basados en nombre sean consistentes
+        rowsForBudget.push({ ...row, product_name: resolvedName })
         const arr = MONTH_KEYS.map((k) => Number(row[k] || 0))
-        qtys[name] = qtys[name] ? qtys[name].map((v, i) => v + arr[i]) : arr
+        qtys[resolvedName] = qtys[resolvedName] ? qtys[resolvedName].map((v, i) => v + arr[i]) : arr
       }
 
       setBudgetRows(rowsForBudget)
