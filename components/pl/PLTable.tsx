@@ -137,6 +137,21 @@ function fmtNeg(val: number): string {
   return `(${Math.abs(val).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })})`
 }
 
+function fmtSigned(val: number): string {
+  if (val === 0) return "-"
+  return val < 0 ? fmtNeg(val) : fmt(val)
+}
+
+// SG&A se guarda como "costo" (positivo) y "crédito" (negativo).
+// Para mostrarlo en el P&L, invertimos el signo: costo -> negativo (paréntesis), crédito -> positivo.
+function sgaDisplay(val: number): number {
+  return -val
+}
+
+function fmtSga(val: number): string {
+  return fmtSigned(sgaDisplay(val))
+}
+
 function normalizeProductKey(name: string): string {
   return (name || "")
     .toLowerCase()
@@ -385,7 +400,8 @@ export function PLTable({
       const idx = Number((row as any).month) - 1
       if (idx < 0 || idx >= 12) continue
       for (const f of SGA_FIELDS) {
-        sgaArr[idx][f.key] += Math.abs(Number((row as any)[f.key] || 0))
+        // SG&A puede tener créditos (negativos). No normalizamos el signo.
+        sgaArr[idx][f.key] += Number((row as any)[f.key] || 0)
       }
     }
 
@@ -1174,8 +1190,8 @@ export function PLTable({
       if (idx < 0 || idx >= 12) continue
       usedRows.push(row)
       for (const f of SGA_FIELDS) {
-        // Normalizamos SG&A como costos positivos (se muestran en negativo, y deben restar en Net Income)
-        sgaArr[idx][f.key] += Math.abs(Number(row[f.key] || 0))
+        // SG&A puede tener créditos (negativos). No normalizamos el signo.
+        sgaArr[idx][f.key] += Number(row[f.key] || 0)
       }
     }
     setSga(sgaArr)
@@ -1510,10 +1526,11 @@ export function PLTable({
         { onConflict: "year,country_code,month,product_name,channel,modelo" }
       )
     } else {
-      const normalized = Math.abs(newVal)
-      setSga((prev) => prev.map((s, i) => i === month ? { ...s, [field]: normalized } : s))
+      // Permitir créditos (negativos) además de gastos (positivos).
+      const signed = newVal
+      setSga((prev) => prev.map((s, i) => i === month ? { ...s, [field]: signed } : s))
       await supabase.from("pl_sga").upsert(
-        { year, country_code: countries[0], month: month + 1, modelo, product_name: product, channel: channels[0], [field]: normalized },
+        { year, country_code: countries[0], month: month + 1, modelo, product_name: product, channel: channels[0], [field]: signed },
         { onConflict: "year,country_code,month,product_name,channel,modelo" }
       )
     }
@@ -1534,9 +1551,9 @@ export function PLTable({
       const product = String(r?.product_name || "(sin producto)")
       let amount = 0
       if (field === "TOTAL") {
-        for (const f of SGA_FIELDS) amount += Math.abs(Number(r?.[f.key] || 0))
+        for (const f of SGA_FIELDS) amount += Number(r?.[f.key] || 0)
       } else {
-        amount = Math.abs(Number(r?.[field] || 0))
+        amount = Number(r?.[field] || 0)
       }
       if (amount === 0) continue
       items.push({ channel, product, amount })
@@ -1570,15 +1587,15 @@ export function PLTable({
     const maxProducts = 18
     for (const ch of channelEntries) {
       if (printed >= maxProducts) break
-      lines.push(`- ${ch.channel}: ${fmtNeg(ch.channelTotal)}`)
+      lines.push(`- ${ch.channel}: ${fmtSga(ch.channelTotal)}`)
       for (const p of ch.prodEntries) {
         if (printed >= maxProducts) break
-        lines.push(`  - ${p.product}: ${fmtNeg(p.amount)}`)
+        lines.push(`  - ${p.product}: ${fmtSga(p.amount)}`)
         printed++
       }
     }
     const total = channelEntries.reduce((s, x) => s + x.channelTotal, 0)
-    lines.push(`Total: ${fmtNeg(total)}`)
+    lines.push(`Total: ${fmtSga(total)}`)
     if (printed >= maxProducts) lines.push("(mostrando top contribuciones)")
     return lines.join("\n")
   }
@@ -1662,6 +1679,7 @@ export function PLTable({
     prominent = false,
     forceGray = false,
     cellTitle,
+    formatValue,
   }: {
     label: string
     labelNode?: ReactNode
@@ -1675,6 +1693,7 @@ export function PLTable({
     // Forzar color gris/neutral en totales clave.
     forceGray?: boolean
     cellTitle?: (monthIdx: number) => string | undefined
+    formatValue?: (val: number) => string
   }) => {
     const ytdVal = periodSum(values)
     const totalVal = sum(values)
@@ -1695,6 +1714,7 @@ export function PLTable({
       ? "text-white"
       : "text-white/80"
     const fmtFn = negative ? fmtNeg : fmt
+    const fmtCell = formatValue || fmtFn
     const cellSizeCls = prominent ? "py-2.5 text-sm" : ""
     const labelSizeCls = prominent ? "text-sm" : ""
     const labelWeightCls = prominent ? "font-extrabold tracking-wide" : (bold ? "font-bold" : "")
@@ -1714,15 +1734,15 @@ export function PLTable({
           const v = values[i] ?? 0
           return (
             <td key={i} className={`${cellCls} ${cellSizeCls} ${numColor} ${bold || prominent ? "font-semibold" : ""}`}>
-              <span title={cellTitle ? cellTitle(i) : undefined}>{fmtFn(v)}</span>
+              <span title={cellTitle ? cellTitle(i) : undefined}>{fmtCell(v)}</span>
             </td>
           )
         })}
         <td className={`${cellCls} ${cellSizeCls} ${numColor} ${bold || prominent ? "font-semibold" : ""} border-l border-white/10`}>
-          {fmtFn(ytdVal)}
+          {fmtCell(ytdVal)}
         </td>
         <td className={`${cellCls} ${cellSizeCls} ${numColor} ${bold || prominent ? "font-semibold" : ""}`}>
-          {fmtFn(totalVal)}
+          {fmtCell(totalVal)}
         </td>
       </tr>
     )
@@ -1745,10 +1765,12 @@ export function PLTable({
         {monthIndices.map((mIdx) => {
           const v = values[mIdx] ?? 0
           const isEditing = editingCell?.field === field && editingCell.month === mIdx
+          const dv = sgaDisplay(v)
+          const dvCls = dv > 0 ? "text-emerald-300/90" : dv < 0 ? "text-rose-300" : "text-white/25"
           return (
             <td
               key={mIdx}
-              className={`${cellCls} text-rose-300 ${canEditSGA ? "cursor-pointer hover:bg-white/10 rounded" : ""}`}
+              className={`${cellCls} ${dvCls} ${canEditSGA ? "cursor-pointer hover:bg-white/10 rounded" : ""}`}
               onDoubleClick={() => startEdit(field, mIdx)}
               title={canEditSGA ? "Doble clic para editar" : undefined}
             >
@@ -1763,13 +1785,17 @@ export function PLTable({
                   autoFocus
                 />
               ) : (
-                <span title={buildSgaTooltip(mIdx, field)}>{fmtNeg(v)}</span>
+                <span title={buildSgaTooltip(mIdx, field)}>{fmtSga(v)}</span>
               )}
             </td>
           )
         })}
-        <td className={`${cellCls} text-rose-300 border-l border-white/10`}>{fmtNeg(ytdVal)}</td>
-        <td className={`${cellCls} text-rose-300`}>{fmtNeg(totalVal)}</td>
+        <td className={`${cellCls} ${sgaDisplay(ytdVal) > 0 ? "text-emerald-300/90" : sgaDisplay(ytdVal) < 0 ? "text-rose-300" : "text-white/25"} border-l border-white/10`}>
+          {fmtSga(ytdVal)}
+        </td>
+        <td className={`${cellCls} ${sgaDisplay(totalVal) > 0 ? "text-emerald-300/90" : sgaDisplay(totalVal) < 0 ? "text-rose-300" : "text-white/25"}`}>
+          {fmtSga(totalVal)}
+        </td>
       </tr>
     )
   }
@@ -2076,11 +2102,11 @@ export function PLTable({
                 }
                 values={totalSGA}
                 bold
-                negative
                 prominent
                 forceGray
                 colorClass="text-white"
                 cellTitle={(mi) => buildSgaTooltip(mi, "TOTAL")}
+                formatValue={(v) => fmtSga(v)}
               />
 
               {/* ─ Taxes (sin título) ─────────────────────────────────── */}
