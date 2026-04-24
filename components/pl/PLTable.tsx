@@ -180,6 +180,8 @@ export function PLTable({
   // Editing state
   const [editingCell, setEditingCell] = useState<{ field: keyof SGAData | keyof TaxData; month: number } | null>(null)
   const [editValue, setEditValue] = useState<string>("")
+  const [editingBudgetUnit, setEditingBudgetUnit] = useState<{ productName: string; monthIdx: number } | null>(null)
+  const [budgetUnitEditValue, setBudgetUnitEditValue] = useState<string>("")
   // Detail panel
   const [showDetail, setShowDetail] = useState(false)
   const [detailMonth, setDetailMonth] = useState<number | null>(null)
@@ -210,6 +212,14 @@ export function PLTable({
   // Taxes are stored at country-level (one country_code row), so allow editing only when a single country is selected.
   const canEditTax = canEdit && financialEnabled && countries.length === 1
 
+  const canEditBudgetUnits =
+    canEdit &&
+    modelo === "budget" &&
+    !combineEnabled &&
+    !testMode &&
+    countries.length === 1 &&
+    channels.length === 1
+
   const startIndex = Math.min(Math.max(Math.min(monthFrom, monthTo) - 1, 0), 11)
   const endIndex = Math.min(Math.max(Math.max(monthFrom, monthTo) - 1, 0), 11)
   const monthIndices = Array.from({ length: endIndex - startIndex + 1 }, (_, k) => startIndex + k)
@@ -239,6 +249,15 @@ export function PLTable({
   const neededMonthModels = Array.from(new Set(effectiveMonthModels))
   const combineReady = !combineEnabled || neededMonthModels.every((m) => Boolean(combinedSnapshots[m]))
 
+  const isForecastQ1 =
+    modelo === "budget" &&
+    String(budgetName || "").trim().toLowerCase() === "forecast q1" &&
+    year === 2026
+
+  // Modo híbrido (sin UI de Combinar): Q1 = Real 2026, resto = Budget forecast Q1.
+  const hybridForecastQ1Enabled = isForecastQ1 && !combineEnabled && !testMode
+  const [hybridRealSnapshot, setHybridRealSnapshot] = useState<ModelSnapshot | null>(null)
+
   // Mapeo (normalizado) de texto de ventas/budget -> nombre canónico del catálogo.
   // Evita duplicados en detalle cuando Odoo/budget usan alias/apodos o variantes.
   const catalogKeyToName = useMemo(() => {
@@ -258,6 +277,12 @@ export function PLTable({
     if (!trimmed) return ""
     return catalogKeyToName.get(normalizeProductKey(trimmed)) || trimmed
   }, [catalogKeyToName])
+
+  const calcMonthModelAt = (monthIdx0: number): MonthModel => {
+    if (combineEnabled) return effectiveMonthModels[monthIdx0]
+    if (hybridForecastQ1Enabled) return monthIdx0 <= 2 ? "real_2026" : (`budget:${budgetName}` as MonthModel)
+    return baseMonthModel
+  }
 
   const computeNetIncomeChain = (
     grossSales: number[],
@@ -464,6 +489,7 @@ export function PLTable({
         setBudgetOverrides({})
         setCombinedSnapshots({})
         setCombineError(null)
+        setHybridRealSnapshot(null)
         return
       }
 
@@ -678,6 +704,107 @@ export function PLTable({
         return
       }
 
+      const fetchHybridRealSnapshot2026 = async (): Promise<ModelSnapshot> => {
+        const forYear = 2026
+        const qtys: Record<string, number[]> = {}
+        const amts: Record<string, number[]> = {}
+        const cats: Record<string, string> = {}
+        const aliases: Record<string, string> = {}
+        const saleKeyToCatalogName = new Map<string, string>()
+
+        const { data: allProds } = await supabase.from("products").select("name, category, alias")
+        for (const p of allProds || []) {
+          const name = String((p as any).name || "")
+          const alias = String((p as any).alias || "")
+          cats[name] = (p as any).category || ""
+          aliases[name] = alias || ""
+          const nameKey = normalizeProductKey(name)
+          if (nameKey) saleKeyToCatalogName.set(nameKey, name)
+          const aliasKey = normalizeProductKey(alias)
+          if (aliasKey) saleKeyToCatalogName.set(aliasKey, name)
+        }
+
+        const companies = countries.flatMap((c) => COUNTRY_TO_COMPANIES[c] || [])
+        if (companies.length) {
+          const { data } = await supabase
+            .from("ventas_mensuales_view")
+            .select("producto, mes, cantidad_ventas, monto_total, compañia")
+            .eq("año", forYear)
+            .in("compañia", companies)
+
+          const categorySet = shouldFilterCategories ? categoriesSet : null
+          const selectedProductKeys = new Set((products || []).map((p) => normalizeProductKey(p)))
+          for (const row of (data || []) as any[]) {
+            const rawName = row.producto as string
+            if (!rawName) continue
+            const resolvedName = saleKeyToCatalogName.get(normalizeProductKey(rawName)) || rawName
+            if (selectedProductKeys.size > 0 && !selectedProductKeys.has(normalizeProductKey(resolvedName))) continue
+            if (categorySet) {
+              const knownCategory = cats[resolvedName]
+              if (knownCategory && !categorySet.has(knownCategory)) continue
+            }
+            if (!qtys[resolvedName]) qtys[resolvedName] = Array(12).fill(0)
+            if (!amts[resolvedName]) amts[resolvedName] = Array(12).fill(0)
+            const mIdx = Number(row.mes) - 1
+            if (mIdx >= 0 && mIdx < 12) {
+              qtys[resolvedName][mIdx] += Number(row.cantidad_ventas || 0)
+              amts[resolvedName][mIdx] += Number(row.monto_total || 0)
+            }
+          }
+          if (channels.length > 0 && !channels.includes("Paciente")) {
+            for (const k of Object.keys(qtys)) qtys[k] = Array(12).fill(0)
+            for (const k of Object.keys(amts)) amts[k] = Array(12).fill(0)
+          }
+        }
+
+        const ovs: Record<string, OverrideData> = {}
+        let q = supabase
+          .from("product_country_overrides")
+          .select("overrides, product_id, country_code")
+          .eq("channel", "Paciente")
+        if (countries.length) q = q.in("country_code", countries)
+        const { data: overrideRows } = await q
+        if (overrideRows && overrideRows.length > 0) {
+          const productIds = (overrideRows as any[]).map((r) => r.product_id).filter(Boolean)
+          const { data: productRows } = await supabase.from("products").select("id, name, category").in("id", productIds)
+          const idToName: Record<string, string> = {}
+          const idToCat: Record<string, string> = {}
+          for (const p of productRows || []) { idToName[p.id] = p.name; idToCat[p.id] = p.category || "" }
+
+          for (const row of overrideRows as any[]) {
+            const name = idToName[row.product_id]
+            if (!name) continue
+            if (shouldFilterCategories && idToCat[row.product_id] && !categoriesSet.has(idToCat[row.product_id])) continue
+            if (products.length > 0 && !products.includes(name)) continue
+            const o = row.overrides || {}
+            const prev = ovs[name] || emptyOverride()
+            ovs[name] = {
+              grossSalesUSD: prev.grossSalesUSD + (o.grossSalesUSD || 0),
+              commercialDiscountUSD: prev.commercialDiscountUSD + (o.commercialDiscountUSD || 0),
+              productCostUSD: prev.productCostUSD + (o.productCostUSD || 0),
+              kitCostUSD: prev.kitCostUSD + (o.kitCostUSD || 0),
+              paymentFeeUSD: prev.paymentFeeUSD + (o.paymentFeeUSD || 0),
+              bloodDrawSampleUSD: prev.bloodDrawSampleUSD + (o.bloodDrawSampleUSD || 0),
+              sanitaryPermitsUSD: prev.sanitaryPermitsUSD + (o.sanitaryPermitsUSD || 0),
+              externalCourierUSD: prev.externalCourierUSD + (o.externalCourierUSD || 0),
+              internalCourierUSD: prev.internalCourierUSD + (o.internalCourierUSD || 0),
+              physiciansFeesUSD: prev.physiciansFeesUSD + (o.physiciansFeesUSD || 0),
+              salesCommissionUSD: prev.salesCommissionUSD + (o.salesCommissionUSD || 0),
+            }
+          }
+        }
+
+        const [tax, sga] = await Promise.all([fetchTaxesFor("real", forYear), fetchSGAFor("real", forYear)])
+        return {
+          model: "real_2026",
+          quantities: qtys,
+          odooAmounts: amts,
+          overrides: ovs,
+          tax,
+          sga,
+        }
+      }
+
       if (modelo === "budget") {
         if (testMode) {
           // En modo Test usamos overrides agregados por producto, igual que en REAL
@@ -687,6 +814,18 @@ export function PLTable({
         }
       } else {
         await Promise.all([fetchQuantities(), fetchOverrides(), fetchSGA()])
+      }
+
+      if (hybridForecastQ1Enabled) {
+        try {
+          const snap = await fetchHybridRealSnapshot2026()
+          setHybridRealSnapshot(snap)
+        } catch (e) {
+          console.error("PLTable hybrid forecast Q1 real snapshot failed:", e)
+          setHybridRealSnapshot(null)
+        }
+      } else {
+        setHybridRealSnapshot(null)
       }
     } catch (e) {
       console.error("PLTable fetchData:", e)
@@ -722,7 +861,7 @@ export function PLTable({
     if (modelo === "budget") {
       let q = supabase
         .from("budget")
-        .select("product_id, product_name, jan,feb,mar,apr,may,jun,jul,aug,sep,oct,nov,dec, channel, country_code")
+        .select("id, product_id, product_name, jan,feb,mar,apr,may,jun,jul,aug,sep,oct,nov,dec, channel, country_code, budget_name, year")
         .eq("year", year)
         .eq("budget_name", budgetName)
 
@@ -1086,9 +1225,10 @@ export function PLTable({
       return Object.values(activeQuantities).reduce((s, arr) => s + (arr[i] || 0), 0)
     }
 
-    if (combineEnabled) {
-      const m = effectiveMonthModels[i]
-      const snap = combinedSnapshots[m]
+    const combineLike = combineEnabled || hybridForecastQ1Enabled
+    if (combineLike) {
+      const m = calcMonthModelAt(i)
+      const snap = combineEnabled ? combinedSnapshots[m] : (m === "real_2026" ? hybridRealSnapshot : null)
       if (!snap) return 0
       if (m.startsWith("budget:")) {
         return (snap.budgetRows || []).reduce((s, row) => s + Number((row as any)[MONTH_KEYS[i] as any] || 0), 0)
@@ -1110,7 +1250,7 @@ export function PLTable({
 
   const mergeMonthlyMetric = (perModel: Record<string, number[]>): number[] => {
     return Array.from({ length: 12 }, (_, i) => {
-      const m = combineEnabled ? effectiveMonthModels[i] : baseMonthModel
+      const m = calcMonthModelAt(i)
       return (perModel[m] || Array(12).fill(0))[i] || 0
     })
   }
@@ -1182,10 +1322,12 @@ export function PLTable({
       salesCommission: number[]
     }>> = {}
 
-    const models: MonthModel[] = combineEnabled ? Array.from(new Set(effectiveMonthModels)) : [baseMonthModel]
+    const models: MonthModel[] = (combineEnabled || hybridForecastQ1Enabled)
+      ? Array.from(new Set(Array.from({ length: 12 }, (_, i) => calcMonthModelAt(i))))
+      : [baseMonthModel]
     for (const m of models) {
-      const snap = combineEnabled ? combinedSnapshots[m] : null
-      if (combineEnabled && !snap) continue
+      const snap = combineEnabled ? combinedSnapshots[m] : (hybridForecastQ1Enabled && m === "real_2026" ? hybridRealSnapshot : null)
+      if ((combineEnabled || hybridForecastQ1Enabled) && m === "real_2026" && !snap) continue
 
       if (m.startsWith("budget:")) {
         const rows = combineEnabled ? (snap!.budgetRows || []) : (budgetRows || [])
@@ -1234,11 +1376,11 @@ export function PLTable({
           ),
         }
       } else {
-        const qty = combineEnabled ? (snap!.quantities || {}) : quantities
-        const amts = combineEnabled ? (snap!.odooAmounts || {}) : odooAmounts
-        const ovs = combineEnabled ? (snap!.overrides || {}) : overrides
-        const sgaArr = combineEnabled ? snap!.sga : sga
-        const taxArr = combineEnabled ? snap!.tax : taxRates
+        const qty = (combineEnabled || hybridForecastQ1Enabled) ? (snap!.quantities || {}) : quantities
+        const amts = (combineEnabled || hybridForecastQ1Enabled) ? (snap!.odooAmounts || {}) : odooAmounts
+        const ovs = (combineEnabled || hybridForecastQ1Enabled) ? (snap!.overrides || {}) : overrides
+        const sgaArr = (combineEnabled || hybridForecastQ1Enabled) ? snap!.sga : sga
+        const taxArr = (combineEnabled || hybridForecastQ1Enabled) ? snap!.tax : taxRates
 
         const grossSales = computeMonthlyRealGrossSalesFromOdoo(amts)
         const commercialDiscount = computeMonthlyRealField(qty, ovs, "commercialDiscountUSD")
@@ -1357,6 +1499,56 @@ export function PLTable({
   }
 
   const cancelEdit = () => setEditingCell(null)
+
+  const startEditBudgetUnit = (productName: string, monthIdx: number, current: number) => {
+    if (!canEditBudgetUnits) return
+    setEditingBudgetUnit({ productName, monthIdx })
+    setBudgetUnitEditValue(String(current ?? 0))
+  }
+
+  const commitEditBudgetUnit = async () => {
+    if (!editingBudgetUnit) return
+    const { productName, monthIdx } = editingBudgetUnit
+    const monthKey = MONTH_KEYS[monthIdx]
+    const nextVal = Math.max(0, Math.round(Number(budgetUnitEditValue) || 0))
+
+    // Encontrar la fila única de budget a editar (seguro: requerimos 1 país, 1 canal, 1 producto, 1 budgetName).
+    const countryCode = countries[0]
+    const channel = channels[0]
+    const row = (budgetRows as any[]).find((r) =>
+      String(r?.product_name || "") === productName &&
+      String(r?.country_code || "") === countryCode &&
+      String(r?.channel || "") === channel &&
+      String(r?.budget_name || "") === budgetName &&
+      Number(r?.year || year) === year
+    )
+
+    const rowId = row?.id as string | undefined
+    if (!rowId) {
+      alert("No se pudo identificar una fila única de budget para editar. Revisá filtros (compañía+canal+producto).")
+      setEditingBudgetUnit(null)
+      return
+    }
+
+    // Optimistic: actualizar estado local
+    setBudgetRows((prev) =>
+      (prev as any[]).map((r) => (r?.id === rowId ? { ...r, [monthKey]: nextVal } : r))
+    )
+    setQuantities((prev) => {
+      const cur = prev[productName] ? [...prev[productName]] : Array(12).fill(0)
+      cur[monthIdx] = nextVal
+      return { ...prev, [productName]: cur }
+    })
+
+    const { error } = await supabase.from("budget").update({ [monthKey]: nextVal }).eq("id", rowId)
+    if (error) {
+      alert(`Error guardando budget: ${error.message}`)
+      // fallback: recargar desde DB
+      await fetchData()
+    }
+
+    setEditingBudgetUnit(null)
+  }
 
   // ── Render helpers ────────────────────────────────────────────────────────
 
@@ -2021,14 +2213,33 @@ export function PLTable({
                             <>
                               {monthIndices.map((i) => {
                                 const v = qtArr[i] || 0
+                                const isBudgetEditing = editingBudgetUnit?.productName === name && editingBudgetUnit.monthIdx === i
+                                const budgetEditableCell = canEditBudgetUnits && channels.length === 1 && countries.length === 1
                                 return (
                                 <td
                                   key={i}
                                   className={`px-2 py-2 text-right text-xs tabular-nums ${
                                     v > 0 ? "text-white/80 font-medium" : v < 0 ? "text-rose-300 font-medium" : "text-white/25"
-                                  }`}
+                                  } ${budgetEditableCell ? "cursor-pointer hover:bg-white/10 rounded" : ""}`}
+                                  onDoubleClick={() => {
+                                    if (!budgetEditableCell) return
+                                    startEditBudgetUnit(name, i, v)
+                                  }}
                                 >
-                                  {testMode ? (
+                                  {isBudgetEditing ? (
+                                    <input
+                                      type="number"
+                                      className="w-12 bg-white/10 border border-white/30 text-white text-right text-[11px] px-1 rounded focus:outline-none"
+                                      value={budgetUnitEditValue}
+                                      onChange={(e) => setBudgetUnitEditValue(e.target.value)}
+                                      onBlur={commitEditBudgetUnit}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") commitEditBudgetUnit()
+                                        if (e.key === "Escape") setEditingBudgetUnit(null)
+                                      }}
+                                      autoFocus
+                                    />
+                                  ) : testMode ? (
                                     <input
                                       type="number"
                                       className="w-12 bg-white/10 border border-white/30 text-white text-right text-[11px] px-1 rounded focus:outline-none"
