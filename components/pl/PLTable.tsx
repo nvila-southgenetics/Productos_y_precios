@@ -175,6 +175,8 @@ export function PLTable({
   const [budgetOverrides, setBudgetOverrides] = useState<Record<string, OverrideData>>({})
   // SGA per month (summed if viewing "all", specific if product+channel selected)
   const [sga, setSga] = useState<SGAData[]>(Array.from({ length: 12 }, emptySGA))
+  // Raw SG&A rows from `pl_sga` used to build tooltips (breakdown by product+channel)
+  const [sgaRowsRaw, setSgaRowsRaw] = useState<any[]>([])
   // Tax rates: country-level, stored with product_name='' and channel=''
   const [taxRates, setTaxRates] = useState<TaxData[]>(Array.from({ length: 12 }, emptyTax))
   // Editing state
@@ -484,6 +486,7 @@ export function PLTable({
     // por eso NO debemos tocarlos.
     setSga(Array.from({ length: 12 }, emptySGA))
     setTaxRates(Array.from({ length: 12 }, emptyTax))
+    setSgaRowsRaw([])
     try {
       if (countries.length === 0) {
         setQuantities({})
@@ -494,6 +497,7 @@ export function PLTable({
         setCombinedSnapshots({})
         setCombineError(null)
         setHybridRealSnapshot(null)
+        setSgaRowsRaw([])
         return
       }
 
@@ -1159,6 +1163,7 @@ export function PLTable({
     }
 
     const selectedProducts = products.length > 0 ? new Set(products) : null
+    const usedRows: any[] = []
     for (const row of sgaData || []) {
       const rowProduct = String(row.product_name || "")
       if (!rowProduct) continue
@@ -1167,12 +1172,14 @@ export function PLTable({
 
       const idx = row.month - 1
       if (idx < 0 || idx >= 12) continue
+      usedRows.push(row)
       for (const f of SGA_FIELDS) {
         // Normalizamos SG&A como costos positivos (se muestran en negativo, y deben restar en Net Income)
         sgaArr[idx][f.key] += Math.abs(Number(row[f.key] || 0))
       }
     }
     setSga(sgaArr)
+    setSgaRowsRaw(usedRows)
   }
 
   // ── P&L calculations ──────────────────────────────────────────────────────
@@ -1515,6 +1522,67 @@ export function PLTable({
 
   const cancelEdit = () => setEditingCell(null)
 
+  const buildSgaTooltip = (monthIdx: number, field: keyof SGAData | "TOTAL") => {
+    if (combineEnabled) return undefined
+    const monthNumber = monthIdx + 1
+    const rows = (sgaRowsRaw || []).filter((r) => Number((r as any)?.month) === monthNumber)
+    if (!rows.length) return undefined
+
+    const items: { channel: string; product: string; amount: number }[] = []
+    for (const r of rows as any[]) {
+      const channel = String(r?.channel || "(sin canal)")
+      const product = String(r?.product_name || "(sin producto)")
+      let amount = 0
+      if (field === "TOTAL") {
+        for (const f of SGA_FIELDS) amount += Math.abs(Number(r?.[f.key] || 0))
+      } else {
+        amount = Math.abs(Number(r?.[field] || 0))
+      }
+      if (amount === 0) continue
+      items.push({ channel, product, amount })
+    }
+
+    if (!items.length) return undefined
+
+    const byChannel = new Map<string, Map<string, number>>()
+    for (const it of items) {
+      if (!byChannel.has(it.channel)) byChannel.set(it.channel, new Map())
+      const m = byChannel.get(it.channel)!
+      m.set(it.product, (m.get(it.product) || 0) + it.amount)
+    }
+
+    const channelEntries = Array.from(byChannel.entries()).map(([ch, prodMap]) => {
+      const prodEntries = Array.from(prodMap.entries())
+        .map(([p, a]) => ({ product: p, amount: a }))
+        .sort((a, b) => b.amount - a.amount)
+      const channelTotal = prodEntries.reduce((s, x) => s + x.amount, 0)
+      return { channel: ch, channelTotal, prodEntries }
+    })
+    channelEntries.sort((a, b) => b.channelTotal - a.channelTotal)
+
+    const headerLabel =
+      field === "TOTAL"
+        ? `SG&A — ${MONTH_LABELS[monthIdx]}`
+        : `${SGA_FIELDS.find((f) => f.key === field)?.label || "SG&A"} — ${MONTH_LABELS[monthIdx]}`
+
+    const lines: string[] = [headerLabel, "Desglose por canal y producto:"]
+    let printed = 0
+    const maxProducts = 18
+    for (const ch of channelEntries) {
+      if (printed >= maxProducts) break
+      lines.push(`- ${ch.channel}: ${fmtNeg(ch.channelTotal)}`)
+      for (const p of ch.prodEntries) {
+        if (printed >= maxProducts) break
+        lines.push(`  - ${p.product}: ${fmtNeg(p.amount)}`)
+        printed++
+      }
+    }
+    const total = channelEntries.reduce((s, x) => s + x.channelTotal, 0)
+    lines.push(`Total: ${fmtNeg(total)}`)
+    if (printed >= maxProducts) lines.push("(mostrando top contribuciones)")
+    return lines.join("\n")
+  }
+
   const startEditBudgetUnit = (productName: string, monthIdx: number, current: number) => {
     if (!canEditBudgetUnits) return
     setEditingBudgetUnit({ productName, monthIdx })
@@ -1593,6 +1661,7 @@ export function PLTable({
     colorClass,
     prominent = false,
     forceGray = false,
+    cellTitle,
   }: {
     label: string
     labelNode?: ReactNode
@@ -1605,6 +1674,7 @@ export function PLTable({
     prominent?: boolean
     // Forzar color gris/neutral en totales clave.
     forceGray?: boolean
+    cellTitle?: (monthIdx: number) => string | undefined
   }) => {
     const ytdVal = periodSum(values)
     const totalVal = sum(values)
@@ -1644,7 +1714,7 @@ export function PLTable({
           const v = values[i] ?? 0
           return (
             <td key={i} className={`${cellCls} ${cellSizeCls} ${numColor} ${bold || prominent ? "font-semibold" : ""}`}>
-              {fmtFn(v)}
+              <span title={cellTitle ? cellTitle(i) : undefined}>{fmtFn(v)}</span>
             </td>
           )
         })}
@@ -1692,7 +1762,9 @@ export function PLTable({
                   onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") cancelEdit() }}
                   autoFocus
                 />
-              ) : fmtNeg(v)}
+              ) : (
+                <span title={buildSgaTooltip(mIdx, field)}>{fmtNeg(v)}</span>
+              )}
             </td>
           )
         })}
@@ -2008,6 +2080,7 @@ export function PLTable({
                 prominent
                 forceGray
                 colorClass="text-white"
+                cellTitle={(mi) => buildSgaTooltip(mi, "TOTAL")}
               />
 
               {/* ─ Taxes (sin título) ─────────────────────────────────── */}
