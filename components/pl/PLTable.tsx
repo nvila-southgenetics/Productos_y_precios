@@ -255,7 +255,11 @@ export function PLTable({
     year === 2026
 
   // Modo híbrido (sin UI de Combinar): Q1 = Real 2026, resto = Budget forecast Q1.
-  const hybridForecastQ1Enabled = isForecastQ1 && !combineEnabled && !testMode
+  // Importante: solo aplica cuando el filtro de países esté acotado a AR/CL (los únicos países cargados en ese budget),
+  // para no "inventar" datos Real en países que no tienen proyección en forecast Q1.
+  const hybridCountriesOk =
+    countries.length > 0 && countries.every((c) => ["AR", "CL"].includes(String(c || "").toUpperCase()))
+  const hybridForecastQ1Enabled = isForecastQ1 && hybridCountriesOk && !combineEnabled && !testMode
   const [hybridRealSnapshot, setHybridRealSnapshot] = useState<ModelSnapshot | null>(null)
 
   // Mapeo (normalizado) de texto de ventas/budget -> nombre canónico del catálogo.
@@ -1225,15 +1229,26 @@ export function PLTable({
       return Object.values(activeQuantities).reduce((s, arr) => s + (arr[i] || 0), 0)
     }
 
-    const combineLike = combineEnabled || hybridForecastQ1Enabled
-    if (combineLike) {
+    if (combineEnabled) {
       const m = calcMonthModelAt(i)
-      const snap = combineEnabled ? combinedSnapshots[m] : (m === "real_2026" ? hybridRealSnapshot : null)
+      const snap = combinedSnapshots[m]
       if (!snap) return 0
       if (m.startsWith("budget:")) {
         return (snap.budgetRows || []).reduce((s, row) => s + Number((row as any)[MONTH_KEYS[i] as any] || 0), 0)
       }
       return Object.values(snap.quantities || {}).reduce((s, arr) => s + (arr[i] || 0), 0)
+    }
+
+    // Modo híbrido: solo Q1 toma Real; el resto usa el budget normal ya cargado.
+    if (hybridForecastQ1Enabled) {
+      const m = calcMonthModelAt(i)
+      if (m === "real_2026") {
+        const snap = hybridRealSnapshot
+        if (!snap) return 0
+        return Object.values(snap.quantities || {}).reduce((s, arr) => s + (arr[i] || 0), 0)
+      }
+      // budget month: unidades desde la tabla budget (respetando canal seleccionado o todos)
+      return (budgetRows || []).reduce((s, row) => s + Number((row as any)[MONTH_KEYS[i] as any] || 0), 0)
     }
 
     if (modelo === "budget") {
