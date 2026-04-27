@@ -62,13 +62,6 @@ export function productNameSortKey(name: string): string {
 /** Nombre a mostrar para productos en el frontend (alias legibles). */
 export function displayProductName(name: string | null | undefined): string {
   const trimmed = (name ?? "").trim()
-  const lower = trimmed.toLowerCase()
-
-  // Unificar \"Unity Básico\" (como se guarda en BD) a \"Unity\" en toda la UI
-  if (lower === "unity básico" || lower === "unity basico") {
-    return "Unity"
-  }
-
   return trimmed
 }
 
