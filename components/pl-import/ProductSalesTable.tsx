@@ -99,8 +99,10 @@ export function ProductSalesTable({ sales, isAllCompanies = false, isTotal = fal
             const grossProfit = calculateGrossProfit(sale.overrides, sale.cantidad_ventas)
             const totalAmount = sale.monto_total || 0
 
-            const hasNoGrossSale = grossSale === 0
-            const hasNoGrossProfit = grossProfit === 0
+            // Si cantidad=0 (por ejemplo, ventas y devoluciones netean a 0), grossSale/grossProfit pueden ser 0 sin que falten precios.
+            // El warning solo aplica cuando hay cantidad != 0 pero el cálculo igual queda en 0 (probable falta de overrides/precios).
+            const shouldWarnGrossSale = sale.cantidad_ventas !== 0 && grossSale === 0
+            const shouldWarnGrossProfit = sale.cantidad_ventas !== 0 && grossProfit === 0
 
             return (
               <tr key={index} className="border-b border-white/10 bg-[#1e4d7b]/30 hover:bg-[#1e4d7b]/45 transition-colors">
@@ -146,10 +148,10 @@ export function ProductSalesTable({ sales, isAllCompanies = false, isTotal = fal
                 </td>
                 <td className="px-3 py-2 text-right">
                   <div className="flex items-center justify-end gap-1">
-                    <span className={hasNoGrossSale ? "text-white/50 text-sm" : "text-sky-300 font-medium text-sm"}>
+                    <span className={shouldWarnGrossSale ? "text-white/50 text-sm" : "text-sky-300 font-medium text-sm"}>
                       {formatCurrency(grossSale)}
                     </span>
-                    {hasNoGrossSale && (
+                    {shouldWarnGrossSale && (
                       <span title="Este producto no tiene precios configurados para este país">
                         <AlertTriangle className="h-3 w-3 text-yellow-300" />
                       </span>
@@ -158,10 +160,10 @@ export function ProductSalesTable({ sales, isAllCompanies = false, isTotal = fal
                 </td>
                 <td className="px-3 py-2 text-right">
                   <div className="flex items-center justify-end gap-1">
-                    <span className={hasNoGrossProfit ? "text-white/50 text-sm" : "text-orange-300 font-medium text-sm"}>
+                    <span className={shouldWarnGrossProfit ? "text-white/50 text-sm" : "text-orange-300 font-medium text-sm"}>
                       {formatCurrency(grossProfit)}
                     </span>
-                    {hasNoGrossProfit && (
+                    {shouldWarnGrossProfit && (
                       <span title="Este producto no tiene precios configurados para este país">
                         <AlertTriangle className="h-3 w-3 text-yellow-300" />
                       </span>
