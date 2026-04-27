@@ -1022,22 +1022,35 @@ export function PLTable({
       if (products.length > 0 && !products.includes(name)) continue
 
       const o = row.overrides || {}
-      const key = `${prodId}|${row.channel || ""}`
-      const prev = ovs[key] || emptyOverride()
+      const ch = row.channel || ""
+      const idKey = `${prodId}|${ch}`
+      const nameKey = `${name}|${ch}`
 
-      ovs[key] = {
-        grossSalesUSD: prev.grossSalesUSD + (o.grossSalesUSD || 0),
-        commercialDiscountUSD: prev.commercialDiscountUSD + (o.commercialDiscountUSD || 0),
-        productCostUSD: prev.productCostUSD + (o.productCostUSD || 0),
-        kitCostUSD: prev.kitCostUSD + (o.kitCostUSD || 0),
-        paymentFeeUSD: prev.paymentFeeUSD + (o.paymentFeeUSD || 0),
-        bloodDrawSampleUSD: prev.bloodDrawSampleUSD + (o.bloodDrawSampleUSD || 0),
-        sanitaryPermitsUSD: prev.sanitaryPermitsUSD + (o.sanitaryPermitsUSD || 0),
-        externalCourierUSD: prev.externalCourierUSD + (o.externalCourierUSD || 0),
-        internalCourierUSD: prev.internalCourierUSD + (o.internalCourierUSD || 0),
-        physiciansFeesUSD: prev.physiciansFeesUSD + (o.physiciansFeesUSD || 0),
-        salesCommissionUSD: prev.salesCommissionUSD + (o.salesCommissionUSD || 0),
+      const addToKey = (key: string) => {
+        const prev = ovs[key] || emptyOverride()
+        ovs[key] = {
+          grossSalesUSD: prev.grossSalesUSD + (o.grossSalesUSD || 0),
+          commercialDiscountUSD: prev.commercialDiscountUSD + (o.commercialDiscountUSD || 0),
+          productCostUSD: prev.productCostUSD + (o.productCostUSD || 0),
+          kitCostUSD: prev.kitCostUSD + (o.kitCostUSD || 0),
+          paymentFeeUSD: prev.paymentFeeUSD + (o.paymentFeeUSD || 0),
+          bloodDrawSampleUSD: prev.bloodDrawSampleUSD + (o.bloodDrawSampleUSD || 0),
+          sanitaryPermitsUSD: prev.sanitaryPermitsUSD + (o.sanitaryPermitsUSD || 0),
+          externalCourierUSD: prev.externalCourierUSD + (o.externalCourierUSD || 0),
+          internalCourierUSD: prev.internalCourierUSD + (o.internalCourierUSD || 0),
+          physiciansFeesUSD: prev.physiciansFeesUSD + (o.physiciansFeesUSD || 0),
+          salesCommissionUSD: prev.salesCommissionUSD + (o.salesCommissionUSD || 0),
+        }
       }
+
+      // Soportar budget rows con product_id NULL:
+      // - claves por id|canal (principal)
+      // - claves por name|canal (fallback)
+      // - y claves base sin canal (fallback)
+      addToKey(idKey)
+      addToKey(nameKey)
+      addToKey(`${prodId}|`)
+      addToKey(`${name}|`)
     }
 
     setBudgetOverrides(ovs)
