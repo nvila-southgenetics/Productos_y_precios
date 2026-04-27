@@ -1335,13 +1335,74 @@ export function PLTable({
 
   const detailData = (() => {
     if (combineEnabled) {
-      return buildCombinedDetail()
+      // En modo combinar, el detalle solo soporta Gross Sale para meses "real" (odooAmounts) por ahora.
+      const built = buildCombinedDetail()
+      return { ...built, grossSale: built.odoo }
     }
     // No combinar: usar los estados actuales.
     // En real, Gross Sales viene de Odoo (odooAmounts). En budget/test no tenemos Odoo.
+    const grossSale: Record<string, number[]> = {}
+    const ensureArr = (m: Record<string, number[]>, key: string) => {
+      if (!m[key]) m[key] = Array(12).fill(0)
+      return m[key]
+    }
+
+    if (modelo === "real") {
+      // Real: usar directamente montos importados de Odoo por producto y mes
+      for (const [rawName, arr] of Object.entries(odooAmounts)) {
+        const name = resolveToCatalogName(rawName)
+        const outArr = ensureArr(grossSale, name)
+        for (let i = 0; i < 12; i++) outArr[i] += (arr[i] || 0)
+      }
+    } else if (modelo === "budget" && !testMode) {
+      // Budget: calcular gross sale desde budgetRows + override por unidad (por canal cuando corresponda)
+      const pickBudgetOv = (row: any): OverrideData => {
+        const prodId = String(row?.product_id || "")
+        const name = resolveToCatalogName(String(row?.product_name || ""))
+        const rowChannel = String(row?.channel || "")
+        const idChannelKey = prodId ? `${prodId}|${rowChannel}` : ""
+        const idPacienteKey = prodId ? `${prodId}|Paciente` : ""
+        const idBaseKey = prodId ? `${prodId}|` : ""
+        const nameChannelKey = `${name}|${rowChannel}`
+        const namePacienteKey = `${name}|Paciente`
+        const nameBaseKey = `${name}|`
+        return (
+          (idChannelKey && budgetOverrides[idChannelKey]) ||
+          (idPacienteKey && budgetOverrides[idPacienteKey]) ||
+          (idBaseKey && budgetOverrides[idBaseKey]) ||
+          budgetOverrides[nameChannelKey] ||
+          budgetOverrides[namePacienteKey] ||
+          budgetOverrides[nameBaseKey] ||
+          emptyOverride()
+        )
+      }
+
+      for (const row of (budgetRows || []) as any[]) {
+        const name = resolveToCatalogName(String(row?.product_name || ""))
+        if (!name) continue
+        const ov = pickBudgetOv(row)
+        const outArr = ensureArr(grossSale, name)
+        for (let i = 0; i < 12; i++) {
+          const units = Number(row[MONTH_KEYS[i] as any] || 0)
+          if (units === 0) continue
+          outArr[i] += (ov.grossSalesUSD || 0) * units
+        }
+      }
+    }
+
+    // Modo híbrido forecast Q1: para Q1, usar montos reales (Odoo) por producto si están disponibles.
+    if (hybridForecastQ1Enabled && hybridRealSnapshot?.odooAmounts) {
+      for (const [rawName, arr] of Object.entries(hybridRealSnapshot.odooAmounts)) {
+        const name = resolveToCatalogName(rawName)
+        const outArr = ensureArr(grossSale, name)
+        for (let i = 0; i <= 2; i++) outArr[i] = (arr[i] || 0)
+      }
+    }
+
     return {
       qty: activeQuantities,
       odoo: modelo === "real" ? odooAmounts : {},
+      grossSale,
     }
   })()
 
@@ -2272,7 +2333,7 @@ export function PLTable({
                       const cat = productCategories[name] || ""
                       const isKnownProduct = Object.prototype.hasOwnProperty.call(productCategories, name)
                       const rowTotal = monthIndices.reduce((s, i) => s + (qtArr[i] || 0), 0)
-                      const totalGS = monthIndices.reduce((s, i) => s + ((detailData.odoo[name]?.[i] || 0) as number), 0)
+                      const totalGS = monthIndices.reduce((s, i) => s + ((detailData.grossSale?.[name]?.[i] || 0) as number), 0)
                       return (
                       <tr key={name} className="hover:bg-white/5 transition-colors">
                           <td className="sticky left-0 bg-slate-800/95 px-3 py-2 text-xs text-white/90 whitespace-nowrap z-10">
@@ -2424,7 +2485,7 @@ export function PLTable({
                       <td className="px-2 py-2 text-right text-xs font-bold text-blue-300 tabular-nums">
                         {(() => {
                           const total = Object.entries(detailData.qty).reduce((s, [name]) => {
-                            const amt = detailData.odoo[name]
+                            const amt = detailData.grossSale?.[name]
                             if (!amt) return s
                             return s + monthIndices.reduce((a, i) => a + (amt[i] || 0), 0)
                           }, 0)
