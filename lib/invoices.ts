@@ -26,6 +26,9 @@ export interface InvoiceMetrics {
   paid: number
   notPaid: number
   inPayment: number
+  billedAmount: number
+  collectedAmount: number
+  inProcessAmount: number
 }
 
 export interface InvoiceMonthlyPoint {
@@ -64,23 +67,44 @@ async function fetchAllInvoices<T>(selectClause: string): Promise<T[]> {
 }
 
 export async function getInvoiceMetrics(): Promise<InvoiceMetrics> {
-  const [totalQ, paidQ, notPaidQ, inPaymentQ] = await Promise.all([
-    supabase.from("invoices").select("id", { count: "exact", head: true }),
-    supabase.from("invoices").select("id", { count: "exact", head: true }).eq("payment_state", "paid"),
-    supabase.from("invoices").select("id", { count: "exact", head: true }).eq("payment_state", "not_paid"),
-    supabase.from("invoices").select("id", { count: "exact", head: true }).eq("payment_state", "in_payment"),
-  ])
+  const data = await fetchAllInvoices<{ payment_state: string | null; total_Amount: number | null }>(
+    "payment_state, total_Amount"
+  )
 
-  if (totalQ.error) throw totalQ.error
-  if (paidQ.error) throw paidQ.error
-  if (notPaidQ.error) throw notPaidQ.error
-  if (inPaymentQ.error) throw inPaymentQ.error
+  let total = 0
+  let paid = 0
+  let notPaid = 0
+  let inPayment = 0
+  let billedAmount = 0
+  let collectedAmount = 0
+  let inProcessAmount = 0
+
+  for (const row of data) {
+    total += 1
+    const amount = row.total_Amount ?? 0
+    billedAmount += amount
+
+    if (row.payment_state === "paid") {
+      paid += 1
+      collectedAmount += amount
+    }
+    if (row.payment_state === "not_paid") {
+      notPaid += 1
+    }
+    if (row.payment_state === "in_payment") {
+      inPayment += 1
+      inProcessAmount += amount
+    }
+  }
 
   return {
-    total: totalQ.count ?? 0,
-    paid: paidQ.count ?? 0,
-    notPaid: notPaidQ.count ?? 0,
-    inPayment: inPaymentQ.count ?? 0,
+    total,
+    paid,
+    notPaid,
+    inPayment,
+    billedAmount,
+    collectedAmount,
+    inProcessAmount,
   }
 }
 

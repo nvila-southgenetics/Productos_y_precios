@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
-import { cn, formatDate, formatNumber } from "@/lib/utils"
+import { cn, formatCurrency, formatDate, formatNumber } from "@/lib/utils"
 import {
   getInvoiceCompanies,
   getInvoiceMetrics,
@@ -52,7 +52,12 @@ export default function InvoicesPage() {
     paid: 0,
     notPaid: 0,
     inPayment: 0,
+    billedAmount: 0,
+    collectedAmount: 0,
+    inProcessAmount: 0,
   })
+  const paidAndInProcessCount = metrics.paid + metrics.inPayment
+  const paidAndInProcessAmount = metrics.collectedAmount + metrics.inProcessAmount
   const [monthlyData, setMonthlyData] = useState<Array<{ month: string; paid: number; notPaid: number; inPayment: number }>>([])
   const [rows, setRows] = useState<InvoiceRow[]>([])
   const [companies, setCompanies] = useState<string[]>([])
@@ -129,7 +134,7 @@ export default function InvoicesPage() {
               <BarChart3 className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-white">Facturas</h1>
+              <h1 className="text-3xl font-bold text-white">Cobranza</h1>
               <p className="text-sm text-white/80 mt-1">Análisis de estado de pago y detalle por cliente</p>
             </div>
           </div>
@@ -139,7 +144,7 @@ export default function InvoicesPage() {
           <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
           <div className="rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4">
             <p className="text-sm text-white/70">Total de facturas</p>
             <p className="text-2xl font-semibold text-white">{formatNumber(metrics.total)}</p>
@@ -155,6 +160,25 @@ export default function InvoicesPage() {
           <div className="rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4">
             <p className="text-sm text-white/70">Total en proceso</p>
             <p className="text-2xl font-semibold text-amber-300">{formatNumber(metrics.inPayment)}</p>
+          </div>
+          <div className="rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4">
+            <p className="text-sm text-white/70">Pagado + En proceso de pago</p>
+            <p className="text-2xl font-semibold text-cyan-300">{formatNumber(paidAndInProcessCount)}</p>
+            <p className="text-sm font-medium text-cyan-200 mt-1">{formatCurrency(paidAndInProcessAmount)}</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4">
+            <p className="text-sm text-white/70">Total facturado (monto)</p>
+            <p className="text-2xl font-semibold text-white">{formatCurrency(metrics.billedAmount)}</p>
+          </div>
+          <div className="rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4">
+            <p className="text-sm text-white/70">Total cobrado (monto)</p>
+            <p className="text-2xl font-semibold text-emerald-300">{formatCurrency(metrics.collectedAmount)}</p>
+          </div>
+          <div className="rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4">
+            <p className="text-sm text-white/70">Total en proceso (monto)</p>
+            <p className="text-2xl font-semibold text-amber-300">{formatCurrency(metrics.inProcessAmount)}</p>
           </div>
         </div>
 
