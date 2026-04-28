@@ -41,6 +41,7 @@ export default function PLImportPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [loadingPeriods, setLoadingPeriods] = useState<Set<string>>(new Set())
   const loadingRef = useRef<Set<string>>(new Set()) // Ref para rastrear períodos en carga
+  const queryKeyRef = useRef(0) // Evita que respuestas viejas pisen el estado
 
   const companyParam = useMemo(
     () => companyQueryFromSelection(companies, selectedCompanies, isAdmin),
@@ -81,18 +82,14 @@ export default function PLImportPage() {
 
   // Función para cargar datos de un período específico - MEMOIZADA para evitar loops infinitos
   const loadPeriodData = useCallback(async (periodo: string) => {
+    const myKey = queryKeyRef.current
     // Verificar si ya está cargando usando ref (síncrono)
     if (loadingRef.current.has(periodo)) {
       return // Ya está en proceso de carga
     }
 
-    // Verificar si ya está cargado
-    setMonthlyData((prev) => {
-      if (prev[periodo] && prev[periodo].length > 0) {
-        return prev // Ya está cargado
-      }
-      return prev
-    })
+    // Verificar si ya está cargado (lectura síncrona por cierre no es confiable),
+    // se re-chequea antes de setear el resultado.
 
     // Marcar como cargando
     loadingRef.current.add(periodo)
@@ -100,6 +97,7 @@ export default function PLImportPage() {
 
     try {
       const data = await getMonthlySales(companyParam, periodo, selectedProducts.length ? selectedProducts : undefined)
+      if (queryKeyRef.current !== myKey) return
       setMonthlyData((prev) => {
         // Solo actualizar si no existe
         if (prev[periodo] && prev[periodo].length > 0) {
@@ -124,6 +122,7 @@ export default function PLImportPage() {
   useEffect(() => {
     async function loadPeriods() {
       if (!companies.length) return
+      const myKey = ++queryKeyRef.current
       try {
         // Limpiar datos anteriores al cambiar compañía
         setMonthlyData({})
@@ -132,6 +131,7 @@ export default function PLImportPage() {
         setLoadingPeriods(new Set())
         
         const periodsData = await getAvailablePeriods(companyParam)
+        if (queryKeyRef.current !== myKey) return
         console.log(`📊 Períodos cargados para ${companyLabelForUi}:`, periodsData)
         setPeriods(periodsData)
         
@@ -159,22 +159,31 @@ export default function PLImportPage() {
       }
     }
     
+    const myKey = queryKeyRef.current
+    const timeouts: number[] = []
     // Cargar datos de cada período automáticamente
     periods.forEach((periodo, index) => {
       // Delay escalonado para evitar sobrecarga
-      setTimeout(() => {
+      const id = window.setTimeout(() => {
+        if (queryKeyRef.current !== myKey) return
         loadPeriodData(periodo)
       }, index * 50)
+      timeouts.push(id)
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    return () => {
+      for (const id of timeouts) window.clearTimeout(id)
+    }
   }, [periods, selectedProducts, companyParam])
 
   // Cargar total anual cuando cambian los filtros
   useEffect(() => {
     async function loadTotal() {
       if (!companies.length) return
+      const myKey = queryKeyRef.current
       try {
         const total = await getAnnualTotal(companyParam, selectedProducts.length ? selectedProducts : undefined)
+        if (queryKeyRef.current !== myKey) return
         setTotalData(total)
       } catch (error) {
         console.error("Error loading total:", error)
