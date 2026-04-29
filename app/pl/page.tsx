@@ -135,7 +135,7 @@ function MultiCheckboxDropdown({
 }
 
 export default function PLPage() {
-  const { allowedCountries, isAdmin, canEdit, loading: permLoading } = usePermissions()
+  const { userId, allowedCountries, isAdmin, canEdit, loading: permLoading } = usePermissions()
   const [modelKey, setModelKey] = useState<ModelKey>("budget:budget")
   const [combineEnabled, setCombineEnabled] = useState(false)
   const [monthModels, setMonthModels] = useState<ModelKey[]>(Array(12).fill("budget:budget"))
@@ -175,7 +175,11 @@ export default function PLPage() {
         setSelectedCompanies([])
       }
     }
-    if (!permLoading) loadCompanies()
+    if (!permLoading && userId) loadCompanies()
+    if (!permLoading && !userId) {
+      setCompanies([])
+      setSelectedCompanies([])
+    }
   }, [permLoading, isAdmin, allowedCountryCodes.join("|")])
 
   const companyParam = useMemo(
@@ -453,8 +457,12 @@ export default function PLPage() {
           </div>
         </div>
 
-        {/* P&L Table: no montar hasta tener compañías — evita fetch con countries=[] y carga colgada */}
-        {plDataReady ? (
+        {/* P&L Table: no montar hasta tener sesión y filtros */}
+        {!permLoading && !userId ? (
+          <div className="rounded-lg border border-amber-500/35 bg-amber-950/25 px-6 py-10 text-center text-amber-100/95 text-sm max-w-lg mx-auto">
+            Tu sesión no está activa en este dominio (deploy de Vercel). Iniciá sesión nuevamente en <span className="font-semibold">/login</span>.
+          </div>
+        ) : plDataReady ? (
           <PLTable
             key={`${countriesForPL.slice().sort().join(",")}-${(salesCompanies ? salesCompanies.slice().sort().join(",") : "all")}-${modelKey}-${year}`}
             modelo={isBudgetModel ? "budget" : "real"}
