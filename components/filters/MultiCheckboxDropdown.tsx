@@ -88,7 +88,7 @@ export function MultiCheckboxDropdown({
                 className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/90 hover:bg-white/10"
               >
                 <Checkbox checked={selectedValues.includes(opt.value)} />
-                {opt.label}
+                <span className="min-w-0 flex-1 truncate text-left">{opt.label}</span>
               </button>
             ))}
           </div>
