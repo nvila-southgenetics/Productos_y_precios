@@ -165,6 +165,7 @@ function ProductosContent() {
           selectedCountriesFromCompanies.length === 0
             ? dataAll
             : dataAll.filter((p) =>
+                (p.country_overrides || []).length === 0 ||
                 (p.country_overrides || []).some((o) => selectedCountriesFromCompanies.includes(o.country_code))
               )
         // Ordenar productos alfabéticamente por nombre
@@ -286,6 +287,7 @@ function ProductosContent() {
         selectedCountriesFromCompanies.length === 0
           ? dataAll
           : dataAll.filter((p) =>
+              (p.country_overrides || []).length === 0 ||
               (p.country_overrides || []).some((o) => selectedCountriesFromCompanies.includes(o.country_code))
             )
       const sortedData = data.sort((a, b) => productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), 'es', { sensitivity: 'base' }))
@@ -305,6 +307,7 @@ function ProductosContent() {
         selectedCountriesFromCompanies.length === 0
           ? dataAll
           : dataAll.filter((p) =>
+              (p.country_overrides || []).length === 0 ||
               (p.country_overrides || []).some((o) => selectedCountriesFromCompanies.includes(o.country_code))
             )
       const sortedData = data.sort((a, b) => productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), 'es', { sensitivity: 'base' }))
