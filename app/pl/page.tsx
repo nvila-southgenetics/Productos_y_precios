@@ -141,7 +141,6 @@ export default function PLPage() {
   const [monthModels, setMonthModels] = useState<ModelKey[]>(Array(12).fill("budget:budget"))
   const [budgetNames, setBudgetNames] = useState<string[]>(["budget"])
   // Arrays con multi-selección: si elegís "Todos", guardamos todos los valores posibles.
-  const [selectedCountries, setSelectedCountries] = useState<string[]>([])
   const [companies, setCompanies] = useState<string[]>([])
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([])
   const [selectedCategories, setSelectedCategories] = useState<string[]>(CATEGORIES)
@@ -206,16 +205,10 @@ export default function PLPage() {
   }, [salesCompanies, allowedCountryCodes.join("|")])
 
   useEffect(() => {
-    if (!permLoading && allowedCountryCodes.length > 0) {
-      setSelectedCountries([...allowedCountryCodes])
-    }
-  }, [permLoading, allowedCountryCodes])
-
-  useEffect(() => {
     fetchBudgetNames()
     fetchProducts()
     setProductsSelected([])
-  }, [selectedCountries, selectedCategories, modelKey, year, selectedBudgetName])
+  }, [countriesFromCompanies.join("|"), selectedCategories, modelKey, year, selectedBudgetName])
 
   // Inicializar el mapeo por mes cuando se activa "Combinar"
   useEffect(() => {
@@ -228,7 +221,7 @@ export default function PLPage() {
   const fetchBudgetNames = async () => {
     try {
       let q = supabase.from("budget").select("budget_name").eq("year", budgetYear)
-      if (selectedCountries.length) q = q.in("country_code", selectedCountries)
+      if (countriesFromCompanies.length) q = q.in("country_code", countriesFromCompanies)
       const { data } = await q
       const rows = (data ?? []) as any[]
       const names: string[] = [...new Set(
@@ -255,7 +248,7 @@ export default function PLPage() {
       if (isBudgetModel) {
         let q = supabase.from("budget").select("product_name").eq("year", budgetYear)
         q = q.eq("budget_name", selectedBudgetName)
-        if (selectedCountries.length) q = q.in("country_code", selectedCountries)
+        if (countriesFromCompanies.length) q = q.in("country_code", countriesFromCompanies)
         const { data } = await q
         if (!data) return
         let names = [...new Set(data.map((b: { product_name: string }) => b.product_name))] as string[]
@@ -293,15 +286,8 @@ export default function PLPage() {
     }
   }
 
-  const countryOptions: Option[] = BASE_COUNTRIES.filter((c) => allowedCountryCodes.includes(c.code)).map((c) => ({
-    value: c.code,
-    label: c.name,
-  }))
-  const countriesForUI = selectedCountries.length ? selectedCountries : (allowedCountryCodes[0] ? [allowedCountryCodes[0]] : [])
-
-  const isRealModel = !isBudgetModel
-  const countriesForPL = isRealModel ? countriesFromCompanies : countriesForUI
-  const plDataReady = !permLoading && countriesForPL.length > 0 && (!isRealModel || companies.length > 0)
+  const countriesForPL = countriesFromCompanies
+  const plDataReady = !permLoading && countriesForPL.length > 0 && companies.length > 0
 
   return (
     <div className="min-h-screen bg-gradient-to-r from-blue-900 via-blue-950 to-slate-900">
@@ -318,7 +304,7 @@ export default function PLPage() {
           {permLoading && (
             <p className="text-sm text-white/60 mb-3 col-span-full">Cargando permisos de usuario…</p>
           )}
-          <div className={`grid grid-cols-2 ${isBudgetModel ? "md:grid-cols-7" : "md:grid-cols-6"} gap-4`}>
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
             {/* Modelo */}
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-white/90">Modelo</label>
@@ -341,29 +327,15 @@ export default function PLPage() {
               </Select>
             </div>
 
-            {/* País (solo Budget) */}
-            {isBudgetModel && (
-              <MultiCheckboxDropdown
-                label="País"
-                options={countryOptions}
-                selectedValues={countriesForUI}
-                onSelectedValuesChange={setSelectedCountries}
-                allLabel={isAdmin ? "Todos los países" : "Todos (mis países)"}
-                pendingLabel={permLoading ? "Cargando permisos…" : undefined}
-              />
-            )}
-
             {/* Compañía (ventas) */}
-            {!isBudgetModel && (
-              <MultiCheckboxDropdown
-                label="Compañía"
-                options={companies.map((c) => ({ value: c, label: c }))}
-                selectedValues={selectedCompanies.length ? selectedCompanies : companies}
-                onSelectedValuesChange={setSelectedCompanies}
-                allLabel={isAdmin ? "Todas las compañías" : "Todas (mis compañías)"}
-                pendingLabel={permLoading ? "Cargando permisos…" : undefined}
-              />
-            )}
+            <MultiCheckboxDropdown
+              label="Compañía"
+              options={companies.map((c) => ({ value: c, label: c }))}
+              selectedValues={selectedCompanies.length ? selectedCompanies : companies}
+              onSelectedValuesChange={setSelectedCompanies}
+              allLabel={isAdmin ? "Todas las compañías" : "Todas (mis compañías)"}
+              pendingLabel={permLoading ? "Cargando permisos…" : undefined}
+            />
 
             {/* Categoría */}
             <MultiCheckboxDropdown
