@@ -172,6 +172,23 @@ function normalizeProductKeyLoose(name: string): string {
   return normalizeProductKey(name).replace(/v(?=\d)/g, "")
 }
 
+// Normalización "de matching" para Budget/Forecast:
+// - Reduce diferencias frecuentes entre fuentes (inglés/español, acentos, corchetes, etc.)
+// - No intenta ser fuzzy (sin levenshtein), pero cubre variantes comunes.
+function normalizeBudgetMatchKey(name: string): string {
+  const raw = String(name || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\[.*?\]/g, " ")
+
+  // Equivalencias comunes que rompen matching exacto entre fuentes
+  const canon = raw.replace(/\b(professional|profesional)\b/g, "prof")
+
+  return canon.replace(/[^a-z0-9]/g, "")
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function PLTable({
@@ -459,6 +476,7 @@ export function PLTable({
         const name = (row as any).product_name as string
         const rowChannel = ((row as any).channel as string) || ""
         const nameNorm = normalizeProductKeyLoose(name)
+        const nameMatch = normalizeBudgetMatchKey(name)
 
         const idChannelKey = prodId ? `${prodId}|${rowChannel}` : ""
         const idPacienteKey = prodId ? `${prodId}|Paciente` : ""
@@ -469,6 +487,9 @@ export function PLTable({
         const normChannelKey = nameNorm ? `${nameNorm}|${rowChannel}` : ""
         const normPacienteKey = nameNorm ? `${nameNorm}|Paciente` : ""
         const normBaseKey = nameNorm ? `${nameNorm}|` : ""
+        const matchChannelKey = nameMatch ? `${nameMatch}|${rowChannel}` : ""
+        const matchPacienteKey = nameMatch ? `${nameMatch}|Paciente` : ""
+        const matchBaseKey = nameMatch ? `${nameMatch}|` : ""
 
         const ov =
           (idChannelKey && ovs[idChannelKey]) ||
@@ -480,6 +501,9 @@ export function PLTable({
           (normChannelKey && ovs[normChannelKey]) ||
           (normPacienteKey && ovs[normPacienteKey]) ||
           (normBaseKey && ovs[normBaseKey]) ||
+          (matchChannelKey && ovs[matchChannelKey]) ||
+          (matchPacienteKey && ovs[matchPacienteKey]) ||
+          (matchBaseKey && ovs[matchBaseKey]) ||
           emptyOverride()
 
         const units = Number((row as any)[MONTH_KEYS[mIdx] as any] || 0)
@@ -1059,6 +1083,8 @@ export function PLTable({
       const nameKey = `${name}|${ch}`
       const normName = normalizeProductKeyLoose(name)
       const normKey = normName ? `${normName}|${ch}` : ""
+      const matchName = normalizeBudgetMatchKey(name)
+      const matchKey = matchName ? `${matchName}|${ch}` : ""
 
       const addToKey = (key: string) => {
         const prev = ovs[key] || emptyOverride()
@@ -1081,13 +1107,16 @@ export function PLTable({
       // - claves por id|canal (principal)
       // - claves por name|canal (fallback)
       // - claves por name normalizado|canal (fallback tolerante)
+      // - claves por matchKey|canal (fallback para variantes frecuentes)
       // - y claves base sin canal (fallback)
       addToKey(idKey)
       addToKey(nameKey)
       if (normKey) addToKey(normKey)
+      if (matchKey) addToKey(matchKey)
       addToKey(`${prodId}|`)
       addToKey(`${name}|`)
       if (normName) addToKey(`${normName}|`)
+      if (matchName) addToKey(`${matchName}|`)
     }
 
     setBudgetOverrides(ovs)
@@ -1411,6 +1440,7 @@ export function PLTable({
         const name = resolveToCatalogName(String(row?.product_name || ""))
         const rowChannel = String(row?.channel || "")
         const nameNorm = normalizeProductKeyLoose(name)
+        const nameMatch = normalizeBudgetMatchKey(name)
         const idChannelKey = prodId ? `${prodId}|${rowChannel}` : ""
         const idPacienteKey = prodId ? `${prodId}|Paciente` : ""
         const idBaseKey = prodId ? `${prodId}|` : ""
@@ -1420,6 +1450,9 @@ export function PLTable({
         const normChannelKey = nameNorm ? `${nameNorm}|${rowChannel}` : ""
         const normPacienteKey = nameNorm ? `${nameNorm}|Paciente` : ""
         const normBaseKey = nameNorm ? `${nameNorm}|` : ""
+        const matchChannelKey = nameMatch ? `${nameMatch}|${rowChannel}` : ""
+        const matchPacienteKey = nameMatch ? `${nameMatch}|Paciente` : ""
+        const matchBaseKey = nameMatch ? `${nameMatch}|` : ""
         return (
           (idChannelKey && budgetOverrides[idChannelKey]) ||
           (idPacienteKey && budgetOverrides[idPacienteKey]) ||
@@ -1430,6 +1463,9 @@ export function PLTable({
           (normChannelKey && budgetOverrides[normChannelKey]) ||
           (normPacienteKey && budgetOverrides[normPacienteKey]) ||
           (normBaseKey && budgetOverrides[normBaseKey]) ||
+          (matchChannelKey && budgetOverrides[matchChannelKey]) ||
+          (matchPacienteKey && budgetOverrides[matchPacienteKey]) ||
+          (matchBaseKey && budgetOverrides[matchBaseKey]) ||
           emptyOverride()
         )
       }
