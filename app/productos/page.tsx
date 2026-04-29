@@ -4,15 +4,23 @@ import { useState, useEffect, useMemo, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Select } from "@/components/ui/select"
 import { ProductTable } from "@/components/products/ProductTable"
 import { ProductFilters } from "@/components/products/ProductFilters"
-import { CountryPills } from "@/components/products/CountryPills"
 import { ProductMergeDialog } from "@/components/products/ProductMergeDialog"
-import { getProductsWithOverrides, deleteProductFromCountry, deleteProductFromAllCountries, getTotalSalesByProductIds, type ProductWithOverrides } from "@/lib/supabase-mcp"
+import {
+  getCompanies,
+  getProductsWithOverrides,
+  deleteProductFromCountry,
+  deleteProductFromAllCountries,
+  getTotalSalesByProductIds,
+  type ProductWithOverrides,
+} from "@/lib/supabase-mcp"
 import { usePermissions } from "@/lib/use-permissions"
 import { supabase } from "@/lib/supabase"
 import { productNameSortKey } from "@/lib/utils"
 import { useProductCreateDialog } from "@/components/products/ProductCreateDialogProvider"
+import { filterCompaniesByCountries, getCountryForCompany } from "@/lib/auth-constants"
 
 const VALID_COUNTRIES = new Set(["UY", "AR", "MX", "CL", "VE", "CO"])
 
@@ -25,6 +33,8 @@ function ProductosContent() {
   const [filteredProducts, setFilteredProducts] = useState<ProductWithOverrides[]>([])
   // País por defecto: Argentina
   const [selectedCountry, setSelectedCountry] = useState("AR")
+  const [companies, setCompanies] = useState<string[]>([])
+  const [selectedCompany, setSelectedCompany] = useState<string>("")
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("")
   const [selectedTipo, setSelectedTipo] = useState("")
@@ -70,6 +80,37 @@ function ProductosContent() {
       return allowedCountries[0]
     })
   }, [allowedCountries])
+
+  // Cargar compañías (mismo origen que P&L/Real Import)
+  useEffect(() => {
+    async function loadCompanies() {
+      try {
+        const companiesData = await getCompanies()
+        const filtered = filterCompaniesByCountries(companiesData, allowedCountries)
+        setCompanies(filtered)
+      } catch (e) {
+        console.error("Error loading companies:", e)
+        setCompanies([])
+      }
+    }
+    if (allowedCountries.length) loadCompanies()
+  }, [allowedCountries])
+
+  // Mantener selectedCompany sincronizado con selectedCountry (para UI)
+  useEffect(() => {
+    if (!companies.length) return
+    // si ya hay una seleccion válida, mantenerla
+    if (selectedCompany && companies.includes(selectedCompany)) return
+    const candidates = companies.filter((c) => getCountryForCompany(c) === selectedCountry)
+    setSelectedCompany(candidates[0] || companies[0] || "")
+  }, [companies, selectedCountry, selectedCompany])
+
+  // Cuando cambia la compañía, derivar el country_code para mantener toda la hoja consistente.
+  useEffect(() => {
+    if (!selectedCompany) return
+    const cc = getCountryForCompany(selectedCompany)
+    if (cc && cc !== selectedCountry) setSelectedCountry(cc)
+  }, [selectedCompany, selectedCountry])
 
   // Mantener la URL en sync con los filtros para que al volver atrás se conserven
   useEffect(() => {
@@ -365,11 +406,23 @@ function ProductosContent() {
         {/* Mercado = compañía / país en BD */}
         <div className="mb-6 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4 shadow-sm">
           <label className="text-sm font-semibold mb-3 block text-white/90">Vista por compañía</label>
-          <CountryPills
-            selectedCountry={selectedCountry}
-            onCountryChange={setSelectedCountry}
-            allowedCountries={allowedCountries.length ? allowedCountries : undefined}
-          />
+          <Select
+            value={selectedCompany}
+            onChange={(e) => setSelectedCompany(e.target.value)}
+            className="w-full md:w-[420px] bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-white/30"
+          >
+            {companies.length === 0 ? (
+              <option value="" className="bg-blue-900 text-white">
+                Sin compañías disponibles
+              </option>
+            ) : (
+              companies.map((c) => (
+                <option key={c} value={c} className="bg-blue-900 text-white">
+                  {c}
+                </option>
+              ))
+            )}
+          </Select>
         </div>
 
         {/* Filtros */}
