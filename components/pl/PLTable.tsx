@@ -324,9 +324,17 @@ export function PLTable({
     for (const name of Object.keys(productCategories)) {
       const nk = normalizeProductKey(name)
       if (nk) m.set(nk, name)
+      const nkl = normalizeProductKeyLoose(name)
+      if (nkl) m.set(nkl, name)
+      const nkm = normalizeBudgetMatchKey(name)
+      if (nkm) m.set(nkm, name)
       const alias = productAliases[name]
       const ak = normalizeProductKey(alias || "")
       if (ak) m.set(ak, name)
+      const akl = normalizeProductKeyLoose(alias || "")
+      if (akl) m.set(akl, name)
+      const akm = normalizeBudgetMatchKey(alias || "")
+      if (akm) m.set(akm, name)
     }
     return m
   }, [productCategories, productAliases])
@@ -334,7 +342,22 @@ export function PLTable({
   const resolveToCatalogName = useCallback((raw: string) => {
     const trimmed = String(raw || "").trim()
     if (!trimmed) return ""
-    return catalogKeyToName.get(normalizeProductKey(trimmed)) || trimmed
+    const k1 = normalizeProductKey(trimmed)
+    if (k1) {
+      const hit = catalogKeyToName.get(k1)
+      if (hit) return hit
+    }
+    const k2 = normalizeProductKeyLoose(trimmed)
+    if (k2) {
+      const hit = catalogKeyToName.get(k2)
+      if (hit) return hit
+    }
+    const k3 = normalizeBudgetMatchKey(trimmed)
+    if (k3) {
+      const hit = catalogKeyToName.get(k3)
+      if (hit) return hit
+    }
+    return trimmed
   }, [catalogKeyToName])
 
   const calcMonthModelAt = (monthIdx0: number): MonthModel => {
