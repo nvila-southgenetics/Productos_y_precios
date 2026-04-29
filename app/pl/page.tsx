@@ -321,7 +321,7 @@ export default function PLPage() {
                 </option>
                 {budgetNames.map((n) => (
                   <option key={n} value={`budget:${n}`} className="bg-blue-900 text-white">
-                    Budget: {n}
+                    {n}
                   </option>
                 ))}
               </Select>
