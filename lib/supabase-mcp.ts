@@ -398,13 +398,9 @@ export async function createProduct(input: {
     throw new Error('El nombre del producto es obligatorio')
   }
 
-  // Alias requerido por DB: lo generamos a partir del nombre (sin necesidad de input del usuario).
-  const generatedAlias = baseName
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .toUpperCase() || `ALIAS-${Date.now()}`
+  // Por UX: al crear desde el "+", usamos el mismo texto como alias.
+  // Si choca por unicidad en DB, reintentamos con sufijo.
+  const generatedAliasBase = baseName
 
   // productos.user_id y productos.base_price son NOT NULL, así que deben setearse al insertar.
   const {
@@ -464,19 +460,33 @@ export async function createProduct(input: {
     }
   }
 
-  const { data, error } = await supabase
-    .from('products')
-    .insert({
-      name: baseName,
-      alias: generatedAlias,
-      base_price: 0,
-      user_id: user.id,
-      description: input.description ?? null,
-      category: input.category ?? null,
-      tipo: input.tipo ?? null,
-    })
-    .select('*')
-    .single()
+  const insertPayload = (aliasToUse: string) => ({
+    name: baseName,
+    alias: aliasToUse,
+    base_price: 0,
+    user_id: user.id,
+    description: input.description ?? null,
+    category: input.category ?? null,
+    tipo: input.tipo ?? null,
+  })
+
+  let data: any | null = null
+  let error: any | null = null
+
+  // Intento 1: alias igual al nombre
+  {
+    const res = await supabase.from('products').insert(insertPayload(generatedAliasBase)).select('*').single()
+    data = res.data
+    error = res.error
+  }
+
+  // Si el alias ya existe, reintentar una vez con sufijo
+  if (error?.code === '23505') {
+    const retryAlias = `${generatedAliasBase}-${Date.now().toString().slice(-6)}`
+    const res2 = await supabase.from('products').insert(insertPayload(retryAlias)).select('*').single()
+    data = res2.data
+    error = res2.error
+  }
 
   if (error || !data) {
     console.error('Error creating product:', error)
