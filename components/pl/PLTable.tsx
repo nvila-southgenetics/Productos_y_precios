@@ -166,6 +166,12 @@ function normalizeProductKey(name: string): string {
     .replace(/[^a-z0-9]/g, "")
 }
 
+// Normalización más tolerante para emparejar variantes típicas en budget/odoo,
+// ej: "v2.0" vs "2.0" (MyProstateScore v2.0 vs MyProstateScore2.0).
+function normalizeProductKeyLoose(name: string): string {
+  return normalizeProductKey(name).replace(/v(?=\d)/g, "")
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function PLTable({
@@ -452,6 +458,7 @@ export function PLTable({
         const prodId = ((row as any).product_id as string | null) || ""
         const name = (row as any).product_name as string
         const rowChannel = ((row as any).channel as string) || ""
+        const nameNorm = normalizeProductKeyLoose(name)
 
         const idChannelKey = prodId ? `${prodId}|${rowChannel}` : ""
         const idPacienteKey = prodId ? `${prodId}|Paciente` : ""
@@ -459,6 +466,9 @@ export function PLTable({
         const nameChannelKey = `${name}|${rowChannel}`
         const namePacienteKey = `${name}|Paciente`
         const nameBaseKey = `${name}|`
+        const normChannelKey = nameNorm ? `${nameNorm}|${rowChannel}` : ""
+        const normPacienteKey = nameNorm ? `${nameNorm}|Paciente` : ""
+        const normBaseKey = nameNorm ? `${nameNorm}|` : ""
 
         const ov =
           (idChannelKey && ovs[idChannelKey]) ||
@@ -467,6 +477,9 @@ export function PLTable({
           ovs[nameChannelKey] ||
           ovs[namePacienteKey] ||
           ovs[nameBaseKey] ||
+          (normChannelKey && ovs[normChannelKey]) ||
+          (normPacienteKey && ovs[normPacienteKey]) ||
+          (normBaseKey && ovs[normBaseKey]) ||
           emptyOverride()
 
         const units = Number((row as any)[MONTH_KEYS[mIdx] as any] || 0)
@@ -1044,6 +1057,8 @@ export function PLTable({
       const ch = row.channel || ""
       const idKey = `${prodId}|${ch}`
       const nameKey = `${name}|${ch}`
+      const normName = normalizeProductKeyLoose(name)
+      const normKey = normName ? `${normName}|${ch}` : ""
 
       const addToKey = (key: string) => {
         const prev = ovs[key] || emptyOverride()
@@ -1065,11 +1080,14 @@ export function PLTable({
       // Soportar budget rows con product_id NULL:
       // - claves por id|canal (principal)
       // - claves por name|canal (fallback)
+      // - claves por name normalizado|canal (fallback tolerante)
       // - y claves base sin canal (fallback)
       addToKey(idKey)
       addToKey(nameKey)
+      if (normKey) addToKey(normKey)
       addToKey(`${prodId}|`)
       addToKey(`${name}|`)
+      if (normName) addToKey(`${normName}|`)
     }
 
     setBudgetOverrides(ovs)
