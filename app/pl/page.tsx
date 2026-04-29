@@ -318,7 +318,7 @@ export default function PLPage() {
           {permLoading && (
             <p className="text-sm text-white/60 mb-3 col-span-full">Cargando permisos de usuario…</p>
           )}
-          <div className="grid grid-cols-2 md:grid-cols-7 gap-4">
+          <div className={`grid grid-cols-2 ${isBudgetModel ? "md:grid-cols-7" : "md:grid-cols-6"} gap-4`}>
             {/* Modelo */}
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-white/90">Modelo</label>
@@ -341,15 +341,17 @@ export default function PLPage() {
               </Select>
             </div>
 
-            {/* País (multi) */}
-            <MultiCheckboxDropdown
-              label="País"
-              options={countryOptions}
-              selectedValues={countriesForUI}
-              onSelectedValuesChange={setSelectedCountries}
-              allLabel={isAdmin ? "Todos los países" : "Todos (mis países)"}
-              pendingLabel={permLoading ? "Cargando permisos…" : undefined}
-            />
+            {/* País (solo Budget) */}
+            {isBudgetModel && (
+              <MultiCheckboxDropdown
+                label="País"
+                options={countryOptions}
+                selectedValues={countriesForUI}
+                onSelectedValuesChange={setSelectedCountries}
+                allLabel={isAdmin ? "Todos los países" : "Todos (mis países)"}
+                pendingLabel={permLoading ? "Cargando permisos…" : undefined}
+              />
+            )}
 
             {/* Compañía (ventas) */}
             {!isBudgetModel && (
