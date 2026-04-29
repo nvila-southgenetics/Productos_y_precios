@@ -13,6 +13,13 @@ interface PLTableProps {
   modelo: "budget" | "real"
   year: number
   countries: string[]
+  /**
+   * Filtro explícito de compañías (como en Real Import).
+   * - `null`: no filtrar por compañía (todas)
+   * - `string[]`: filtrar exactamente por esas compañías
+   * - `undefined`: usar el mapeo legacy `countries -> compañías`
+   */
+  salesCompanies?: string[] | null
   categories: string[]
   /** Array vacío = todos. */
   products: string[]
@@ -165,6 +172,7 @@ export function PLTable({
   modelo,
   year,
   countries,
+  salesCompanies,
   categories,
   products,
   channels,
@@ -210,6 +218,13 @@ export function PLTable({
   const categoriesSet = new Set(categories)
   const allKnownCategoriesSelected = KNOWN_PL_CATEGORIES.every((c) => categoriesSet.has(c))
   const shouldFilterCategories = categories.length > 0 && !allKnownCategoriesSelected
+
+  const resolveSalesCompanies = useCallback((): string[] | null => {
+    if (salesCompanies !== undefined) return salesCompanies
+    // Legacy: derivar compañías desde países.
+    const companies = countries.flatMap((c) => COUNTRY_TO_COMPANIES[c] || [])
+    return companies.length ? companies : null
+  }, [salesCompanies, countries])
 
   // Dropdowns independientes por fila de totales.
   // Al expandir una fila, se muestra el desglose correspondiente (y dependencias),
@@ -617,13 +632,15 @@ export function PLTable({
             if (aliasKey) saleKeyToCatalogName.set(aliasKey, name)
           }
 
-          const companies = countries.flatMap((c) => COUNTRY_TO_COMPANIES[c] || [])
-          if (companies.length) {
-            const { data } = await supabase
-              .from("ventas_mensuales_view")
-              .select("producto, mes, cantidad_ventas, monto_total, compañia")
-              .eq("año", forYear)
-              .in("compañia", companies)
+          const companies = resolveSalesCompanies()
+          let qSales = supabase
+            .from("ventas_mensuales_view")
+            .select("producto, mes, cantidad_ventas, monto_total, compañia")
+            .eq("año", forYear)
+          if (companies && companies.length) qSales = qSales.in("compañia", companies)
+
+          {
+            const { data } = await qSales
 
             const categorySet = shouldFilterCategories ? categoriesSet : null
             const selectedProductKeys = new Set((products || []).map((p) => normalizeProductKey(p)))
@@ -748,13 +765,15 @@ export function PLTable({
           if (aliasKey) saleKeyToCatalogName.set(aliasKey, name)
         }
 
-        const companies = countries.flatMap((c) => COUNTRY_TO_COMPANIES[c] || [])
-        if (companies.length) {
-          const { data } = await supabase
-            .from("ventas_mensuales_view")
-            .select("producto, mes, cantidad_ventas, monto_total, compañia")
-            .eq("año", forYear)
-            .in("compañia", companies)
+        const companies = resolveSalesCompanies()
+        let qSales = supabase
+          .from("ventas_mensuales_view")
+          .select("producto, mes, cantidad_ventas, monto_total, compañia")
+          .eq("año", forYear)
+        if (companies && companies.length) qSales = qSales.in("compañia", companies)
+
+        {
+          const { data } = await qSales
 
           const categorySet = shouldFilterCategories ? categoriesSet : null
           const selectedProductKeys = new Set((products || []).map((p) => normalizeProductKey(p)))
@@ -923,14 +942,14 @@ export function PLTable({
     } else {
       // Modo REAL: no usamos budgetRows
       setBudgetRows([])
-      const companies = countries.flatMap((c) => COUNTRY_TO_COMPANIES[c] || [])
-      if (!companies.length) { setQuantities({}); setOdooAmounts({}); setProductCategories(cats); return }
-
-      const { data } = await supabase
+      const companies = resolveSalesCompanies()
+      let qSales = supabase
         .from("ventas_mensuales_view")
         .select("producto, mes, cantidad_ventas, monto_total, compañia")
         .eq("año", year)
-        .in("compañia", companies)
+      if (companies && companies.length) qSales = qSales.in("compañia", companies)
+
+      const { data } = await qSales
 
       if (!data) { setProductCategories(cats); setProductAliases(aliases); return }
 

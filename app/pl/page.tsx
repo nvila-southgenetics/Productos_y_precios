@@ -10,6 +10,9 @@ import { cn, productNameSortKey } from "@/lib/utils"
 import { PLTable } from "@/components/pl/PLTable"
 import { ProductMultiSearchFilter } from "@/components/dashboard/ProductMultiSearchFilter"
 import { MonthRangeFilter } from "@/components/filters/MonthRangeFilter"
+import { getCompanies } from "@/lib/supabase-mcp"
+import { filterCompaniesByCountries, getCountryForCompany } from "@/lib/auth-constants"
+import { companyQueryFromSelection } from "@/lib/company-filter"
 
 const BASE_COUNTRIES = [
   { code: "AR", name: "Argentina" },
@@ -139,6 +142,8 @@ export default function PLPage() {
   const [budgetNames, setBudgetNames] = useState<string[]>(["budget"])
   // Arrays con multi-selección: si elegís "Todos", guardamos todos los valores posibles.
   const [selectedCountries, setSelectedCountries] = useState<string[]>([])
+  const [companies, setCompanies] = useState<string[]>([])
+  const [selectedCompanies, setSelectedCompanies] = useState<string[]>([])
   const [selectedCategories, setSelectedCategories] = useState<string[]>(CATEGORIES)
   const [productsSelected, setProductsSelected] = useState<string[]>([])
   const [selectedChannels, setSelectedChannels] = useState<string[]>(CHANNELS)
@@ -155,6 +160,46 @@ export default function PLPage() {
     () => (isAdmin ? [...BASE_COUNTRIES.map((c) => c.code)] : allowedCountries),
     [isAdmin, allowedCountries]
   )
+
+  // Cargar lista de compañías de ventas (mismo origen que Real Import)
+  useEffect(() => {
+    async function loadCompanies() {
+      try {
+        const companiesData = await getCompanies()
+        const filtered = filterCompaniesByCountries(companiesData, allowedCountryCodes)
+        setCompanies(filtered)
+        setSelectedCompanies(isAdmin ? [...filtered] : filtered.length ? [filtered[0]] : [])
+      } catch (e) {
+        console.error("Error loading companies:", e)
+        setCompanies([])
+        setSelectedCompanies([])
+      }
+    }
+    if (!permLoading) loadCompanies()
+  }, [permLoading, isAdmin, allowedCountryCodes.join("|")])
+
+  const companyParam = useMemo(
+    () => companyQueryFromSelection(companies, selectedCompanies, isAdmin),
+    [companies, selectedCompanies, isAdmin]
+  )
+
+  const salesCompanies = useMemo<string[] | null>(() => {
+    if (typeof companyParam === "string") {
+      return companyParam === "Todas las compañías" ? null : [companyParam]
+    }
+    return companyParam
+  }, [companyParam])
+
+  // En Real, derivamos países desde compañías para overrides/SGA/taxes.
+  const countriesFromCompanies = useMemo(() => {
+    if (salesCompanies === null) return [...allowedCountryCodes]
+    const set = new Set<string>()
+    for (const c of salesCompanies) {
+      const cc = getCountryForCompany(c)
+      if (cc) set.add(cc)
+    }
+    return set.size ? [...set] : [...allowedCountryCodes]
+  }, [salesCompanies, allowedCountryCodes.join("|")])
 
   useEffect(() => {
     if (!permLoading && allowedCountryCodes.length > 0) {
@@ -250,7 +295,9 @@ export default function PLPage() {
   }))
   const countriesForUI = selectedCountries.length ? selectedCountries : (allowedCountryCodes[0] ? [allowedCountryCodes[0]] : [])
 
-  const plDataReady = !permLoading && countriesForUI.length > 0
+  const isRealModel = !isBudgetModel
+  const countriesForPL = isRealModel ? countriesFromCompanies : countriesForUI
+  const plDataReady = !permLoading && countriesForPL.length > 0 && (!isRealModel || companies.length > 0)
 
   return (
     <div className="min-h-screen bg-gradient-to-r from-blue-900 via-blue-950 to-slate-900">
@@ -290,15 +337,27 @@ export default function PLPage() {
               </Select>
             </div>
 
-            {/* Compañía (multi) */}
+            {/* País (multi) */}
             <MultiCheckboxDropdown
-              label="Compañía"
+              label="País"
               options={countryOptions}
               selectedValues={countriesForUI}
               onSelectedValuesChange={setSelectedCountries}
-              allLabel={isAdmin ? "Todas las compañías" : "Todas (mis compañías)"}
+              allLabel={isAdmin ? "Todos los países" : "Todos (mis países)"}
               pendingLabel={permLoading ? "Cargando permisos…" : undefined}
             />
+
+            {/* Compañía (ventas) */}
+            {!isBudgetModel && (
+              <MultiCheckboxDropdown
+                label="Compañía"
+                options={companies.map((c) => ({ value: c, label: c }))}
+                selectedValues={selectedCompanies.length ? selectedCompanies : companies}
+                onSelectedValuesChange={setSelectedCompanies}
+                allLabel={isAdmin ? "Todas las compañías" : "Todas (mis compañías)"}
+                pendingLabel={permLoading ? "Cargando permisos…" : undefined}
+              />
+            )}
 
             {/* Categoría */}
             <MultiCheckboxDropdown
@@ -397,10 +456,11 @@ export default function PLPage() {
         {/* P&L Table: no montar hasta tener compañías — evita fetch con countries=[] y carga colgada */}
         {plDataReady ? (
           <PLTable
-            key={`${countriesForUI.slice().sort().join(",")}-${modelKey}-${year}`}
+            key={`${countriesForPL.slice().sort().join(",")}-${(salesCompanies ? salesCompanies.slice().sort().join(",") : "all")}-${modelKey}-${year}`}
             modelo={isBudgetModel ? "budget" : "real"}
             year={year}
-            countries={countriesForUI}
+            countries={countriesForPL}
+            salesCompanies={salesCompanies}
             categories={selectedCategories}
             products={productsSelected}
             channels={selectedChannels}
