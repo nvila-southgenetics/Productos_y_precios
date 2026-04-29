@@ -1410,12 +1410,16 @@ export function PLTable({
         const prodId = String(row?.product_id || "")
         const name = resolveToCatalogName(String(row?.product_name || ""))
         const rowChannel = String(row?.channel || "")
+        const nameNorm = normalizeProductKeyLoose(name)
         const idChannelKey = prodId ? `${prodId}|${rowChannel}` : ""
         const idPacienteKey = prodId ? `${prodId}|Paciente` : ""
         const idBaseKey = prodId ? `${prodId}|` : ""
         const nameChannelKey = `${name}|${rowChannel}`
         const namePacienteKey = `${name}|Paciente`
         const nameBaseKey = `${name}|`
+        const normChannelKey = nameNorm ? `${nameNorm}|${rowChannel}` : ""
+        const normPacienteKey = nameNorm ? `${nameNorm}|Paciente` : ""
+        const normBaseKey = nameNorm ? `${nameNorm}|` : ""
         return (
           (idChannelKey && budgetOverrides[idChannelKey]) ||
           (idPacienteKey && budgetOverrides[idPacienteKey]) ||
@@ -1423,6 +1427,9 @@ export function PLTable({
           budgetOverrides[nameChannelKey] ||
           budgetOverrides[namePacienteKey] ||
           budgetOverrides[nameBaseKey] ||
+          (normChannelKey && budgetOverrides[normChannelKey]) ||
+          (normPacienteKey && budgetOverrides[normPacienteKey]) ||
+          (normBaseKey && budgetOverrides[normBaseKey]) ||
           emptyOverride()
         )
       }
