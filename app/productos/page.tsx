@@ -4,10 +4,10 @@ import { useState, useEffect, useMemo, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Select } from "@/components/ui/select"
 import { ProductTable } from "@/components/products/ProductTable"
 import { ProductFilters } from "@/components/products/ProductFilters"
 import { ProductMergeDialog } from "@/components/products/ProductMergeDialog"
+import { MultiCheckboxDropdown } from "@/components/filters/MultiCheckboxDropdown"
 import {
   getCompanies,
   getProductsWithOverrides,
@@ -34,7 +34,7 @@ function ProductosContent() {
   // País por defecto: Argentina
   const [selectedCountry, setSelectedCountry] = useState("AR")
   const [companies, setCompanies] = useState<string[]>([])
-  const [selectedCompany, setSelectedCompany] = useState<string>("")
+  const [selectedCompanies, setSelectedCompanies] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("")
   const [selectedTipo, setSelectedTipo] = useState("")
@@ -96,21 +96,28 @@ function ProductosContent() {
     if (allowedCountries.length) loadCompanies()
   }, [allowedCountries])
 
-  // Mantener selectedCompany sincronizado con selectedCountry (para UI)
+  const selectedCountriesFromCompanies = useMemo(() => {
+    const out = new Set<string>()
+    for (const c of selectedCompanies) {
+      const cc = getCountryForCompany(c)
+      if (cc) out.add(cc)
+    }
+    return Array.from(out)
+  }, [selectedCompanies])
+
+  // Default: si no hay selección, seleccionamos "todas"
   useEffect(() => {
     if (!companies.length) return
-    // si ya hay una seleccion válida, mantenerla
-    if (selectedCompany && companies.includes(selectedCompany)) return
-    const candidates = companies.filter((c) => getCountryForCompany(c) === selectedCountry)
-    setSelectedCompany(candidates[0] || companies[0] || "")
-  }, [companies, selectedCountry, selectedCompany])
+    if (selectedCompanies.length) return
+    setSelectedCompanies(companies)
+  }, [companies, selectedCompanies.length])
 
-  // Cuando cambia la compañía, derivar el country_code para mantener toda la hoja consistente.
+  // Mantener selectedCountry (país activo) consistente con selección de compañías
   useEffect(() => {
-    if (!selectedCompany) return
-    const cc = getCountryForCompany(selectedCompany)
-    if (cc && cc !== selectedCountry) setSelectedCountry(cc)
-  }, [selectedCompany, selectedCountry])
+    if (!selectedCountriesFromCompanies.length) return
+    if (selectedCountriesFromCompanies.includes(selectedCountry)) return
+    setSelectedCountry(selectedCountriesFromCompanies[0])
+  }, [selectedCountriesFromCompanies, selectedCountry])
 
   // Mantener la URL en sync con los filtros para que al volver atrás se conserven
   useEffect(() => {
@@ -153,7 +160,13 @@ function ProductosContent() {
       setIsLoading(true)
       setError(null)
       try {
-        const data = await getProductsWithOverrides(selectedCountry)
+        const dataAll = await getProductsWithOverrides()
+        const data =
+          selectedCountriesFromCompanies.length === 0
+            ? dataAll
+            : dataAll.filter((p) =>
+                (p.country_overrides || []).some((o) => selectedCountriesFromCompanies.includes(o.country_code))
+              )
         // Ordenar productos alfabéticamente por nombre
         const sortedData = data.sort((a, b) => productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), 'es', { sensitivity: 'base' }))
         setProducts(sortedData)
@@ -201,7 +214,7 @@ function ProductosContent() {
       }
     }
     loadProducts()
-  }, [selectedCountry])
+  }, [selectedCountry, selectedCountriesFromCompanies])
 
   // Filtrar y ordenar productos
   useEffect(() => {
@@ -268,7 +281,13 @@ function ProductosContent() {
       }
       
       // Recargar productos después de eliminar
-      const data = await getProductsWithOverrides(selectedCountry)
+      const dataAll = await getProductsWithOverrides()
+      const data =
+        selectedCountriesFromCompanies.length === 0
+          ? dataAll
+          : dataAll.filter((p) =>
+              (p.country_overrides || []).some((o) => selectedCountriesFromCompanies.includes(o.country_code))
+            )
       const sortedData = data.sort((a, b) => productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), 'es', { sensitivity: 'base' }))
       setProducts(sortedData)
     } catch (error) {
@@ -281,7 +300,13 @@ function ProductosContent() {
   const handleReviewToggle = async (productId: string, countryCode: string, checked: boolean) => {
     // Recargar productos después de actualizar el estado de revisión
     try {
-      const data = await getProductsWithOverrides(selectedCountry)
+      const dataAll = await getProductsWithOverrides()
+      const data =
+        selectedCountriesFromCompanies.length === 0
+          ? dataAll
+          : dataAll.filter((p) =>
+              (p.country_overrides || []).some((o) => selectedCountriesFromCompanies.includes(o.country_code))
+            )
       const sortedData = data.sort((a, b) => productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), 'es', { sensitivity: 'base' }))
       setProducts(sortedData)
     } catch (error) {
@@ -406,23 +431,15 @@ function ProductosContent() {
         {/* Mercado = compañía / país en BD */}
         <div className="mb-6 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4 shadow-sm">
           <label className="text-sm font-semibold mb-3 block text-white/90">Vista por compañía</label>
-          <Select
-            value={selectedCompany}
-            onChange={(e) => setSelectedCompany(e.target.value)}
-            className="w-full md:w-[420px] bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-white/30"
-          >
-            {companies.length === 0 ? (
-              <option value="" className="bg-blue-900 text-white">
-                Sin compañías disponibles
-              </option>
-            ) : (
-              companies.map((c) => (
-                <option key={c} value={c} className="bg-blue-900 text-white">
-                  {c}
-                </option>
-              ))
-            )}
-          </Select>
+          <MultiCheckboxDropdown
+            label="Compañía"
+            hideLabel
+            allLabel="Todas las compañías"
+            options={companies.map((c) => ({ value: c, label: c }))}
+            selectedValues={selectedCompanies.length ? selectedCompanies : companies}
+            onSelectedValuesChange={setSelectedCompanies}
+            className="w-full md:w-[520px]"
+          />
         </div>
 
         {/* Filtros */}
