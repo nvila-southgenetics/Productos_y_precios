@@ -68,7 +68,7 @@ export function MultiCheckboxDropdown({
         </button>
 
         {open && (
-          <div className="mt-1 w-full rounded-md border border-white/20 bg-blue-950/95 backdrop-blur-sm py-2 shadow-lg max-h-64 overflow-y-auto">
+          <div className="mt-1 w-full min-w-[320px] max-w-[90vw] rounded-md border border-white/20 bg-blue-950/95 backdrop-blur-sm py-2 shadow-lg max-h-64 overflow-y-auto overflow-x-auto">
             <button
               type="button"
               onClick={() => {
@@ -78,7 +78,7 @@ export function MultiCheckboxDropdown({
               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/90 hover:bg-white/10"
             >
               <Checkbox checked={isAll} />
-              {allLabel}
+              <span className="min-w-0 flex-1 text-left whitespace-nowrap">{allLabel}</span>
             </button>
             {options.map((opt) => (
               <button
@@ -88,7 +88,7 @@ export function MultiCheckboxDropdown({
                 className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/90 hover:bg-white/10"
               >
                 <Checkbox checked={selectedValues.includes(opt.value)} />
-                <span className="min-w-0 flex-1 truncate text-left">{opt.label}</span>
+                <span className="min-w-0 flex-1 text-left whitespace-nowrap">{opt.label}</span>
               </button>
             ))}
           </div>
