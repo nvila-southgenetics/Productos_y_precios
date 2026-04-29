@@ -147,6 +147,7 @@ export default function PLPage() {
   const [productsSelected, setProductsSelected] = useState<string[]>([])
   const [selectedChannels, setSelectedChannels] = useState<string[]>(CHANNELS)
   const [products, setProducts] = useState<string[]>([])
+  const [aliasesByName, setAliasesByName] = useState<Record<string, string>>({})
   const [monthFrom, setMonthFrom] = useState<number>(1)
   const [monthTo, setMonthTo] = useState<number>(12)
   const [testMode, setTestMode] = useState<boolean>(false)
@@ -266,8 +267,21 @@ export default function PLPage() {
             productNameSortKey(a).localeCompare(productNameSortKey(b), "es", { sensitivity: "base" })
           )
         )
+
+        // Aliases (mejora UX de búsqueda/label): buscar alias para los nombres que estén en catálogo.
+        const { data: aliasRows } = await supabase
+          .from("products")
+          .select("name, alias")
+          .in("name", names)
+        const map: Record<string, string> = {}
+        for (const r of aliasRows || []) {
+          const n = String((r as any).name || "")
+          const a = String((r as any).alias || "")
+          if (n && a) map[n] = a
+        }
+        setAliasesByName(map)
       } else {
-        let q = supabase.from("products").select("name, category")
+        let q = supabase.from("products").select("name, alias, category")
         if (selectedCategories.length && selectedCategories.length !== CATEGORIES.length) {
           q = q.in("category", selectedCategories)
         }
@@ -280,6 +294,14 @@ export default function PLPage() {
               productNameSortKey(a).localeCompare(productNameSortKey(b), "es", { sensitivity: "base" })
             )
         )
+
+        const map: Record<string, string> = {}
+        for (const r of data as any[]) {
+          const n = String(r?.name || "")
+          const a = String(r?.alias || "")
+          if (n && a) map[n] = a
+        }
+        setAliasesByName(map)
       }
     } catch (err) {
       console.error(err)
@@ -352,6 +374,7 @@ export default function PLPage() {
                 products={products}
                 selectedProducts={productsSelected}
                 onSelectedProductsChange={setProductsSelected}
+                aliasesByName={aliasesByName}
                 allLabel="Todos los productos"
               />
             </div>

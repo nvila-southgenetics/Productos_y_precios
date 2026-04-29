@@ -1702,7 +1702,8 @@ export function PLTable({
     const items: { channel: string; product: string; amount: number }[] = []
     for (const r of rows as any[]) {
       const channel = String(r?.channel || "(sin canal)")
-      const product = String(r?.product_name || "(sin producto)")
+      const rawProduct = String(r?.product_name || "(sin producto)")
+      const product = productAliases?.[rawProduct] || rawProduct
       let amount = 0
       if (field === "TOTAL") {
         for (const f of SGA_FIELDS) amount += Number(r?.[f.key] || 0)

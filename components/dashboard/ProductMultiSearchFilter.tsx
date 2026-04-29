@@ -9,6 +9,8 @@ interface ProductMultiSearchFilterProps {
   products: string[]
   selectedProducts: string[]
   onSelectedProductsChange: (products: string[]) => void
+  /** Optional map: product name -> alias for display/search */
+  aliasesByName?: Record<string, string>
   disabled?: boolean
   allLabel?: string
 }
@@ -17,6 +19,7 @@ export function ProductMultiSearchFilter({
   products,
   selectedProducts,
   onSelectedProductsChange,
+  aliasesByName,
   disabled = false,
   allLabel = "Todos los productos",
 }: ProductMultiSearchFilterProps) {
@@ -31,8 +34,11 @@ export function ProductMultiSearchFilter({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return safeProducts
-    return safeProducts.filter((p) => p.toLowerCase().includes(q))
-  }, [safeProducts, query])
+    return safeProducts.filter((p) => {
+      const alias = aliasesByName?.[p]
+      return p.toLowerCase().includes(q) || (alias ? alias.toLowerCase().includes(q) : false)
+    })
+  }, [safeProducts, query, aliasesByName])
 
   const selectedSet = useMemo(() => new Set(selectedProducts), [selectedProducts])
 
@@ -41,9 +47,12 @@ export function ProductMultiSearchFilter({
   const displayValue = useMemo(() => {
     if (selectedProducts.length === 0) return allLabel
     if (selectedProducts.length === safeProducts.length) return allLabel
-    if (selectedProducts.length === 1) return displayProductName(selectedProducts[0])
+    if (selectedProducts.length === 1) {
+      const n = selectedProducts[0]
+      return aliasesByName?.[n] || displayProductName(n)
+    }
     return `${selectedProducts.length} productos`
-  }, [allLabel, selectedProducts, safeProducts.length])
+  }, [allLabel, selectedProducts, safeProducts.length, aliasesByName])
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -143,6 +152,7 @@ export function ProductMultiSearchFilter({
             <div className="overflow-y-auto max-h-56">
               {filtered.map((product) => {
                 const checked = selectedSet.has(product)
+                const alias = aliasesByName?.[product]
                 return (
                   <button
                     key={product}
@@ -151,7 +161,7 @@ export function ProductMultiSearchFilter({
                     className="flex w-full items-center gap-2 px-3 py-2 text-sm text-left text-white/90 hover:bg-white/10 transition-colors"
                   >
                     <Checkbox checked={checked} />
-                    {displayProductName(product)}
+                    {alias || displayProductName(product)}
                   </button>
                 )
               })}
