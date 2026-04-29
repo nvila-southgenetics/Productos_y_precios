@@ -688,8 +688,17 @@ export function PLTable({
             aliases[name] = alias || ""
             const nameKey = normalizeProductKey(name)
             if (nameKey) saleKeyToCatalogName.set(nameKey, name)
+            const nameKeyLoose = normalizeProductKeyLoose(name)
+            if (nameKeyLoose) saleKeyToCatalogName.set(nameKeyLoose, name)
+            const nameKeyMatch = normalizeBudgetMatchKey(name)
+            if (nameKeyMatch) saleKeyToCatalogName.set(nameKeyMatch, name)
+
             const aliasKey = normalizeProductKey(alias)
             if (aliasKey) saleKeyToCatalogName.set(aliasKey, name)
+            const aliasKeyLoose = normalizeProductKeyLoose(alias)
+            if (aliasKeyLoose) saleKeyToCatalogName.set(aliasKeyLoose, name)
+            const aliasKeyMatch = normalizeBudgetMatchKey(alias)
+            if (aliasKeyMatch) saleKeyToCatalogName.set(aliasKeyMatch, name)
           }
 
           const companies = resolveSalesCompanies()
@@ -707,7 +716,11 @@ export function PLTable({
             for (const row of (data || []) as any[]) {
               const rawName = row.producto as string
               if (!rawName) continue
-              const resolvedName = saleKeyToCatalogName.get(normalizeProductKey(rawName)) || rawName
+              const resolvedName =
+                saleKeyToCatalogName.get(normalizeProductKey(rawName)) ||
+                saleKeyToCatalogName.get(normalizeProductKeyLoose(rawName)) ||
+                saleKeyToCatalogName.get(normalizeBudgetMatchKey(rawName)) ||
+                rawName
               if (selectedProductKeys.size > 0 && !selectedProductKeys.has(normalizeProductKey(resolvedName))) continue
               if (categorySet) {
                 const knownCategory = cats[resolvedName]
@@ -821,8 +834,16 @@ export function PLTable({
           aliases[name] = alias || ""
           const nameKey = normalizeProductKey(name)
           if (nameKey) saleKeyToCatalogName.set(nameKey, name)
+          const nameKeyLoose = normalizeProductKeyLoose(name)
+          if (nameKeyLoose) saleKeyToCatalogName.set(nameKeyLoose, name)
+          const nameKeyMatch = normalizeBudgetMatchKey(name)
+          if (nameKeyMatch) saleKeyToCatalogName.set(nameKeyMatch, name)
           const aliasKey = normalizeProductKey(alias)
           if (aliasKey) saleKeyToCatalogName.set(aliasKey, name)
+          const aliasKeyLoose = normalizeProductKeyLoose(alias)
+          if (aliasKeyLoose) saleKeyToCatalogName.set(aliasKeyLoose, name)
+          const aliasKeyMatch = normalizeBudgetMatchKey(alias)
+          if (aliasKeyMatch) saleKeyToCatalogName.set(aliasKeyMatch, name)
         }
 
         const companies = resolveSalesCompanies()
@@ -840,7 +861,11 @@ export function PLTable({
           for (const row of (data || []) as any[]) {
             const rawName = row.producto as string
             if (!rawName) continue
-            const resolvedName = saleKeyToCatalogName.get(normalizeProductKey(rawName)) || rawName
+            const resolvedName =
+              saleKeyToCatalogName.get(normalizeProductKey(rawName)) ||
+              saleKeyToCatalogName.get(normalizeProductKeyLoose(rawName)) ||
+              saleKeyToCatalogName.get(normalizeBudgetMatchKey(rawName)) ||
+              rawName
             if (selectedProductKeys.size > 0 && !selectedProductKeys.has(normalizeProductKey(resolvedName))) continue
             if (categorySet) {
               const knownCategory = cats[resolvedName]
@@ -957,8 +982,38 @@ export function PLTable({
       aliases[name] = alias || ""
       const nameKey = normalizeProductKey(name)
       if (nameKey) saleKeyToCatalogName.set(nameKey, name)
+      const nameKeyLoose = normalizeProductKeyLoose(name)
+      if (nameKeyLoose) saleKeyToCatalogName.set(nameKeyLoose, name)
+      const nameKeyMatch = normalizeBudgetMatchKey(name)
+      if (nameKeyMatch) saleKeyToCatalogName.set(nameKeyMatch, name)
+
       const aliasKey = normalizeProductKey(alias)
       if (aliasKey) saleKeyToCatalogName.set(aliasKey, name)
+      const aliasKeyLoose = normalizeProductKeyLoose(alias)
+      if (aliasKeyLoose) saleKeyToCatalogName.set(aliasKeyLoose, name)
+      const aliasKeyMatch = normalizeBudgetMatchKey(alias)
+      if (aliasKeyMatch) saleKeyToCatalogName.set(aliasKeyMatch, name)
+    }
+
+    const resolveCatalogNameFromSaleText = (rawName: string): string => {
+      const trimmed = String(rawName || "").trim()
+      if (!trimmed) return ""
+      const k1 = normalizeProductKey(trimmed)
+      if (k1) {
+        const hit = saleKeyToCatalogName.get(k1)
+        if (hit) return hit
+      }
+      const k2 = normalizeProductKeyLoose(trimmed)
+      if (k2) {
+        const hit = saleKeyToCatalogName.get(k2)
+        if (hit) return hit
+      }
+      const k3 = normalizeBudgetMatchKey(trimmed)
+      if (k3) {
+        const hit = saleKeyToCatalogName.get(k3)
+        if (hit) return hit
+      }
+      return trimmed
     }
 
     if (modelo === "budget") {
@@ -988,7 +1043,7 @@ export function PLTable({
 
       for (const row of data as Record<string, unknown>[]) {
         const rawName = row.product_name as string
-        const resolvedName = saleKeyToCatalogName.get(normalizeProductKey(rawName)) || rawName
+        const resolvedName = resolveCatalogNameFromSaleText(rawName)
         if (allowedProds && !allowedProds.has(resolvedName)) continue
         // Normalizar product_name al nombre canónico del catálogo para que:
         // - no aparezca el "+" si el budget usa alias
@@ -1022,7 +1077,7 @@ export function PLTable({
       for (const row of data as { producto: string; mes: number; cantidad_ventas: number | string | null; monto_total?: number | string | null; compañia: string | null }[]) {
         const rawName = row.producto
         if (!rawName) continue
-        const resolvedName = saleKeyToCatalogName.get(normalizeProductKey(rawName)) || rawName
+        const resolvedName = resolveCatalogNameFromSaleText(rawName)
         if (selectedProductKeys.size > 0 && !selectedProductKeys.has(normalizeProductKey(resolvedName))) continue
 
         if (categorySet) {
