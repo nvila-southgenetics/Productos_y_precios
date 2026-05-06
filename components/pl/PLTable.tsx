@@ -434,7 +434,9 @@ export function PLTable({
     if (channels.length) sgaQuery = sgaQuery.in("channel", channels)
 
     if (products.length === 1 && channels.length === 1) {
-      sgaQuery = sgaQuery.eq("product_name", product).eq("channel", channels[0])
+      const canonical = resolveToCatalogName(product)
+      const candidates = Array.from(new Set([product, canonical].filter(Boolean)))
+      sgaQuery = sgaQuery.in("product_name", candidates).eq("channel", channels[0])
     } else {
       sgaQuery = sgaQuery.neq("product_name", "").neq("channel", "")
     }
@@ -452,11 +454,15 @@ export function PLTable({
       )
     }
 
-    const selectedProducts = products.length > 0 ? new Set(products) : null
+    // En UI podemos mostrar alias (p.ej. "Unity") aunque en pl_sga esté guardado el nombre canónico
+    // (p.ej. "Unity Básico"). Comparamos siempre por nombre canónico.
+    const selectedProducts =
+      products.length > 0 ? new Set(products.map((p) => resolveToCatalogName(p)).filter(Boolean)) : null
     for (const row of data || []) {
       const rowProduct = String((row as any).product_name || "")
       if (!rowProduct) continue
-      if (selectedProducts && !selectedProducts.has(rowProduct)) continue
+      const rowCanonical = resolveToCatalogName(rowProduct)
+      if (selectedProducts && !selectedProducts.has(rowCanonical)) continue
       if (allowedProductsByCategory && !allowedProductsByCategory.has(rowProduct)) continue
       const idx = Number((row as any).month) - 1
       if (idx < 0 || idx >= 12) continue
@@ -1315,7 +1321,9 @@ export function PLTable({
 
     if (products.length === 1 && channels.length === 1) {
       // Specific product+channel → load that specific row
-      sgaQuery = sgaQuery.eq("product_name", product).eq("channel", channels[0])
+      const canonical = resolveToCatalogName(product)
+      const candidates = Array.from(new Set([product, canonical].filter(Boolean)))
+      sgaQuery = sgaQuery.in("product_name", candidates).eq("channel", channels[0])
     } else {
       // Aggregate all product/channel rows (exclude the tax-only country-level row)
       sgaQuery = sgaQuery.neq("product_name", "").neq("channel", "")
@@ -1335,12 +1343,15 @@ export function PLTable({
       )
     }
 
-    const selectedProducts = products.length > 0 ? new Set(products) : null
+    // Ver comentario en fetchSGAFor: el filtro por producto debe matchear por nombre canónico
+    const selectedProducts =
+      products.length > 0 ? new Set(products.map((p) => resolveToCatalogName(p)).filter(Boolean)) : null
     const usedRows: any[] = []
     for (const row of sgaData || []) {
       const rowProduct = String(row.product_name || "")
       if (!rowProduct) continue
-      if (selectedProducts && !selectedProducts.has(rowProduct)) continue
+      const rowCanonical = resolveToCatalogName(rowProduct)
+      if (selectedProducts && !selectedProducts.has(rowCanonical)) continue
       if (allowedProductsByCategory && !allowedProductsByCategory.has(rowProduct)) continue
 
       const idx = row.month - 1
