@@ -77,9 +77,17 @@ function normalizeCountryFromCompany(companyName: string | null): string {
 }
 
 function monthKeyFromDate(dateValue: string | null): string | null {
-  const date = dateValue ? new Date(dateValue) : null
+  const date = parseInvoiceDate(dateValue)
   if (!date || Number.isNaN(date.getTime())) return null
   return format(date, "yyyy-MM")
+}
+
+function parseInvoiceDate(dateValue: string | null): Date | null {
+  if (!dateValue) return null
+  const parts = dateValue.split("-").map((part) => Number(part))
+  if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) return null
+  const [year, month, day] = parts
+  return new Date(year, month - 1, day)
 }
 
 async function fetchAllInvoices<T>(selectClause: string): Promise<T[]> {
@@ -166,7 +174,7 @@ export async function getMonthlyInvoicesSummary(): Promise<InvoiceMonthlyPoint[]
   const monthly = new Map<string, InvoiceMonthlyPoint>()
 
   for (const row of data) {
-    const date = row.invoice_date ? new Date(row.invoice_date) : null
+    const date = parseInvoiceDate(row.invoice_date)
     if (!date || Number.isNaN(date.getTime())) continue
     const monthKey = format(date, "yyyy-MM")
     const monthLabel = format(date, "MMM yyyy")
@@ -261,7 +269,7 @@ export async function getCountryMonthCollectionPercentages(): Promise<InvoiceCou
     if (!collected.has(country)) collected.set(country, new Map<string, number>())
 
     billed.get(country)!.set(monthKey, (billed.get(country)!.get(monthKey) ?? 0) + amount)
-    if (row.payment_state === "paid") {
+    if (row.payment_state === "paid" || row.payment_state === "in_payment") {
       collected.get(country)!.set(monthKey, (collected.get(country)!.get(monthKey) ?? 0) + amount)
     }
   }
