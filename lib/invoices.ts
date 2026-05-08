@@ -53,7 +53,8 @@ export interface InvoiceCountryMonthPercentages {
   months: string[]
   rows: Array<{
     country: string
-    values: Record<string, number>
+    percentageValues: Record<string, number>
+    collectedAmountValues: Record<string, number>
   }>
 }
 
@@ -278,13 +279,15 @@ export async function getCountryMonthCollectionPercentages(): Promise<InvoiceCou
   const countries = Array.from(new Set([...billed.keys(), ...collected.keys()])).sort((a, b) => a.localeCompare(b))
 
   const rows = countries.map((country) => {
-    const values: Record<string, number> = {}
+    const percentageValues: Record<string, number> = {}
+    const collectedAmountValues: Record<string, number> = {}
     for (const month of months) {
       const billedAmount = billed.get(country)?.get(month) ?? 0
       const collectedAmount = collected.get(country)?.get(month) ?? 0
-      values[month] = billedAmount > 0 ? (collectedAmount / billedAmount) * 100 : 0
+      percentageValues[month] = billedAmount > 0 ? (collectedAmount / billedAmount) * 100 : 0
+      collectedAmountValues[month] = collectedAmount
     }
-    return { country, values }
+    return { country, percentageValues, collectedAmountValues }
   })
 
   return { months, rows }

@@ -67,6 +67,12 @@ function percentageDotClass(value: number): string {
   return "bg-red-500"
 }
 
+function percentageTextClass(value: number): string {
+  if (value >= 85) return "text-emerald-600"
+  if (value >= 70) return "text-amber-600"
+  return "text-red-600"
+}
+
 export default function InvoicesPage() {
   const [metrics, setMetrics] = useState<InvoiceMetrics>({
     total: 0,
@@ -91,6 +97,7 @@ export default function InvoicesPage() {
     months: [],
     rows: [],
   })
+  const [countryPercentageMode, setCountryPercentageMode] = useState<"percentage" | "amount">("percentage")
   const [rows, setRows] = useState<InvoiceRow[]>([])
   const [companies, setCompanies] = useState<string[]>([])
   const [paymentState, setPaymentState] = useState<"all" | "paid" | "not_paid" | "in_payment">("all")
@@ -170,7 +177,7 @@ export default function InvoicesPage() {
               <BarChart3 className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-white">Cobranza</h1>
+              <h1 className="text-3xl font-bold text-white">Cobranza anualidades</h1>
               <p className="text-sm text-white/80 mt-1">Análisis de estado de pago y detalle por cliente</p>
             </div>
           </div>
@@ -325,8 +332,25 @@ export default function InvoicesPage() {
 
         {activeView === "country-percentages" && (
           <div className="rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4 mb-6">
-            <h2 className="text-white text-lg font-semibold mb-1">% de cobranza por mes y país</h2>
-            <p className="text-sm text-white/80 mb-4">Porcentaje cobrado (monto pagado / monto facturado) por cada país y mes.</p>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="text-white text-lg font-semibold mb-1">% de cobranza por mes y país</h2>
+                <p className="text-sm text-white/80">
+                  {countryPercentageMode === "percentage"
+                    ? "Porcentaje cobrado ((pagado + en proceso) / monto facturado) por cada país y mes."
+                    : "Dinero cobrado (pagado + en proceso) por cada país y mes."}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() =>
+                  setCountryPercentageMode((current) => (current === "percentage" ? "amount" : "percentage"))
+                }
+                className="bg-transparent text-white border-white/40 hover:bg-white/10"
+              >
+                {countryPercentageMode === "percentage" ? "Ver dinero" : "Ver porcentajes"}
+              </Button>
+            </div>
             <div className="overflow-x-auto rounded-md border border-white/20">
               <table className="min-w-full text-sm bg-white text-slate-900">
                 <thead className="bg-slate-100">
@@ -344,13 +368,23 @@ export default function InvoicesPage() {
                     <tr key={row.country} className="border-t border-slate-200">
                       <td className="px-3 py-2 font-medium sticky left-0 bg-white">{row.country}</td>
                       {countryPercentages.months.map((month) => {
-                        const value = row.values[month] ?? 0
+                        const value = row.percentageValues[month] ?? 0
+                        const amount = row.collectedAmountValues[month] ?? 0
                         return (
                           <td key={`${row.country}-${month}`} className="px-3 py-2 whitespace-nowrap">
-                            <span className="inline-flex items-center gap-2">
-                              <span className={cn("h-3 w-3 rounded-full", percentageDotClass(value))} />
-                              {formatNumber(value, "es-UY", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}%
-                            </span>
+                            {countryPercentageMode === "percentage" ? (
+                              <span className="inline-flex items-center gap-2">
+                                <span className={cn("h-3 w-3 rounded-full", percentageDotClass(value))} />
+                                {formatNumber(value, "es-UY", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}%
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5">
+                                <span>{formatNumber(amount)}</span>
+                                <span className={cn("text-xs", percentageTextClass(value))}>
+                                  ({formatNumber(value, "es-UY", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}%)
+                                </span>
+                              </span>
+                            )}
                           </td>
                         )
                       })}
