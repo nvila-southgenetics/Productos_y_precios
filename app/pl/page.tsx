@@ -148,9 +148,9 @@ function MultiCheckboxDropdown({
 
 export default function PLPage() {
   const { userId, allowedCountries, isAdmin, canEdit, loading: permLoading } = usePermissions()
-  const [modelKey, setModelKey] = useState<ModelKey>("budget:budget")
+  const [modelKey, setModelKey] = useState<ModelKey>("real_2026")
   const [combineEnabled, setCombineEnabled] = useState(false)
-  const [monthModels, setMonthModels] = useState<ModelKey[]>(Array(12).fill("budget:budget"))
+  const [monthModels, setMonthModels] = useState<ModelKey[]>(Array(12).fill("real_2026"))
   const [budgetNames, setBudgetNames] = useState<string[]>(["budget"])
   // Arrays con multi-selección: si elegís "Todos", guardamos todos los valores posibles.
   const [companies, setCompanies] = useState<string[]>([])
