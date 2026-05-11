@@ -253,11 +253,9 @@ export function PLTable({
   // Al expandir una fila, se muestra el desglose correspondiente (y dependencias),
   // pero al expandir otra no se cierra esta.
   const [expandedSalesRevenue, setExpandedSalesRevenue] = useState(false)
-  const [expandedGrossProfit, setExpandedGrossProfit] = useState(false)
-  /** Desglose Product Cost … Sales Commission bajo la fila título "Total Cost of Sales". */
+  /** Desglose Product Cost … Sales Commission bajo "Total Cost of Sales" (sección independiente de Gross Profit). */
   const [expandedCostOfSalesBreakdown, setExpandedCostOfSalesBreakdown] = useState(true)
   const [expandedSGA, setExpandedSGA] = useState(false)
-  const [expandedNetIncome, setExpandedNetIncome] = useState(false)
 
   // SG&A / impuestos se pueden usar tanto en Budget como en Real,
   // pero siempre filtrando por la columna `modelo` en `pl_sga`.
@@ -2132,12 +2130,11 @@ export function PLTable({
   // Booleans del desglose según filas expandidas (independientes).
   const zero12 = Array.from({ length: 12 }, () => 0)
 
-  const showGrossSalesAndDiscount =
-    expandedSalesRevenue || expandedGrossProfit || expandedNetIncome
-  const showCostOfSales = expandedGrossProfit || expandedNetIncome
+  const showGrossSalesAndDiscount = expandedSalesRevenue
   // En modo combinar, deshabilitamos desglose editable por campo (SGA/tasas) porque el modelo puede cambiar por mes.
-  const showSGAFields = !combineEnabled && financialEnabled && (expandedSGA || expandedNetIncome)
-  const showTaxRows = !combineEnabled && financialEnabled && expandedNetIncome
+  const showSGAFields = !combineEnabled && financialEnabled && expandedSGA
+  /** IIBB / income tax: siempre visibles con el bloque financiero (Net Income es solo el total; no hay “dentro”). */
+  const showTaxRows = !combineEnabled && financialEnabled
 
   const netColor = sum(netIncome) >= 0 ? "text-emerald-300" : "text-red-400"
 
@@ -2279,8 +2276,8 @@ export function PLTable({
                 colorClass="text-white"
               />
 
-              {/* ─ Cost of Sales: desglose + fila título (mismo estilo que Sales Revenue / Gross Profit) ─ */}
-              {showCostOfSales && expandedCostOfSalesBreakdown && (
+              {/* ─ Total Cost of Sales (sección propia; no depende de Gross Profit) ─ */}
+              {expandedCostOfSalesBreakdown && (
                 <>
                   <Row label="Product Cost" values={productCost} negative indent />
                   <Row label="Kit Cost" values={kitCost} negative indent />
@@ -2293,57 +2290,36 @@ export function PLTable({
                   <Row label="Sales Commission" values={salesCommission} negative indent />
                 </>
               )}
-              {showCostOfSales && (
-                <Row
-                  label="Total Cost of Sales"
-                  labelNode={
-                    <span className="inline-flex items-center gap-2">
-                      <span>Total Cost of Sales</span>
-                      <button
-                        type="button"
-                        onClick={() => setExpandedCostOfSalesBreakdown((v) => !v)}
-                        className="p-0.5 text-white/70 hover:text-white"
-                        aria-label="Alternar desglose Total Cost of Sales"
-                      >
-                        <ChevronDown
-                          className={`h-4 w-4 transition-transform ${
-                            expandedCostOfSalesBreakdown ? "rotate-0" : "-rotate-90"
-                          }`}
-                        />
-                      </button>
-                    </span>
-                  }
-                  values={totalCOS}
-                  bold
-                  prominent
-                  forceGray
-                  negative
-                  colorClass="text-white"
-                />
-              )}
-
-              {/* ─ Gross Profit (gris/neutral) ─────────────────────────── */}
               <Row
-                label="Gross Profit"
+                label="Total Cost of Sales"
                 labelNode={
                   <span className="inline-flex items-center gap-2">
-                    <span>Gross Profit</span>
+                    <span>Total Cost of Sales</span>
                     <button
                       type="button"
-                      onClick={() => {
-                        setExpandedGrossProfit((v) => !v)
-                      }}
+                      onClick={() => setExpandedCostOfSalesBreakdown((v) => !v)}
                       className="p-0.5 text-white/70 hover:text-white"
-                      aria-label="Alternar desglose Gross Profit"
+                      aria-label="Alternar desglose Total Cost of Sales"
                     >
                       <ChevronDown
                         className={`h-4 w-4 transition-transform ${
-                          expandedGrossProfit ? "rotate-0" : "-rotate-90"
+                          expandedCostOfSalesBreakdown ? "rotate-0" : "-rotate-90"
                         }`}
                       />
                     </button>
                   </span>
                 }
+                values={totalCOS}
+                bold
+                prominent
+                forceGray
+                negative
+                colorClass="text-white"
+              />
+
+              {/* ─ Gross Profit = Sales Revenue − Total Cost of Sales (sin desglose anidado) ─ */}
+              <Row
+                label="Gross Profit"
                 values={grossProfit}
                 bold
                 prominent
@@ -2400,29 +2376,9 @@ export function PLTable({
                 </>
               )}
 
-              {/* ─ Net Income (gris/neutral) ──────────────────────────── */}
+              {/* ─ Net Income (total; impuestos arriba como líneas aparte, no “dentro” de NI) ─ */}
               <Row
                 label="Net Income"
-                labelNode={
-                  <span className="inline-flex items-center gap-2">
-                    <span>Net Income</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!financialEnabled) return
-                        setExpandedNetIncome((v) => !v)
-                      }}
-                      className={`p-0.5 ${financialEnabled ? "text-white/70 hover:text-white" : "text-white/20 cursor-not-allowed"}`}
-                      aria-label="Alternar desglose Net Income"
-                    >
-                      <ChevronDown
-                        className={`h-4 w-4 transition-transform ${
-                          financialEnabled && expandedNetIncome ? "rotate-0" : "-rotate-90"
-                        }`}
-                      />
-                    </button>
-                  </span>
-                }
                 values={netIncome}
                 bold
                 prominent
