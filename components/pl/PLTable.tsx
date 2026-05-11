@@ -254,8 +254,10 @@ export function PLTable({
   // pero al expandir otra no se cierra esta.
   const [expandedSalesRevenue, setExpandedSalesRevenue] = useState(false)
   /** Desglose Product Cost … Sales Commission bajo "Total Cost of Sales" (sección independiente de Gross Profit). */
-  const [expandedCostOfSalesBreakdown, setExpandedCostOfSalesBreakdown] = useState(true)
+  const [expandedCostOfSalesBreakdown, setExpandedCostOfSalesBreakdown] = useState(false)
   const [expandedSGA, setExpandedSGA] = useState(false)
+  /** IIBB / income tax bajo Net Income (mismo patrón que SG&A + desglose). */
+  const [expandedNetIncome, setExpandedNetIncome] = useState(false)
 
   // SG&A / impuestos se pueden usar tanto en Budget como en Real,
   // pero siempre filtrando por la columna `modelo` en `pl_sga`.
@@ -1909,17 +1911,26 @@ export function PLTable({
   // ── Render helpers ────────────────────────────────────────────────────────
 
   const cellCls = "text-right px-2 py-1.5 text-xs whitespace-nowrap tabular-nums"
-  const stickyLabel = (bold = false, section = false, prominent = false, forceGray = false) =>
+  /** `calculatedHighlight`: filas de resultado (GP / Net Income) vs encabezados de sección (SG&A, etc.). */
+  const stickyLabel = (
+    bold = false,
+    section = false,
+    prominent = false,
+    forceGray = false,
+    calculatedHighlight = false
+  ) =>
     `sticky left-0 px-3 ${
       prominent ? "py-2.5 text-sm" : "py-1.5 text-xs"
     } whitespace-nowrap z-10 min-w-[220px] ${
-      section
-        ? "bg-slate-600/95 font-semibold text-white/60 uppercase tracking-wider"
-        : forceGray
-          ? "bg-slate-700/40 border-y border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] font-extrabold tracking-wide text-white"
-          : bold
-            ? `bg-slate-700/95 ${prominent ? "font-extrabold tracking-wide text-white" : "font-bold text-white"}`
-            : "bg-slate-800/95 text-white/80"
+      calculatedHighlight
+        ? "bg-indigo-950/70 border-y border-cyan-500/35 shadow-[inset_0_1px_0_rgba(34,211,238,0.08)] font-extrabold tracking-wide text-cyan-50"
+        : section
+          ? "bg-slate-600/95 font-semibold text-white/60 uppercase tracking-wider"
+          : forceGray
+            ? "bg-slate-700/40 border-y border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] font-extrabold tracking-wide text-white"
+            : bold
+              ? `bg-slate-700/95 ${prominent ? "font-extrabold tracking-wide text-white" : "font-bold text-white"}`
+              : "bg-slate-800/95 text-white/80"
     }`
 
   // Render a standard P&L row
@@ -1934,6 +1945,7 @@ export function PLTable({
     colorClass,
     prominent = false,
     forceGray = false,
+    calculatedHighlight = false,
     cellTitle,
     formatValue,
   }: {
@@ -1948,12 +1960,16 @@ export function PLTable({
     prominent?: boolean
     // Forzar color gris/neutral en totales clave.
     forceGray?: boolean
+    /** Resaltado suave (indigo/cyan) para totales calculados: Gross Profit, Net Income. */
+    calculatedHighlight?: boolean
     cellTitle?: (monthIdx: number) => string | undefined
     formatValue?: (val: number) => string
   }) => {
     const ytdVal = periodSum(values)
     const totalVal = sum(values)
-    const rowCls = forceGray
+    const rowCls = calculatedHighlight
+      ? "bg-indigo-950/45 border-y border-cyan-500/25 shadow-[inset_0_1px_0_rgba(34,211,238,0.06)]"
+      : forceGray
       ? "bg-slate-700/40 border-y border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
       : section
       ? "bg-slate-600/30 border-t border-white/20"
@@ -1962,7 +1978,9 @@ export function PLTable({
       : bold
       ? "bg-slate-700/40 border-t border-white/10"
       : "hover:bg-white/5"
-    const numColor = colorClass
+    const numColor = calculatedHighlight
+      ? "text-cyan-100"
+      : colorClass
       ? colorClass
       : negative
       ? "text-rose-300"
@@ -1977,7 +1995,7 @@ export function PLTable({
 
     return (
       <tr className={`${rowCls} transition-colors`}>
-        <td className={stickyLabel(bold, section, prominent, forceGray)}>
+        <td className={stickyLabel(bold, section, prominent, forceGray, calculatedHighlight)}>
           <span className={`${labelSizeCls} ${labelWeightCls}`}>
             {indent ? (
               <span className="ml-4">{labelNode ?? label}</span>
@@ -2133,8 +2151,7 @@ export function PLTable({
   const showGrossSalesAndDiscount = expandedSalesRevenue
   // En modo combinar, deshabilitamos desglose editable por campo (SGA/tasas) porque el modelo puede cambiar por mes.
   const showSGAFields = !combineEnabled && financialEnabled && expandedSGA
-  /** IIBB / income tax: siempre visibles con el bloque financiero (Net Income es solo el total; no hay “dentro”). */
-  const showTaxRows = !combineEnabled && financialEnabled
+  const showTaxRows = !combineEnabled && financialEnabled && expandedNetIncome
 
   const netColor = sum(netIncome) >= 0 ? "text-emerald-300" : "text-red-400"
 
@@ -2323,8 +2340,7 @@ export function PLTable({
                 values={grossProfit}
                 bold
                 prominent
-                forceGray
-                colorClass="text-white"
+                calculatedHighlight
               />
 
               {/* ─ SG&A (sin título) ──────────────────────────────────── */}
@@ -2366,7 +2382,7 @@ export function PLTable({
                 formatValue={(v) => fmtSga(v)}
               />
 
-              {/* ─ Taxes (sin título) ─────────────────────────────────── */}
+              {/* ─ Net Income: desglose IIBB / income tax arriba del total (mismo patrón que SG&A) ─ */}
               {showTaxRows && (
                 <>
                   <TaxConfigRow field="iibb_pct" label="IIBB — tasa (% sobre revenue)" />
@@ -2375,15 +2391,41 @@ export function PLTable({
                   <Row label="Income tax (% sobre ganancia)" values={incomeTax} negative indent />
                 </>
               )}
-
-              {/* ─ Net Income (total; impuestos arriba como líneas aparte, no “dentro” de NI) ─ */}
               <Row
                 label="Net Income"
+                labelNode={
+                  <button
+                    type="button"
+                    disabled={!financialEnabled || combineEnabled}
+                    aria-expanded={
+                      financialEnabled && !combineEnabled ? expandedNetIncome : undefined
+                    }
+                    aria-label="Alternar desglose Net Income (IIBB e income tax)"
+                    className={`inline-flex max-w-full items-center gap-2 rounded px-0.5 py-0.5 text-left font-inherit -m-0.5 ${
+                      financialEnabled && !combineEnabled
+                        ? "text-inherit hover:bg-white/10 cursor-pointer"
+                        : "cursor-not-allowed opacity-60"
+                    }`}
+                    onClick={() => {
+                      if (!financialEnabled || combineEnabled) return
+                      setExpandedNetIncome((v) => !v)
+                    }}
+                  >
+                    <span>Net Income</span>
+                    <ChevronDown
+                      className={`h-4 w-4 shrink-0 transition-transform ${
+                        financialEnabled && !combineEnabled && expandedNetIncome
+                          ? "rotate-0"
+                          : "-rotate-90"
+                      }`}
+                      aria-hidden
+                    />
+                  </button>
+                }
                 values={netIncome}
                 bold
                 prominent
-                forceGray
-                colorClass="text-white"
+                calculatedHighlight
               />
             </tbody>
           </table>
