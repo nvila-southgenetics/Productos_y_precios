@@ -254,6 +254,8 @@ export function PLTable({
   // pero al expandir otra no se cierra esta.
   const [expandedSalesRevenue, setExpandedSalesRevenue] = useState(false)
   const [expandedGrossProfit, setExpandedGrossProfit] = useState(false)
+  /** Desglose Product Cost … Sales Commission bajo la fila título "Total Cost of Sales". */
+  const [expandedCostOfSalesBreakdown, setExpandedCostOfSalesBreakdown] = useState(true)
   const [expandedSGA, setExpandedSGA] = useState(false)
   const [expandedNetIncome, setExpandedNetIncome] = useState(false)
 
@@ -2277,8 +2279,8 @@ export function PLTable({
                 colorClass="text-white"
               />
 
-              {/* ─ Cost of Sales (sin título) ─────────────────────────── */}
-              {showCostOfSales && (
+              {/* ─ Cost of Sales: desglose + fila título (mismo estilo que Sales Revenue / Gross Profit) ─ */}
+              {showCostOfSales && expandedCostOfSalesBreakdown && (
                 <>
                   <Row label="Product Cost" values={productCost} negative indent />
                   <Row label="Kit Cost" values={kitCost} negative indent />
@@ -2289,8 +2291,35 @@ export function PLTable({
                   <Row label="Internal Courier" values={intCourier} negative indent />
                   <Row label="Physicians Fees" values={physiciansFees} negative indent />
                   <Row label="Sales Commission" values={salesCommission} negative indent />
-                  <Row label="Total Cost of Sales" values={totalCOS} bold negative />
                 </>
+              )}
+              {showCostOfSales && (
+                <Row
+                  label="Total Cost of Sales"
+                  labelNode={
+                    <span className="inline-flex items-center gap-2">
+                      <span>Total Cost of Sales</span>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedCostOfSalesBreakdown((v) => !v)}
+                        className="p-0.5 text-white/70 hover:text-white"
+                        aria-label="Alternar desglose Total Cost of Sales"
+                      >
+                        <ChevronDown
+                          className={`h-4 w-4 transition-transform ${
+                            expandedCostOfSalesBreakdown ? "rotate-0" : "-rotate-90"
+                          }`}
+                        />
+                      </button>
+                    </span>
+                  }
+                  values={totalCOS}
+                  bold
+                  prominent
+                  forceGray
+                  negative
+                  colorClass="text-white"
+                />
               )}
 
               {/* ─ Gross Profit (gris/neutral) ─────────────────────────── */}
