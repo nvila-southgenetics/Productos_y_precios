@@ -215,7 +215,7 @@ export default function PLPage() {
   useEffect(() => {
     if (!combineEnabled) return
     setMonthModels(Array(12).fill(modelKey))
-    // En modo combinar, el "Test" no aplica (mezcla varios modelos).
+    // En modo combinar, "Modelar" no aplica (mezcla varios modelos).
     setTestMode(false)
   }, [combineEnabled, modelKey])
 
@@ -400,9 +400,9 @@ export default function PLPage() {
 
             {/* Combinar */}
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-white/90">Combinar</label>
               <button
                 type="button"
+                aria-label="Combinar modelos por mes"
                 onClick={() => setCombineEnabled((v) => !v)}
                 className={`inline-flex items-center justify-center rounded-md px-3 py-2 text-xs font-semibold border transition-colors ${
                   combineEnabled
@@ -426,11 +426,11 @@ export default function PLPage() {
               )}
             </div>
 
-            {/* Test toggle */}
+            {/* Modelar (unidades simuladas) */}
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-white/90">Test</label>
               <button
                 type="button"
+                aria-label="Modelar: simular unidades manualmente"
                 onClick={() => setTestMode((v) => !v)}
                 disabled={combineEnabled}
                 className={`inline-flex items-center justify-center rounded-md px-3 py-2 text-xs font-semibold border transition-colors ${
@@ -441,7 +441,7 @@ export default function PLPage() {
                       : "bg-white/5 border-white/30 text-white/70 hover:bg-white/10"
                 }`}
               >
-                <span className="mr-2">Test</span>
+                <span className="mr-2">Modelar</span>
                 <span
                   className={`inline-flex h-4 w-8 items-center rounded-full px-0.5 text-[10px] ${
                     testMode ? "bg-emerald-500/80 justify-end" : "bg-slate-500/70 justify-start"

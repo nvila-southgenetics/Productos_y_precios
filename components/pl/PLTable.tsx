@@ -2447,7 +2447,7 @@ export function PLTable({
             {testMode && (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-emerald-300/80">
-                  Edita unidades de prueba por producto y mes
+                  Modo Modelar: editá unidades por producto y mes
                 </span>
               </div>
             )}
