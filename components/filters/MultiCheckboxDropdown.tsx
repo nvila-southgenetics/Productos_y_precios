@@ -39,14 +39,10 @@ export function MultiCheckboxDropdown({
         ? options.find((o) => o.value === selectedValues[0])?.label ?? selectedValues[0]
         : `${selectedValues.length} seleccionados`
 
+  /** Cada casilla sólo suma o quita ese valor (nunca fuerza «solo uno» cuando estaban todos). */
   const toggle = (v: string) => {
-    // UX: si está seleccionado "todo", al clickear una opción pasamos directo a esa opción sola.
-    if (isAll && selectedValues.includes(v)) {
-      onSelectedValuesChange([v])
-      return
-    }
     const next = selectedValues.includes(v) ? selectedValues.filter((x) => x !== v) : [...selectedValues, v]
-    // Evitamos "0" selección: si se desmarca todo, volvemos a "todos".
+    // Sin selección ninguna: comportamiento anterior (evita filtros vacíos que rompan consultas).
     onSelectedValuesChange(next.length === 0 ? allValues : next)
   }
 
@@ -69,27 +65,47 @@ export function MultiCheckboxDropdown({
 
         {open && (
           <div className="mt-1 w-full min-w-[320px] max-w-[90vw] rounded-md border border-white/20 bg-blue-950/95 backdrop-blur-sm py-2 shadow-lg max-h-64 overflow-y-auto overflow-x-auto">
-            <button
-              type="button"
+            <div
+              role="button"
+              tabIndex={0}
               onClick={() => {
                 onSelectedValuesChange(allValues)
                 setOpen(false)
               }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/90 hover:bg-white/10"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault()
+                  onSelectedValuesChange(allValues)
+                  setOpen(false)
+                }
+              }}
+              className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-sm text-white/90 outline-none hover:bg-white/10 focus-visible:bg-white/10"
             >
-              <Checkbox checked={isAll} />
+              <span className="pointer-events-none shrink-0">
+                <Checkbox checked={isAll} />
+              </span>
               <span className="min-w-0 flex-1 text-left whitespace-nowrap">{allLabel}</span>
-            </button>
+            </div>
             {options.map((opt) => (
-              <button
+              <div
                 key={opt.value}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => toggle(opt.value)}
-                className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/90 hover:bg-white/10"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    toggle(opt.value)
+                  }
+                }}
+                className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-sm text-white/90 outline-none hover:bg-white/10 focus-visible:bg-white/10"
               >
-                <Checkbox checked={selectedValues.includes(opt.value)} />
+                {/* Evita nesting interactivo (button+checkbox) que en algunos browsers dispara dos eventos */}
+                <span className="pointer-events-none shrink-0">
+                  <Checkbox checked={selectedValues.includes(opt.value)} />
+                </span>
                 <span className="min-w-0 flex-1 text-left whitespace-nowrap">{opt.label}</span>
-              </button>
+              </div>
             ))}
           </div>
         )}

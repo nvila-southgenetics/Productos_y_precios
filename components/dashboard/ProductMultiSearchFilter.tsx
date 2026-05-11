@@ -154,15 +154,24 @@ export function ProductMultiSearchFilter({
                 const checked = selectedSet.has(product)
                 const alias = aliasesByName?.[product]
                 return (
-                  <button
+                  <div
                     key={product}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     onClick={() => toggleProduct(product)}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-left text-white/90 hover:bg-white/10 transition-colors"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault()
+                        toggleProduct(product)
+                      }
+                    }}
+                    className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-sm text-left text-white/90 outline-none transition-colors hover:bg-white/10 focus-visible:bg-white/10"
                   >
-                    <Checkbox checked={checked} />
+                    <span className="pointer-events-none shrink-0">
+                      <Checkbox checked={checked} />
+                    </span>
                     {alias || displayProductName(product)}
-                  </button>
+                  </div>
                 )
               })}
               {filtered.length === 0 && (
