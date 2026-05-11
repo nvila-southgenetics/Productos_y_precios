@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { Select } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ChevronDown } from "lucide-react"
-import { cn, productNameSortKey } from "@/lib/utils"
+import { capitalizeFirstLetter, cn, productNameSortKey } from "@/lib/utils"
 import { PLTable } from "@/components/pl/PLTable"
 import { ProductMultiSearchFilter } from "@/components/dashboard/ProductMultiSearchFilter"
 import { MonthRangeFilter } from "@/components/filters/MonthRangeFilter"
@@ -348,14 +348,14 @@ export default function PLPage() {
                 className={selectClass}
               >
                 <option value="real_2026" className="bg-blue-900 text-white">
-                  Real 2026
+                  {capitalizeFirstLetter("Real 2026")}
                 </option>
                 <option value="real_2025" className="bg-blue-900 text-white">
-                  Real 2025
+                  {capitalizeFirstLetter("Real 2025")}
                 </option>
                 {budgetNames.map((n) => (
                   <option key={n} value={`budget:${n}`} className="bg-blue-900 text-white">
-                    {n}
+                    {capitalizeFirstLetter(n)}
                   </option>
                 ))}
               </Select>

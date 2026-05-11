@@ -4,6 +4,7 @@ import { Select } from "@/components/ui/select"
 import { ProductMultiSearchFilter } from "@/components/dashboard/ProductMultiSearchFilter"
 import { MultiCheckboxDropdown, type MultiSelectOption } from "@/components/filters/MultiCheckboxDropdown"
 import { MonthRangeFilter } from "@/components/filters/MonthRangeFilter"
+import { capitalizeFirstLetter } from "@/lib/utils"
 
 interface BudgetFiltersProps {
   selectedYear: number
@@ -105,7 +106,7 @@ export function BudgetFilters({
         >
           {budgetNames.map((n) => (
             <option key={n} value={n} className="bg-blue-900 text-white">
-              {n}
+              {capitalizeFirstLetter(n)}
             </option>
           ))}
         </Select>

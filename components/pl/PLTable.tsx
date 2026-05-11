@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useMemo, type ReactNode } from "react
 import { supabase } from "@/lib/supabase"
 import { ChevronDown, ChevronRight, Plus, Table2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { displayProductName, displayProductLabelFromName, formatNumber } from "@/lib/utils"
+import { capitalizeFirstLetter, displayProductName, displayProductLabelFromName, formatNumber } from "@/lib/utils"
 import { useProductCreateDialog } from "@/components/products/ProductCreateDialogProvider"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -2188,9 +2188,15 @@ export function PLTable({
                         className="h-7 w-[86px] rounded-md border border-white/20 bg-white/10 px-2 text-[11px] text-white"
                         title="Modelo del mes"
                       >
-                        <option value={`budget:${budgetName}`} className="bg-blue-900 text-white">Budget</option>
-                        <option value="real_2026" className="bg-blue-900 text-white">Real 2026</option>
-                        <option value="real_2025" className="bg-blue-900 text-white">Real 2025</option>
+                        <option value={`budget:${budgetName}`} className="bg-blue-900 text-white">
+                          {capitalizeFirstLetter(budgetName)}
+                        </option>
+                        <option value="real_2026" className="bg-blue-900 text-white">
+                          {capitalizeFirstLetter("Real 2026")}
+                        </option>
+                        <option value="real_2025" className="bg-blue-900 text-white">
+                          {capitalizeFirstLetter("Real 2025")}
+                        </option>
                       </select>
                     )}
                   </div>
