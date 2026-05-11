@@ -72,6 +72,10 @@ export function ProductMultiSearchFilter({
     }
   }
 
+  const selectOnlyProduct = (product: string) => {
+    onSelectedProductsChange([product])
+  }
+
   const selectAll = () => onSelectedProductsChange([...safeProducts])
   const deselectAll = () => onSelectedProductsChange([])
 
@@ -156,21 +160,25 @@ export function ProductMultiSearchFilter({
                 return (
                   <div
                     key={product}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => toggleProduct(product)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault()
-                        toggleProduct(product)
-                      }
-                    }}
-                    className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-sm text-left text-white/90 outline-none transition-colors hover:bg-white/10 focus-visible:bg-white/10"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-left text-white/90"
                   >
-                    <span className="pointer-events-none shrink-0">
-                      <Checkbox checked={checked} />
+                    <span className="shrink-0 flex items-center rounded p-0.5 hover:bg-white/10 focus-within:bg-white/10">
+                      <Checkbox checked={checked} onChange={() => toggleProduct(product)} />
                     </span>
-                    {alias || displayProductName(product)}
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      className="min-w-0 flex-1 cursor-pointer rounded px-1 py-0.5 outline-none transition-colors hover:bg-white/10 focus-visible:bg-white/10"
+                      onClick={() => selectOnlyProduct(product)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault()
+                          selectOnlyProduct(product)
+                        }
+                      }}
+                    >
+                      {alias || displayProductName(product)}
+                    </span>
                   </div>
                 )
               })}

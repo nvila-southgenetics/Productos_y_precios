@@ -78,6 +78,16 @@ function MultiCheckboxDropdown({
     onSelectedValuesChange(next.length === 0 ? allValues : next)
   }
 
+  const selectOnly = (v: string) => {
+    onSelectedValuesChange([v])
+  }
+
+  const toggleAllCheckbox = () => {
+    if (allValues.length === 0) return
+    if (isAll) onSelectedValuesChange([allValues[0]])
+    else onSelectedValuesChange(allValues)
+  }
+
   return (
     <div className="flex flex-col gap-2">
       <label className="text-sm font-medium text-white/90">{label}</label>
@@ -97,46 +107,49 @@ function MultiCheckboxDropdown({
 
         {open && (
           <div className="mt-1 w-full rounded-md border border-white/20 bg-blue-950/95 backdrop-blur-sm py-2 shadow-lg max-h-64 overflow-y-auto">
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={() => {
-                onSelectedValuesChange(allValues)
-                setOpen(false)
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault()
-                  onSelectedValuesChange(allValues)
-                  setOpen(false)
-                }
-              }}
-              className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-sm text-white/90 outline-none hover:bg-white/10 focus-visible:bg-white/10"
-            >
-              <span className="pointer-events-none shrink-0">
-                <Checkbox checked={isAll} />
+            <div className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/90">
+              <span className="shrink-0 flex items-center rounded p-0.5 hover:bg-white/10 focus-within:bg-white/10">
+                <Checkbox checked={isAll} onChange={toggleAllCheckbox} />
               </span>
-              <span>{allLabel}</span>
-            </div>
-
-            {options.map((opt) => (
-              <div
-                key={opt.value}
+              <span
                 role="button"
                 tabIndex={0}
-                onClick={() => toggle(opt.value)}
+                className="min-w-0 flex-1 cursor-pointer text-left rounded px-1 py-0.5 outline-none hover:bg-white/10 focus-visible:bg-white/10"
+                onClick={() => {
+                  onSelectedValuesChange(allValues)
+                  setOpen(false)
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault()
-                    toggle(opt.value)
+                    onSelectedValuesChange(allValues)
+                    setOpen(false)
                   }
                 }}
-                className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-sm text-white/90 outline-none hover:bg-white/10 focus-visible:bg-white/10"
               >
-                <span className="pointer-events-none shrink-0">
-                  <Checkbox checked={selectedValues.includes(opt.value)} />
+                {allLabel}
+              </span>
+            </div>
+
+            {options.map((opt) => (
+              <div key={opt.value} className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/90">
+                <span className="shrink-0 flex items-center rounded p-0.5 hover:bg-white/10 focus-within:bg-white/10">
+                  <Checkbox checked={selectedValues.includes(opt.value)} onChange={() => toggle(opt.value)} />
                 </span>
-                <span>{opt.label}</span>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  className="min-w-0 flex-1 cursor-pointer text-left rounded px-1 py-0.5 outline-none hover:bg-white/10 focus-visible:bg-white/10"
+                  onClick={() => selectOnly(opt.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault()
+                      selectOnly(opt.value)
+                    }
+                  }}
+                >
+                  {opt.label}
+                </span>
               </div>
             ))}
           </div>
