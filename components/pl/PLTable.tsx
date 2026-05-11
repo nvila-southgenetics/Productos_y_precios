@@ -1608,13 +1608,15 @@ export function PLTable({
       : [baseMonthModel]
     for (const m of models) {
       const snap = combineEnabled ? combinedSnapshots[m] : (hybridForecastQ1Enabled && m === "real_2026" ? hybridRealSnapshot : null)
-      if ((combineEnabled || hybridForecastQ1Enabled) && m === "real_2026" && !snap) continue
+      // Combinar: en el primer render los snapshots pueden no estar aún (loading aún false un tick).
+      if (combineEnabled && !snap) continue
+      if (hybridForecastQ1Enabled && m === "real_2026" && !snap) continue
 
       if (m.startsWith("budget:")) {
-        const rows = combineEnabled ? (snap!.budgetRows || []) : (budgetRows || [])
-        const ovs = combineEnabled ? (snap!.budgetOverrides || {}) : (budgetOverrides || {})
-        const sgaArr = combineEnabled ? snap!.sga : sga
-        const taxArr = combineEnabled ? snap!.tax : taxRates
+        const rows = combineEnabled ? (snap?.budgetRows || []) : (budgetRows || [])
+        const ovs = combineEnabled ? (snap?.budgetOverrides || {}) : (budgetOverrides || {})
+        const sgaArr = combineEnabled ? (snap?.sga || Array.from({ length: 12 }, emptySGA)) : sga
+        const taxArr = combineEnabled ? (snap?.tax || Array.from({ length: 12 }, emptyTax)) : taxRates
 
         const grossSales = computeMonthlyBudgetField(rows, ovs, "grossSalesUSD")
         const commercialDiscount = computeMonthlyBudgetField(rows, ovs, "commercialDiscountUSD")
@@ -1657,11 +1659,11 @@ export function PLTable({
           ),
         }
       } else {
-        const qty = (combineEnabled || hybridForecastQ1Enabled) ? (snap!.quantities || {}) : quantities
-        const amts = (combineEnabled || hybridForecastQ1Enabled) ? (snap!.odooAmounts || {}) : odooAmounts
-        const ovs = (combineEnabled || hybridForecastQ1Enabled) ? (snap!.overrides || {}) : overrides
-        const sgaArr = (combineEnabled || hybridForecastQ1Enabled) ? snap!.sga : sga
-        const taxArr = (combineEnabled || hybridForecastQ1Enabled) ? snap!.tax : taxRates
+        const qty = (combineEnabled || hybridForecastQ1Enabled) ? (snap?.quantities || {}) : quantities
+        const amts = (combineEnabled || hybridForecastQ1Enabled) ? (snap?.odooAmounts || {}) : odooAmounts
+        const ovs = (combineEnabled || hybridForecastQ1Enabled) ? (snap?.overrides || {}) : overrides
+        const sgaArr = (combineEnabled || hybridForecastQ1Enabled) ? (snap?.sga || Array.from({ length: 12 }, emptySGA)) : sga
+        const taxArr = (combineEnabled || hybridForecastQ1Enabled) ? (snap?.tax || Array.from({ length: 12 }, emptyTax)) : taxRates
 
         const grossSales = computeMonthlyRealGrossSalesFromOdoo(amts)
         const commercialDiscount = computeMonthlyRealField(qty, ovs, "commercialDiscountUSD")
@@ -1707,6 +1709,16 @@ export function PLTable({
     }
 
     return out as Record<string, (ReturnType<typeof computeNetIncomeChain> & any)>
+  }
+
+  // Importante: no calcular líneas ni helpers de tabla hasta tener datos en modo combinar
+  // (si no, el primer render después de togglear puede crashear con snapshots vacíos).
+  if (loading || (combineEnabled && !combineReady)) {
+    return (
+      <div className="flex items-center justify-center py-20 text-white/60 text-sm">
+        {combineError ? `Error en combinar: ${combineError}` : "Cargando datos..."}
+      </div>
+    )
   }
 
   const modelLines = computeAllModelLines()
@@ -2124,16 +2136,6 @@ export function PLTable({
   // En modo combinar, deshabilitamos desglose editable por campo (SGA/tasas) porque el modelo puede cambiar por mes.
   const showSGAFields = !combineEnabled && financialEnabled && (expandedSGA || expandedNetIncome)
   const showTaxRows = !combineEnabled && financialEnabled && expandedNetIncome
-
-  // ── Loading ───────────────────────────────────────────────────────────────
-
-  if (loading || (combineEnabled && !combineReady)) {
-    return (
-      <div className="flex items-center justify-center py-20 text-white/60 text-sm">
-        {combineError ? `Error en combinar: ${combineError}` : "Cargando datos..."}
-      </div>
-    )
-  }
 
   const netColor = sum(netIncome) >= 0 ? "text-emerald-300" : "text-red-400"
 
