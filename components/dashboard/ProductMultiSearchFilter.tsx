@@ -112,7 +112,7 @@ export function ProductMultiSearchFilter({
           <ChevronDown className={cn("h-4 w-4 opacity-70 shrink-0 transition-transform", open && "rotate-180")} />
         </button>
         {open && (
-          <div className="absolute left-0 right-0 top-full z-50 mt-1 w-full rounded-md border border-white/20 bg-blue-950/95 backdrop-blur-sm py-2 shadow-xl max-h-72 overflow-hidden flex flex-col">
+          <div className="absolute left-0 right-0 top-full z-[100] mt-1 w-full rounded-md border border-white/20 bg-blue-950/95 backdrop-blur-sm py-2 shadow-xl max-h-72 overflow-hidden flex flex-col">
             <div className="px-3 pb-2 border-b border-white/10 space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <button

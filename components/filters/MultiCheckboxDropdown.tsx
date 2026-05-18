@@ -15,6 +15,7 @@ export function MultiCheckboxDropdown({
   allLabel,
   hideLabel = false,
   className,
+  pendingLabel,
 }: {
   label: string
   options: MultiSelectOption[]
@@ -23,6 +24,8 @@ export function MultiCheckboxDropdown({
   allLabel: string
   hideLabel?: boolean
   className?: string
+  /** Mientras no hay opciones (p. ej. permisos cargando), mostrar este texto. */
+  pendingLabel?: string
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -44,11 +47,15 @@ export function MultiCheckboxDropdown({
     allValues.every((v) => selectedValues.includes(v))
 
   const display =
-    isAll
-      ? allLabel
-      : selectedValues.length === 1
-        ? options.find((o) => o.value === selectedValues[0])?.label ?? selectedValues[0]
-        : `${selectedValues.length} seleccionados`
+    options.length === 0 && pendingLabel
+      ? pendingLabel
+      : options.length === 0
+        ? "Sin opciones"
+        : isAll
+          ? allLabel
+          : selectedValues.length === 1
+            ? options.find((o) => o.value === selectedValues[0])?.label ?? selectedValues[0]
+            : `${selectedValues.length} seleccionados`
 
   /** Clic en el cuadrado: suma o quita ese valor (nunca deja el filtro vacío). */
   const toggle = (v: string) => {
@@ -85,7 +92,7 @@ export function MultiCheckboxDropdown({
         </button>
 
         {open && (
-          <div className="absolute left-0 right-0 top-full z-50 mt-1 w-full min-w-[280px] max-w-[90vw] rounded-md border border-white/20 bg-blue-950/95 backdrop-blur-sm py-2 shadow-xl max-h-64 overflow-y-auto overflow-x-auto">
+          <div className="absolute left-0 right-0 top-full z-[100] mt-1 w-full min-w-[280px] max-w-[90vw] rounded-md border border-white/20 bg-blue-950/95 backdrop-blur-sm py-2 shadow-xl max-h-64 overflow-y-auto overflow-x-auto">
             <div className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/90">
               <span className="shrink-0 flex items-center rounded p-0.5 hover:bg-white/10 focus-within:bg-white/10">
                 <Checkbox checked={isAll} onChange={toggleAllCheckbox} />

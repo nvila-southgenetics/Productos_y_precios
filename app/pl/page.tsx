@@ -4,12 +4,11 @@ import { useState, useEffect, useMemo } from "react"
 import { usePermissions } from "@/lib/use-permissions"
 import { supabase } from "@/lib/supabase"
 import { Select } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
-import { ChevronDown } from "lucide-react"
-import { capitalizeFirstLetter, cn, productNameSortKey } from "@/lib/utils"
+import { capitalizeFirstLetter, productNameSortKey } from "@/lib/utils"
 import { PLTable } from "@/components/pl/PLTable"
 import { ProductMultiSearchFilter } from "@/components/dashboard/ProductMultiSearchFilter"
 import { MonthRangeFilter } from "@/components/filters/MonthRangeFilter"
+import { MultiCheckboxDropdown } from "@/components/filters/MultiCheckboxDropdown"
 import { getCompanies } from "@/lib/supabase-mcp"
 import { filterCompaniesByCountries, getCountryForCompany } from "@/lib/auth-constants"
 import { companyQueryFromSelection } from "@/lib/company-filter"
@@ -40,124 +39,6 @@ const selectClass =
 
 type Option = { value: string; label: string }
 type ModelKey = "real_2026" | "real_2025" | `budget:${string}`
-
-function MultiCheckboxDropdown({
-  label,
-  options,
-  selectedValues,
-  onSelectedValuesChange,
-  allLabel,
-  pendingLabel,
-}: {
-  label: string
-  options: Option[]
-  selectedValues: string[]
-  onSelectedValuesChange: (values: string[]) => void
-  allLabel: string
-  /** Mientras no hay opciones (p. ej. permisos cargando), mostrar este texto en lugar de "0 seleccionados". */
-  pendingLabel?: string
-}) {
-  const [open, setOpen] = useState(false)
-
-  const allValues = options.map((o) => o.value)
-  const isAll = allValues.length > 0 && selectedValues.length === allValues.length && allValues.every((v) => selectedValues.includes(v))
-
-  const display =
-    options.length === 0 && pendingLabel
-      ? pendingLabel
-      : options.length === 0
-        ? "Sin opciones"
-        : isAll
-          ? allLabel
-          : selectedValues.length === 1
-            ? options.find((o) => o.value === selectedValues[0])?.label ?? selectedValues[0]
-            : `${selectedValues.length} seleccionados`
-
-  const toggle = (v: string) => {
-    const next = selectedValues.includes(v) ? selectedValues.filter((x) => x !== v) : [...selectedValues, v]
-    onSelectedValuesChange(next.length === 0 ? allValues : next)
-  }
-
-  const selectOnly = (v: string) => {
-    onSelectedValuesChange([v])
-  }
-
-  const toggleAllCheckbox = () => {
-    if (allValues.length === 0) return
-    if (isAll) onSelectedValuesChange([allValues[0]])
-    else onSelectedValuesChange(allValues)
-  }
-
-  return (
-    <div className="flex flex-col gap-2">
-      <label className="text-sm font-medium text-white/90">{label}</label>
-      <div>
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className={cn(
-            "flex h-10 w-full items-center justify-between rounded-md border px-3 py-2 text-sm",
-            "bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-2 focus:ring-white/30 focus:ring-offset-0 focus:ring-offset-transparent"
-          )}
-          aria-label={`Alternar ${label}`}
-        >
-          <span className="truncate">{display}</span>
-          <ChevronDown className={cn("h-4 w-4 opacity-70 transition-transform", open && "rotate-180")} />
-        </button>
-
-        {open && (
-          <div className="mt-1 w-full rounded-md border border-white/20 bg-blue-950/95 backdrop-blur-sm py-2 shadow-lg max-h-64 overflow-y-auto">
-            <div className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/90">
-              <span className="shrink-0 flex items-center rounded p-0.5 hover:bg-white/10 focus-within:bg-white/10">
-                <Checkbox checked={isAll} onChange={toggleAllCheckbox} />
-              </span>
-              <span
-                role="button"
-                tabIndex={0}
-                className="min-w-0 flex-1 cursor-pointer text-left rounded px-1 py-0.5 outline-none hover:bg-white/10 focus-visible:bg-white/10"
-                onClick={() => {
-                  onSelectedValuesChange(allValues)
-                  setOpen(false)
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault()
-                    onSelectedValuesChange(allValues)
-                    setOpen(false)
-                  }
-                }}
-              >
-                {allLabel}
-              </span>
-            </div>
-
-            {options.map((opt) => (
-              <div key={opt.value} className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/90">
-                <span className="shrink-0 flex items-center rounded p-0.5 hover:bg-white/10 focus-within:bg-white/10">
-                  <Checkbox checked={selectedValues.includes(opt.value)} onChange={() => toggle(opt.value)} />
-                </span>
-                <span
-                  role="button"
-                  tabIndex={0}
-                  className="min-w-0 flex-1 cursor-pointer text-left rounded px-1 py-0.5 outline-none hover:bg-white/10 focus-visible:bg-white/10"
-                  onClick={() => selectOnly(opt.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault()
-                      selectOnly(opt.value)
-                    }
-                  }}
-                >
-                  {opt.label}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
 
 export default function PLPage() {
   const { userId, allowedCountries, isAdmin, canEdit, loading: permLoading } = usePermissions()
@@ -347,7 +228,7 @@ export default function PLPage() {
         </div>
 
         {/* Filters */}
-        <div className="mb-6 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4 shadow-sm">
+        <div className="relative z-40 mb-6 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4 shadow-sm">
           {permLoading && (
             <p className="text-sm text-white/60 mb-3 col-span-full">Cargando permisos de usuario…</p>
           )}
