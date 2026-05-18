@@ -42,7 +42,7 @@ export function MedicosFilters({
   }))
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div className="relative z-40 grid grid-cols-1 md:grid-cols-4 gap-4">
       <MultiCheckboxDropdown
         label="Compañía"
         options={companyOptions}

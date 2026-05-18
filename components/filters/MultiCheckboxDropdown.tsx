@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { ChevronDown } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
@@ -25,6 +25,17 @@ export function MultiCheckboxDropdown({
   className?: string
 }) {
   const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
 
   const allValues = options.map((o) => o.value)
   const isAll =
@@ -59,7 +70,7 @@ export function MultiCheckboxDropdown({
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       {!hideLabel && <label className="text-sm font-medium text-white/90">{label}</label>}
-      <div className="w-full">
+      <div className="relative w-full" ref={ref}>
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
@@ -74,7 +85,7 @@ export function MultiCheckboxDropdown({
         </button>
 
         {open && (
-          <div className="mt-1 w-full min-w-[320px] max-w-[90vw] rounded-md border border-white/20 bg-blue-950/95 backdrop-blur-sm py-2 shadow-lg max-h-64 overflow-y-auto overflow-x-auto">
+          <div className="absolute left-0 right-0 top-full z-50 mt-1 w-full min-w-[280px] max-w-[90vw] rounded-md border border-white/20 bg-blue-950/95 backdrop-blur-sm py-2 shadow-xl max-h-64 overflow-y-auto overflow-x-auto">
             <div className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/90">
               <span className="shrink-0 flex items-center rounded p-0.5 hover:bg-white/10 focus-within:bg-white/10">
                 <Checkbox checked={isAll} onChange={toggleAllCheckbox} />
