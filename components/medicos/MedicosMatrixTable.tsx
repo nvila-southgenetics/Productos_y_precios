@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react"
 import { Minus, Plus } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { formatNumber, productNameSortKey } from "@/lib/utils"
 import {
@@ -143,26 +142,33 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
                 <th
                   key={inst.key}
                   colSpan={colSpan}
-                  className="border-r border-white/20 px-2 py-2 text-center font-semibold text-white"
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={expanded}
+                  aria-label={
+                    expanded ? `Contraer ${inst.label}` : `Expandir ${inst.label}`
+                  }
+                  onClick={() => toggleInstitution(inst.key)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault()
+                      toggleInstitution(inst.key)
+                    }
+                  }}
+                  className={cn(
+                    "border-r border-white/20 px-2 py-2 text-center font-semibold text-white",
+                    "cursor-pointer select-none transition-colors hover:bg-white/15"
+                  )}
                 >
                   <div className="flex items-center justify-center gap-1">
                     <span className="truncate max-w-[200px]" title={inst.label}>
                       {inst.label}
                     </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 shrink-0 text-white hover:bg-white/20"
-                      onClick={() => toggleInstitution(inst.key)}
-                      aria-label={expanded ? `Contraer ${inst.label}` : `Expandir ${inst.label}`}
-                    >
-                      {expanded ? (
-                        <Minus className="h-4 w-4" />
-                      ) : (
-                        <Plus className="h-4 w-4" />
-                      )}
-                    </Button>
+                    {expanded ? (
+                      <Minus className="h-4 w-4 shrink-0" aria-hidden />
+                    ) : (
+                      <Plus className="h-4 w-4 shrink-0" aria-hidden />
+                    )}
                   </div>
                 </th>
               )
@@ -193,8 +199,20 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
                 return inst.medicos.map((medico) => (
                   <th
                     key={`${inst.key}-${medico}`}
-                    className="min-w-[100px] max-w-[160px] border-r border-white/20 px-2 py-1 text-xs font-medium text-white/90"
-                    title={medico}
+                    role="button"
+                    tabIndex={0}
+                    title={`${medico} — clic para contraer ${inst.label}`}
+                    onClick={() => toggleInstitution(inst.key)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault()
+                        toggleInstitution(inst.key)
+                      }
+                    }}
+                    className={cn(
+                      "min-w-[100px] max-w-[160px] border-r border-white/20 px-2 py-1 text-xs font-medium text-white/90",
+                      "cursor-pointer select-none transition-colors hover:bg-white/15"
+                    )}
                   >
                     <span className="line-clamp-2">{medico}</span>
                   </th>
