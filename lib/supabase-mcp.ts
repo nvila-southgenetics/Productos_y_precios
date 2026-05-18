@@ -267,6 +267,8 @@ export interface VentaByDate {
   test: string
   amount: number
   company: string
+  medico: string | null
+  institucion: string | null
 }
 
 /**
@@ -276,7 +278,7 @@ export interface VentaByDate {
 export async function getSalesByDate(fecha: string): Promise<VentaByDate[]> {
   const { data, error } = await supabase
     .from('ventas')
-    .select('id, fecha, test, amount, company')
+    .select('id, fecha, test, amount, company, medico, institucion')
     .eq('fecha', fecha)
     .order('company', { ascending: true })
     .order('test', { ascending: true })
@@ -284,12 +286,14 @@ export async function getSalesByDate(fecha: string): Promise<VentaByDate[]> {
   if (error) throw error
   if (!data) return []
 
-  return data.map((row: { id: string; fecha: string; test: string; amount: string | number; company: string }) => ({
+  return data.map((row: { id: string; fecha: string; test: string; amount: string | number; company: string; medico: string | null; institucion: string | null }) => ({
     id: row.id,
     fecha: row.fecha,
     test: row.test,
     amount: typeof row.amount === 'string' ? parseFloat(row.amount) : row.amount,
     company: row.company,
+    medico: row.medico ?? null,
+    institucion: row.institucion ?? null,
   }))
 }
 
@@ -316,6 +320,165 @@ export async function deleteSalesByYear(year: string): Promise<{ deleted: number
   const deletedCount = data?.length || 0
   console.log(`✅ Borradas ${deletedCount} ventas del año ${year}`)
   return { deleted: deletedCount, error: null }
+}
+
+export const SIN_INSTITUCION_KEY = '__sin_institucion__'
+export const SIN_INSTITUCION_LABEL = 'Sin institución'
+
+export interface MedicoInstitucionSalesParams {
+  year: number
+  monthFrom?: number
+  monthTo?: number
+  /** Vacío = todas las compañías ya filtradas por permisos en la página. */
+  companies?: string[]
+  /** Vacío = todos los productos (nombres `test` / producto en ventas). */
+  products?: string[]
+}
+
+export interface MedicoInstitucionSaleRow {
+  productKey: string
+  producto: string
+  product_id: string | null
+  institucionKey: string
+  institucionLabel: string
+  medico: string
+  cantidad: number
+}
+
+type VentaMedicoRow = {
+  test: string | null
+  id_producto: string | null
+  medico: string | null
+  institucion: string | null
+  quantity: string | number
+  company: string
+  fecha: string
+}
+
+function padMonth(month: number): string {
+  return String(month).padStart(2, '0')
+}
+
+function lastDayOfMonth(year: number, month: number): string {
+  return new Date(year, month, 0).toISOString().slice(0, 10)
+}
+
+function normalizeInstitucion(inst: string | null | undefined): { key: string; label: string } {
+  const trimmed = (inst ?? '').trim()
+  if (!trimmed) return { key: SIN_INSTITUCION_KEY, label: SIN_INSTITUCION_LABEL }
+  return { key: trimmed, label: trimmed }
+}
+
+async function fetchVentasForMedicoMatrix(params: {
+  fechaStart: string
+  fechaEnd: string
+  companies?: string[]
+}): Promise<VentaMedicoRow[]> {
+  const pageSize = 1000
+  let offset = 0
+  const all: VentaMedicoRow[] = []
+
+  while (true) {
+    let q = supabase
+      .from('ventas')
+      .select('test, id_producto, medico, institucion, quantity, company, fecha')
+      .gte('fecha', params.fechaStart)
+      .lte('fecha', params.fechaEnd)
+      .order('fecha', { ascending: true })
+      .range(offset, offset + pageSize - 1)
+
+    if (params.companies?.length) {
+      q = q.in('company', params.companies)
+    }
+
+    const { data, error } = await q
+    if (error) throw error
+    const batch = (data || []) as VentaMedicoRow[]
+    all.push(...batch)
+    if (batch.length < pageSize) break
+    offset += pageSize
+  }
+
+  return all
+}
+
+/**
+ * Ventas agregadas por producto, institución y médico (suma de quantity).
+ * Solo filas con médico cargado.
+ */
+export async function getMedicoInstitucionSales(
+  params: MedicoInstitucionSalesParams
+): Promise<MedicoInstitucionSaleRow[]> {
+  const monthFrom = params.monthFrom ?? 1
+  const monthTo = params.monthTo ?? 12
+  const fechaStart = `${params.year}-${padMonth(monthFrom)}-01`
+  const fechaEnd = lastDayOfMonth(params.year, monthTo)
+
+  const rawRows = await fetchVentasForMedicoMatrix({
+    fechaStart,
+    fechaEnd,
+    companies: params.companies?.length ? params.companies : undefined,
+  })
+
+  const productNames = [
+    ...new Set(
+      rawRows
+        .map((r) => r.test?.trim())
+        .filter((t): t is string => Boolean(t))
+    ),
+  ]
+  const { data: productsData, error: productsError } = await supabase
+    .from('products')
+    .select('*')
+  if (productsError) throw productsError
+  const products = (productsData || []) as Product[]
+  const ventasTestToProductId = await fetchProductIdMapFromVentasTable(productNames)
+
+  const productFilter = params.products?.length
+    ? new Set(params.products)
+    : null
+
+  const agg = new Map<string, MedicoInstitucionSaleRow>()
+
+  for (const row of rawRows) {
+    const medico = row.medico?.trim()
+    if (!medico) continue
+
+    const test = row.test?.trim() || 'Sin producto'
+    if (productFilter && !productFilter.has(test)) {
+      const resolved = resolveProductForSale(products, test, ventasTestToProductId)
+      if (!resolved || !productFilter.has(resolved.name)) continue
+    }
+
+    const product = resolveProductForSale(products, test, ventasTestToProductId)
+    const product_id = product?.id ?? row.id_producto ?? null
+    const productKey = product_id ?? test
+    const producto = product
+      ? product.alias?.trim() || product.name
+      : test
+
+    const { key: institucionKey, label: institucionLabel } = normalizeInstitucion(row.institucion)
+    const qty =
+      typeof row.quantity === 'string' ? parseFloat(row.quantity) : Number(row.quantity) || 0
+
+    const cellKey = `${productKey}|${institucionKey}|${medico}`
+    const existing = agg.get(cellKey)
+    if (existing) {
+      existing.cantidad += qty
+    } else {
+      agg.set(cellKey, {
+        productKey,
+        producto,
+        product_id,
+        institucionKey,
+        institucionLabel,
+        medico,
+        cantidad: qty,
+      })
+    }
+  }
+
+  return [...agg.values()]
 }
 
 /**
