@@ -49,7 +49,7 @@ function buildMatrix(rows: MedicoInstitucionSaleRow[]) {
     .sort((a, b) => (instLabels.get(a) ?? a).localeCompare(instLabels.get(b) ?? b, 'es'))
 
   const institutionKeys = instLabels.has(SIN_INSTITUCION_KEY)
-    ? [...namedInstKeys, SIN_INSTITUCION_KEY]
+    ? [SIN_INSTITUCION_KEY, ...namedInstKeys]
     : namedInstKeys
 
   const institutions: InstitutionColumn[] = institutionKeys.map((key) => ({
