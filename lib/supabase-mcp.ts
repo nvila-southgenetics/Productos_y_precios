@@ -325,14 +325,19 @@ export async function deleteSalesByYear(year: string): Promise<{ deleted: number
 export const SIN_INSTITUCION_KEY = '__sin_institucion__'
 export const SIN_INSTITUCION_LABEL = 'Sin institución'
 
+/** Año por defecto en la página Médicos (2025 no tiene médicos cargados). */
+export const MEDICOS_PAGE_YEAR = 2026
+
 export interface MedicoInstitucionSalesParams {
-  year: number
+  year?: number
   monthFrom?: number
   monthTo?: number
   /** Vacío = todas las compañías ya filtradas por permisos en la página. */
   companies?: string[]
   /** Vacío = todos los productos (nombres `test` / producto en ventas). */
   products?: string[]
+  /** Vacío = todos los médicos. */
+  medicos?: string[]
 }
 
 export interface MedicoInstitucionSaleRow {
@@ -403,16 +408,46 @@ async function fetchVentasForMedicoMatrix(params: {
 }
 
 /**
+ * Lista de médicos distintos en ventas (con médico cargado) para un período.
+ */
+export async function getMedicosFromVentas(params: {
+  year?: number
+  monthFrom?: number
+  monthTo?: number
+  companies?: string[]
+}): Promise<string[]> {
+  const year = params.year ?? MEDICOS_PAGE_YEAR
+  const monthFrom = params.monthFrom ?? 1
+  const monthTo = params.monthTo ?? 12
+  const fechaStart = `${year}-${padMonth(monthFrom)}-01`
+  const fechaEnd = lastDayOfMonth(year, monthTo)
+
+  const rawRows = await fetchVentasForMedicoMatrix({
+    fechaStart,
+    fechaEnd,
+    companies: params.companies?.length ? params.companies : undefined,
+  })
+
+  const set = new Set<string>()
+  for (const row of rawRows) {
+    const m = row.medico?.trim()
+    if (m) set.add(m)
+  }
+  return [...set].sort((a, b) => a.localeCompare(b, 'es'))
+}
+
+/**
  * Ventas agregadas por producto, institución y médico (suma de quantity).
  * Solo filas con médico cargado.
  */
 export async function getMedicoInstitucionSales(
   params: MedicoInstitucionSalesParams
 ): Promise<MedicoInstitucionSaleRow[]> {
+  const year = params.year ?? MEDICOS_PAGE_YEAR
   const monthFrom = params.monthFrom ?? 1
   const monthTo = params.monthTo ?? 12
-  const fechaStart = `${params.year}-${padMonth(monthFrom)}-01`
-  const fechaEnd = lastDayOfMonth(params.year, monthTo)
+  const fechaStart = `${year}-${padMonth(monthFrom)}-01`
+  const fechaEnd = lastDayOfMonth(year, monthTo)
 
   const rawRows = await fetchVentasForMedicoMatrix({
     fechaStart,
@@ -437,12 +472,14 @@ export async function getMedicoInstitucionSales(
   const productFilter = params.products?.length
     ? new Set(params.products)
     : null
+  const medicoFilter = params.medicos?.length ? new Set(params.medicos) : null
 
   const agg = new Map<string, MedicoInstitucionSaleRow>()
 
   for (const row of rawRows) {
     const medico = row.medico?.trim()
     if (!medico) continue
+    if (medicoFilter && !medicoFilter.has(medico)) continue
 
     const test = row.test?.trim() || 'Sin producto'
     if (productFilter && !productFilter.has(test)) {

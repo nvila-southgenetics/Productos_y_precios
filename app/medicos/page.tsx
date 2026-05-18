@@ -8,7 +8,9 @@ import { filterCompaniesByCountries } from "@/lib/auth-constants"
 import {
   getCompanies,
   getMedicoInstitucionSales,
+  getMedicosFromVentas,
   getProductsFromSales,
+  MEDICOS_PAGE_YEAR,
   type MedicoInstitucionSaleRow,
 } from "@/lib/supabase-mcp"
 
@@ -16,12 +18,12 @@ export default function MedicosPage() {
   const { allowedCountries, isAdmin, loading: permLoading } = usePermissions()
   const [companies, setCompanies] = useState<string[]>([])
   const [products, setProducts] = useState<string[]>([])
+  const [medicos, setMedicos] = useState<string[]>([])
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([])
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
-  const [selectedYear, setSelectedYear] = useState("2026")
+  const [selectedMedicos, setSelectedMedicos] = useState<string[]>([])
   const [monthFrom, setMonthFrom] = useState(1)
   const [monthTo, setMonthTo] = useState(12)
-  const [availableYears] = useState(["2026", "2025"])
   const [rows, setRows] = useState<MedicoInstitucionSaleRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
@@ -53,17 +55,36 @@ export default function MedicosPage() {
   }, [allowedCountries, isAdmin, permLoading])
 
   useEffect(() => {
+    async function loadMedicos() {
+      if (!companies.length || permLoading) return
+      try {
+        const list = await getMedicosFromVentas({
+          year: MEDICOS_PAGE_YEAR,
+          monthFrom,
+          monthTo,
+          companies: companiesForQuery,
+        })
+        setMedicos(list)
+      } catch (e) {
+        console.error("Error loading médicos list:", e)
+        setMedicos([])
+      }
+    }
+    loadMedicos()
+  }, [companies.length, companiesForQuery, monthFrom, monthTo, permLoading])
+
+  useEffect(() => {
     async function loadMatrix() {
       if (!companies.length || permLoading) return
       setIsLoading(true)
       try {
-        const year = parseInt(selectedYear, 10)
         const data = await getMedicoInstitucionSales({
-          year,
+          year: MEDICOS_PAGE_YEAR,
           monthFrom,
           monthTo,
           companies: companiesForQuery,
           products: selectedProducts.length ? selectedProducts : undefined,
+          medicos: selectedMedicos.length ? selectedMedicos : undefined,
         })
         setRows(data)
       } catch (e) {
@@ -77,10 +98,10 @@ export default function MedicosPage() {
   }, [
     companies.length,
     companiesForQuery,
-    selectedYear,
     monthFrom,
     monthTo,
     selectedProducts,
+    selectedMedicos,
     permLoading,
   ])
 
@@ -90,23 +111,23 @@ export default function MedicosPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">Médicos</h1>
           <p className="text-sm text-white/80 mt-1">
-            Unidades vendidas por producto, institución y médico. Expandí cada institución para ver el
-            desglose por médico.
+            Unidades vendidas por producto, institución y médico ({MEDICOS_PAGE_YEAR}). Expandí cada
+            institución para ver el desglose por médico.
           </p>
         </div>
 
         <MedicosFilters
           companies={companies}
           products={products}
-          availableYears={availableYears}
+          medicos={medicos}
           selectedCompanies={selectedCompanies}
           selectedProducts={selectedProducts}
-          selectedYear={selectedYear}
+          selectedMedicos={selectedMedicos}
           monthFrom={monthFrom}
           monthTo={monthTo}
           onCompaniesChange={setSelectedCompanies}
           onProductsChange={setSelectedProducts}
-          onYearChange={setSelectedYear}
+          onMedicosChange={setSelectedMedicos}
           onMonthRangeChange={({ fromMonth, toMonth }) => {
             setMonthFrom(fromMonth)
             setMonthTo(toMonth)
