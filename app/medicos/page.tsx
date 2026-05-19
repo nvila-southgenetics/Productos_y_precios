@@ -5,6 +5,7 @@ import { MedicosFilters } from "@/components/medicos/MedicosFilters"
 import { MedicosMatrixTable } from "@/components/medicos/MedicosMatrixTable"
 import { usePermissions } from "@/lib/use-permissions"
 import { filterCompaniesByCountries } from "@/lib/auth-constants"
+import { PRODUCT_CATEGORIES_SORTED } from "@/lib/product-categories"
 import {
   getCompanies,
   getMedicoInstitucionSales,
@@ -22,6 +23,7 @@ export default function MedicosPage() {
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([])
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [selectedMedicos, setSelectedMedicos] = useState<string[]>([])
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(PRODUCT_CATEGORIES_SORTED)
   const [monthFrom, setMonthFrom] = useState(1)
   const [monthTo, setMonthTo] = useState(12)
   const [rows, setRows] = useState<MedicoInstitucionSaleRow[]>([])
@@ -78,12 +80,16 @@ export default function MedicosPage() {
       if (!companies.length || permLoading) return
       setIsLoading(true)
       try {
+        const allCategories =
+          selectedCategories.length === PRODUCT_CATEGORIES_SORTED.length &&
+          PRODUCT_CATEGORIES_SORTED.every((c) => selectedCategories.includes(c))
         const data = await getMedicoInstitucionSales({
           year: MEDICOS_PAGE_YEAR,
           monthFrom,
           monthTo,
           companies: companiesForQuery,
           products: selectedProducts.length ? selectedProducts : undefined,
+          categories: allCategories ? undefined : selectedCategories,
           medicos: selectedMedicos.length ? selectedMedicos : undefined,
         })
         setRows(data)
@@ -102,6 +108,7 @@ export default function MedicosPage() {
     monthTo,
     selectedProducts,
     selectedMedicos,
+    selectedCategories,
     permLoading,
   ])
 
@@ -123,11 +130,13 @@ export default function MedicosPage() {
           selectedCompanies={selectedCompanies}
           selectedProducts={selectedProducts}
           selectedMedicos={selectedMedicos}
+          selectedCategories={selectedCategories}
           monthFrom={monthFrom}
           monthTo={monthTo}
           onCompaniesChange={setSelectedCompanies}
           onProductsChange={setSelectedProducts}
           onMedicosChange={setSelectedMedicos}
+          onCategoriesChange={setSelectedCategories}
           onMonthRangeChange={({ fromMonth, toMonth }) => {
             setMonthFrom(fromMonth)
             setMonthTo(toMonth)

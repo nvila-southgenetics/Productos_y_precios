@@ -336,6 +336,8 @@ export interface MedicoInstitucionSalesParams {
   companies?: string[]
   /** Vacío = todos los productos (nombres `test` / producto en ventas). */
   products?: string[]
+  /** Vacío = todas las categorías del catálogo. */
+  categories?: string[]
   /** Vacío = todos los médicos. */
   medicos?: string[]
 }
@@ -472,6 +474,9 @@ export async function getMedicoInstitucionSales(
   const productFilter = params.products?.length
     ? new Set(params.products)
     : null
+  const categoryFilter = params.categories?.length
+    ? new Set(params.categories)
+    : null
   const medicoFilter = params.medicos?.length ? new Set(params.medicos) : null
 
   const agg = new Map<string, MedicoInstitucionSaleRow>()
@@ -488,6 +493,10 @@ export async function getMedicoInstitucionSales(
     }
 
     const product = resolveProductForSale(products, test, ventasTestToProductId)
+    if (categoryFilter) {
+      const cat = product?.category?.trim() || 'Otros'
+      if (!categoryFilter.has(cat)) continue
+    }
     const product_id = product?.id ?? row.id_producto ?? null
     const productKey = product_id ?? test
     const producto = product

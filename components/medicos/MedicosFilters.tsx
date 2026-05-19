@@ -4,6 +4,7 @@ import { ProductMultiSearchFilter } from "@/components/dashboard/ProductMultiSea
 import { MedicoMultiSearchFilter } from "@/components/medicos/MedicoMultiSearchFilter"
 import { MultiCheckboxDropdown, type MultiSelectOption } from "@/components/filters/MultiCheckboxDropdown"
 import { MonthRangeFilter } from "@/components/filters/MonthRangeFilter"
+import { PRODUCT_CATEGORIES_SORTED } from "@/lib/product-categories"
 
 interface MedicosFiltersProps {
   companies: string[]
@@ -12,11 +13,13 @@ interface MedicosFiltersProps {
   selectedCompanies: string[]
   selectedProducts: string[]
   selectedMedicos: string[]
+  selectedCategories: string[]
   monthFrom: number
   monthTo: number
   onCompaniesChange: (companies: string[]) => void
   onProductsChange: (products: string[]) => void
   onMedicosChange: (medicos: string[]) => void
+  onCategoriesChange: (categories: string[]) => void
   onMonthRangeChange: (range: { fromMonth: number; toMonth: number }) => void
   showAllCompanies?: boolean
 }
@@ -28,11 +31,13 @@ export function MedicosFilters({
   selectedCompanies,
   selectedProducts,
   selectedMedicos,
+  selectedCategories,
   monthFrom,
   monthTo,
   onCompaniesChange,
   onProductsChange,
   onMedicosChange,
+  onCategoriesChange,
   onMonthRangeChange,
   showAllCompanies = true,
 }: MedicosFiltersProps) {
@@ -41,8 +46,13 @@ export function MedicosFilters({
     label: c,
   }))
 
+  const categoryOptions: MultiSelectOption[] = PRODUCT_CATEGORIES_SORTED.map((c) => ({
+    value: c,
+    label: c,
+  }))
+
   return (
-    <div className="relative z-40 grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div className="relative z-40 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
       <MultiCheckboxDropdown
         label="Compañía"
         options={companyOptions}
@@ -51,6 +61,16 @@ export function MedicosFilters({
         }
         onSelectedValuesChange={onCompaniesChange}
         allLabel={showAllCompanies ? "Todas las compañías" : "Todas (mis compañías)"}
+      />
+
+      <MultiCheckboxDropdown
+        label="Categoría"
+        options={categoryOptions}
+        selectedValues={
+          selectedCategories.length ? selectedCategories : PRODUCT_CATEGORIES_SORTED
+        }
+        onSelectedValuesChange={onCategoriesChange}
+        allLabel="Todas las categorías"
       />
 
       <ProductMultiSearchFilter
