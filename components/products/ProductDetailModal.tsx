@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { formatCurrency, formatPercentage, cn, formatUSDNumber } from "@/lib/utils"
 import type { ProductWithOverrides, ProductCountryOverride } from "@/lib/supabase-mcp"
 import { updateProductCountryOverride } from "@/lib/supabase-mcp"
+import { PRODUCT_CATEGORY_COLORS_LIGHT } from "@/lib/product-categories"
 
 interface ProductDetailModalProps {
   product: ProductWithOverrides | null
@@ -38,18 +39,6 @@ const countries = [
   { code: "VE", name: "Venezuela" },
   { code: "CO", name: "Colombia" },
 ]
-
-const categoryColors: Record<string, string> = {
-  "Ginecología": "bg-pink-200 text-pink-800 border-pink-300",
-  "Oncología": "bg-rose-200 text-rose-800 border-rose-300",
-  "Urología": "bg-sky-200 text-sky-800 border-sky-300",
-  "Endocrinología": "bg-violet-200 text-violet-800 border-violet-300",
-  "Prenatales": "bg-teal-200 text-teal-800 border-teal-300",
-  "Anualidades": "bg-amber-200 text-amber-800 border-amber-300",
-  "Carrier": "bg-indigo-200 text-indigo-800 border-indigo-300",
-  "Nutrición": "bg-lime-200 text-lime-800 border-lime-300",
-  "Otros": "bg-slate-200 text-slate-800 border-slate-300",
-}
 
 const tipoColors: Record<string, string> = {
   "Sangre": "bg-red-200 text-red-800 border-red-300",
@@ -369,7 +358,7 @@ export function ProductDetailModal({
             <div className="flex gap-2 flex-wrap">
               {product.category && (
                 <Badge
-                  className={`${categoryColors[product.category] || categoryColors["Otros"]} border`}
+                  className={`${PRODUCT_CATEGORY_COLORS_LIGHT[product.category] || PRODUCT_CATEGORY_COLORS_LIGHT["Otros"]} border`}
                 >
                   {product.category}
                 </Badge>
@@ -581,7 +570,7 @@ export function ProductDetailModal({
                 <div className="mt-1">
                   {product.category && (
                     <Badge
-                      className={`${categoryColors[product.category] || categoryColors["Otros"]} border`}
+                      className={`${PRODUCT_CATEGORY_COLORS_LIGHT[product.category] || PRODUCT_CATEGORY_COLORS_LIGHT["Otros"]} border`}
                     >
                       {product.category}
                     </Badge>

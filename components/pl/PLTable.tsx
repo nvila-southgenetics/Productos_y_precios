@@ -6,6 +6,7 @@ import { ChevronDown, ChevronRight, Plus, Table2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { capitalizeFirstLetter, displayProductName, displayProductLabelFromName, formatNumber } from "@/lib/utils"
 import { useProductCreateDialog } from "@/components/products/ProductCreateDialogProvider"
+import { PRODUCT_CATEGORIES_SORTED } from "@/lib/product-categories"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -93,7 +94,8 @@ const COUNTRY_TO_COMPANIES: Record<string, string[]> = {
 const MONTH_KEYS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"] as const
 const MONTH_LABELS = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
 const SHORT_LABELS = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"]
-const KNOWN_PL_CATEGORIES = ["Anualidades", "Endocrinología", "Ginecología", "Oncología", "Otros", "Prenatales", "Urología"] as const
+
+const KNOWN_PL_CATEGORIES = PRODUCT_CATEGORIES_SORTED
 
 const SGA_FIELDS: { key: keyof SGAData; label: string }[] = [
   { key: "salaries_wages", label: "Salaries & Wages" },

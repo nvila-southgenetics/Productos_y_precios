@@ -11,6 +11,7 @@ import { displayProductName, formatNumber } from "@/lib/utils"
 import type { ProductWithOverrides } from "@/lib/supabase-mcp"
 import { updateProductCountryOverride } from "@/lib/supabase-mcp"
 import { DeleteProductDialog } from "@/components/products/DeleteProductDialog"
+import { PRODUCT_CATEGORY_COLORS } from "@/lib/product-categories"
 
 export type ProductDeleteScope =
   | "current-country"
@@ -32,18 +33,6 @@ interface ProductTableProps {
   canDeleteGlobally?: boolean
   /** Callback para iniciar el flujo de fusión con los productos seleccionados. */
   onRequestMerge?: (products: ProductWithOverrides[]) => void
-}
-
-const categoryColors: Record<string, string> = {
-  "Ginecología": "bg-pink-300/20 text-pink-200 border-pink-300/30",
-  "Oncología": "bg-rose-300/20 text-rose-200 border-rose-300/30",
-  "Urología": "bg-sky-300/20 text-sky-200 border-sky-300/30",
-  "Endocrinología": "bg-violet-300/20 text-violet-200 border-violet-300/30",
-  "Prenatales": "bg-teal-300/20 text-teal-200 border-teal-300/30",
-  "Anualidades": "bg-amber-300/20 text-amber-200 border-amber-300/30",
-  "Carrier": "bg-indigo-300/20 text-indigo-200 border-indigo-300/30",
-  "Nutrición": "bg-lime-300/20 text-lime-200 border-lime-300/30",
-  "Otros": "bg-slate-300/20 text-slate-200 border-slate-300/30",
 }
 
 const tipoColors: Record<string, string> = {
@@ -372,7 +361,7 @@ export function ProductTable({
                     <div className="flex gap-2 flex-wrap">
                       {product.category && (
                         <Badge
-                          className={`${categoryColors[product.category] || categoryColors["Otros"]} border shadow-sm`}
+                          className={`${PRODUCT_CATEGORY_COLORS[product.category] || PRODUCT_CATEGORY_COLORS["Otros"]} border shadow-sm`}
                         >
                           {product.category}
                         </Badge>

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { cn, displayProductName } from "@/lib/utils"
 import { motion } from "framer-motion"
 import type { DashboardProduct } from "@/lib/supabase-mcp"
+import { PRODUCT_CATEGORY_COLORS } from "@/lib/product-categories"
 
 interface ProductRankingProps {
   products: DashboardProduct[]
@@ -14,18 +15,6 @@ interface ProductRankingProps {
   getMetricColor: (product: DashboardProduct, index: number) => string
   iconColor?: string
   emptyMessage?: string
-}
-
-const categoryColors: Record<string, string> = {
-  "Ginecología": "bg-pink-300/20 text-pink-200 border-pink-300/30",
-  "Oncología": "bg-rose-300/20 text-rose-200 border-rose-300/30",
-  "Urología": "bg-sky-300/20 text-sky-200 border-sky-300/30",
-  "Endocrinología": "bg-violet-300/20 text-violet-200 border-violet-300/30",
-  "Prenatales": "bg-teal-300/20 text-teal-200 border-teal-300/30",
-  "Anualidades": "bg-amber-300/20 text-amber-200 border-amber-300/30",
-  "Carrier": "bg-indigo-300/20 text-indigo-200 border-indigo-300/30",
-  "Nutrición": "bg-lime-300/20 text-lime-200 border-lime-300/30",
-  "Otros": "bg-slate-300/20 text-slate-200 border-slate-300/30",
 }
 
 export function ProductRanking({
@@ -82,7 +71,7 @@ export function ProductRanking({
                 <Badge
                   className={cn(
                     "mt-1 text-xs border bg-white/10 text-white/80 border-white/20",
-                    categoryColors[product.category] || categoryColors["Otros"]
+                    PRODUCT_CATEGORY_COLORS[product.category] || PRODUCT_CATEGORY_COLORS["Otros"]
                   )}
                 >
                   {product.category}

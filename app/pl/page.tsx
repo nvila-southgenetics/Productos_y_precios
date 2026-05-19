@@ -12,6 +12,7 @@ import { MultiCheckboxDropdown } from "@/components/filters/MultiCheckboxDropdow
 import { getCompanies } from "@/lib/supabase-mcp"
 import { filterCompaniesByCountries, getCountryForCompany } from "@/lib/auth-constants"
 import { companyQueryFromSelection } from "@/lib/company-filter"
+import { PRODUCT_CATEGORIES_SORTED } from "@/lib/product-categories"
 
 const BASE_COUNTRIES = [
   { code: "AR", name: "Argentina" },
@@ -24,15 +25,7 @@ const BASE_COUNTRIES = [
 
 const CHANNELS = ["Gobierno", "Instituciones SFL", "Paciente", "Pacientes desc", "Aseguradoras", "Distribuidores"]
 
-const CATEGORIES = [
-  "Anualidades",
-  "Endocrinología",
-  "Ginecología",
-  "Oncología",
-  "Otros",
-  "Prenatales",
-  "Urología",
-]
+const CATEGORIES = PRODUCT_CATEGORIES_SORTED
 
 const selectClass =
   "w-full bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-white/30"
