@@ -100,6 +100,12 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
   const [metaTipo, setMetaTipo] = useState<string>(product.tipo ?? "")
   const [isSavingMeta, setIsSavingMeta] = useState(false)
 
+  /** Categoría que se muestra y se guardará: selección del dropdown o la guardada en BD. */
+  const displayedCategory =
+    metaCategory.trim() || product.category?.trim() || ""
+  const isCustomCategory =
+    !!displayedCategory && !CATEGORY_OPTIONS.includes(displayedCategory)
+
   useEffect(() => {
     setMetaCategory(product.category ?? "")
     setMetaTipo(product.tipo ?? "")
@@ -1319,18 +1325,40 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
             <label className="text-xs font-semibold text-white/70 uppercase tracking-wide">Categoría</label>
                   <div className="mt-2">
                     {canEdit ? (
-                      <Select
-                        value={metaCategory}
-                        onChange={(e) => setMetaCategory(e.target.value)}
-                        className="bg-white/10 border-white/20 text-white"
-                      >
-                        <option value="">Seleccionar categoría</option>
-                        {CATEGORY_OPTIONS.map((c) => (
-                          <option key={c} value={c} className="bg-blue-900 text-white">
-                            {c}
-                          </option>
-                        ))}
-                      </Select>
+                      <>
+                        <Select
+                          value={CATEGORY_OPTIONS.includes(metaCategory) ? metaCategory : ""}
+                          onChange={(e) => setMetaCategory(e.target.value)}
+                          className="bg-white/10 border-white/20 text-white"
+                        >
+                          <option value="">Seleccionar categoría</option>
+                          {CATEGORY_OPTIONS.map((c) => (
+                            <option key={c} value={c} className="bg-blue-900 text-white">
+                              {c}
+                            </option>
+                          ))}
+                        </Select>
+                        {displayedCategory ? (
+                          <p className="mt-2 text-sm text-white/80">
+                            <span className="text-white/50">Categoría actual: </span>
+                            <Badge
+                              className={cn(
+                                "ml-1 align-middle border shadow-sm",
+                                categoryColors[displayedCategory] || categoryColors["Otros"]
+                              )}
+                            >
+                              {displayedCategory}
+                            </Badge>
+                            {isCustomCategory ? (
+                              <span className="block mt-1 text-xs text-white/50">
+                                No está en la lista; elegí una categoría predeterminada para cambiarla.
+                              </span>
+                            ) : null}
+                          </p>
+                        ) : (
+                          <p className="mt-2 text-sm text-white/50">Sin categoría asignada</p>
+                        )}
+                      </>
                     ) : (
                       product.category && (
                         <Badge
@@ -1374,14 +1402,15 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
                   <div className="pt-2">
                     <Button
                       onClick={async () => {
-                        if (!metaCategory.trim() || !metaTipo.trim()) {
+                        const categoryToSave = displayedCategory
+                        if (!categoryToSave || !metaTipo.trim()) {
                           alert("Completá categoría y tipo de muestra antes de guardar.")
                           return
                         }
                         setIsSavingMeta(true)
                         try {
                           await updateProductMeta(product.id, {
-                            category: metaCategory.trim(),
+                            category: categoryToSave,
                             tipo: metaTipo.trim(),
                           })
                           router.refresh()
