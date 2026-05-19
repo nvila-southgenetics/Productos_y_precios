@@ -91,6 +91,16 @@ function rowTotal(
   )
 }
 
+/** Suma de un producto en todas las instituciones y médicos (datos filtrados). */
+function productGrandTotal(countMap: Map<string, number>, productKey: string): number {
+  let total = 0
+  const prefix = `${productKey}|`
+  for (const [k, v] of countMap) {
+    if (k.startsWith(prefix)) total += v
+  }
+  return total
+}
+
 function formatCell(value: number): string {
   if (value === 0) return "—"
   return formatNumber(value, "es-UY")
@@ -221,6 +231,12 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
     return out
   }, [rows, rowSortMode, productKeys, countMap, expandedInstitutions])
 
+  const grandTotals = useMemo(() => {
+    const byProduct = productKeys.map((pk) => productGrandTotal(countMap, pk))
+    const total = byProduct.reduce((s, n) => s + n, 0)
+    return { byProduct, total }
+  }, [countMap, productKeys])
+
   function toggleInstitution(key: string) {
     setExpandedInstitutions((prev) => {
       const next = new Set(prev)
@@ -314,6 +330,30 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
             </tr>
           </thead>
           <tbody>
+            <tr className="border-b border-white/20 bg-white/15 font-semibold">
+              <td className="sticky left-0 z-10 border-r border-white/20 bg-blue-900/95 px-3 py-2 text-white">
+                Total
+              </td>
+              <td
+                className={cn(
+                  "border-r border-white/20 bg-blue-900/90 px-2 py-2 text-center text-white",
+                  grandTotals.total === 0 && "text-white/40"
+                )}
+              >
+                {formatCell(grandTotals.total)}
+              </td>
+              {productKeys.map((pk, i) => (
+                <td
+                  key={`grand-${pk}`}
+                  className={cn(
+                    "border-r border-white/10 px-2 py-2 text-center text-white",
+                    grandTotals.byProduct[i] === 0 && "text-white/40"
+                  )}
+                >
+                  {formatCell(grandTotals.byProduct[i])}
+                </td>
+              ))}
+            </tr>
             {displayRows.map((row) => {
               const total = rowTotal(
                 countMap,
