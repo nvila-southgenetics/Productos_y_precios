@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { ProductTable } from "@/components/products/ProductTable"
+import { ProductTable, type ProductDeleteScope } from "@/components/products/ProductTable"
 import { ProductFilters } from "@/components/products/ProductFilters"
 import { ProductMergeDialog } from "@/components/products/ProductMergeDialog"
 import { MultiCheckboxDropdown } from "@/components/filters/MultiCheckboxDropdown"
@@ -20,14 +20,16 @@ import { usePermissions } from "@/lib/use-permissions"
 import { supabase } from "@/lib/supabase"
 import { productNameSortKey } from "@/lib/utils"
 import { useProductCreateDialog } from "@/components/products/ProductCreateDialogProvider"
-import { filterCompaniesByCountries, getCountryForCompany } from "@/lib/auth-constants"
+import { COUNTRY_CODES_LIST, filterCompaniesByCountries, getCountryForCompany } from "@/lib/auth-constants"
 
 const VALID_COUNTRIES = new Set(["UY", "AR", "MX", "CL", "VE", "CO"])
 
 function ProductosContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const { allowedCountries, canEdit } = usePermissions()
+  const { allowedCountries, canEdit, isAdmin } = usePermissions()
+  const canDeleteGlobally =
+    isAdmin || allowedCountries.length >= COUNTRY_CODES_LIST.length
   const { openCreateProductDialog } = useProductCreateDialog()
   const [products, setProducts] = useState<ProductWithOverrides[]>([])
   const [filteredProducts, setFilteredProducts] = useState<ProductWithOverrides[]>([])
@@ -273,12 +275,16 @@ function ProductosContent() {
     // La navegación se maneja en ProductTable
   }
 
-  const handleDeleteProduct = async (product: ProductWithOverrides, deleteFromAllCountries: boolean) => {
+  const handleDeleteProduct = async (product: ProductWithOverrides, scope: ProductDeleteScope) => {
     try {
-      if (deleteFromAllCountries) {
+      if (scope === "all-countries") {
         await deleteProductFromAllCountries(product.id)
-      } else {
+      } else if (scope === "current-country") {
         await deleteProductFromCountry(product.id, selectedCountry)
+      } else {
+        for (const countryCode of scope.countryCodes) {
+          await deleteProductFromCountry(product.id, countryCode)
+        }
       }
       
       // Recargar productos después de eliminar
@@ -482,6 +488,8 @@ function ProductosContent() {
             onDeleteProduct={handleDeleteProduct}
             onReviewToggle={handleReviewToggle}
             canEdit={canEdit}
+            allowedCountries={allowedCountries}
+            canDeleteGlobally={canDeleteGlobally}
             onRequestMerge={handleRequestMerge}
           />
         )}

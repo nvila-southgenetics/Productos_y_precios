@@ -12,6 +12,11 @@ import type { ProductWithOverrides } from "@/lib/supabase-mcp"
 import { updateProductCountryOverride } from "@/lib/supabase-mcp"
 import { DeleteProductDialog } from "@/components/products/DeleteProductDialog"
 
+export type ProductDeleteScope =
+  | "current-country"
+  | "all-countries"
+  | { countryCodes: string[] }
+
 interface ProductTableProps {
   products: ProductWithOverrides[]
   selectedCountry: string
@@ -19,10 +24,12 @@ interface ProductTableProps {
   budgetUnitsByProductId?: Record<string, number>
   onViewProduct: (product: ProductWithOverrides) => void
   onEditProduct: (product: ProductWithOverrides) => void
-  onDeleteProduct: (product: ProductWithOverrides, deleteFromAllCountries: boolean) => Promise<void>
+  onDeleteProduct: (product: ProductWithOverrides, scope: ProductDeleteScope) => Promise<void>
   onReviewToggle?: (productId: string, countryCode: string, checked: boolean) => Promise<void>
   /** Si false, se ocultan botones de editar/eliminar/revisado. */
   canEdit?: boolean
+  allowedCountries?: string[]
+  canDeleteGlobally?: boolean
   /** Callback para iniciar el flujo de fusión con los productos seleccionados. */
   onRequestMerge?: (products: ProductWithOverrides[]) => void
 }
@@ -59,6 +66,8 @@ export function ProductTable({
   onDeleteProduct,
   onReviewToggle,
   canEdit = true,
+  allowedCountries = [],
+  canDeleteGlobally = true,
   onRequestMerge,
 }: ProductTableProps) {
   const router = useRouter()
@@ -121,7 +130,7 @@ export function ProductTable({
       const failures: Array<{ id: string; name: string; error: string }> = []
       for (const p of list) {
         try {
-          await onDeleteProduct(p, false)
+          await onDeleteProduct(p, "current-country")
         } catch (e) {
           failures.push({ id: p.id, name: p.name, error: e instanceof Error ? e.message : String(e) })
         }
@@ -149,7 +158,7 @@ export function ProductTable({
       const failures: Array<{ id: string; name: string; error: string }> = []
       for (const p of list) {
         try {
-          await onDeleteProduct(p, true)
+          await onDeleteProduct(p, "all-countries")
         } catch (e) {
           failures.push({ id: p.id, name: p.name, error: e instanceof Error ? e.message : String(e) })
         }
@@ -161,6 +170,34 @@ export function ProductTable({
       if (failures.length) {
         alert(
           `Algunos productos no se pudieron eliminar de todos los países:\n` +
+            failures.map((f) => `- ${f.name}: ${f.error}`).join("\n")
+        )
+      }
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const handleDeleteFromCountries = async (countryCodes: string[]) => {
+    const list = productsToDelete?.length ? productsToDelete : (productToDelete ? [productToDelete] : [])
+    if (list.length === 0 || countryCodes.length === 0) return
+    setIsDeleting(true)
+    try {
+      const failures: Array<{ id: string; name: string; error: string }> = []
+      for (const p of list) {
+        try {
+          await onDeleteProduct(p, { countryCodes })
+        } catch (e) {
+          failures.push({ id: p.id, name: p.name, error: e instanceof Error ? e.message : String(e) })
+        }
+      }
+      setDeleteDialogOpen(false)
+      setProductToDelete(null)
+      setProductsToDelete(null)
+      setMergeSelection(new Set())
+      if (failures.length) {
+        alert(
+          `Algunos productos no se pudieron eliminar de los países seleccionados:\n` +
             failures.map((f) => `- ${f.name}: ${f.error}`).join("\n")
         )
       }
@@ -419,8 +456,11 @@ export function ProductTable({
             product={productToDelete}
             products={productsToDelete}
             selectedCountry={selectedCountry}
+            allowedCountries={allowedCountries}
+            canDeleteGlobally={canDeleteGlobally}
             onDeleteFromCountry={handleDeleteFromCountry}
             onDeleteFromAll={handleDeleteFromAll}
+            onDeleteFromCountries={handleDeleteFromCountries}
             isDeleting={isDeleting}
           />,
           document.body
