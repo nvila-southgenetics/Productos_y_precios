@@ -111,8 +111,8 @@ export default function MedicosPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">Médicos</h1>
           <p className="text-sm text-white/80 mt-1">
-            Unidades vendidas por producto, institución y médico ({MEDICOS_PAGE_YEAR}). Expandí cada
-            institución para ver el desglose por médico.
+            Unidades vendidas por médico e institución ({MEDICOS_PAGE_YEAR}). Filas: médicos (agrupables
+            por institución). Columnas: total y productos ordenados por ventas.
           </p>
         </div>
 
