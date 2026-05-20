@@ -135,7 +135,7 @@ export function reconcileMonthlyProductCost(
 }
 
 /** Asegura que Diferencia aparezca en cantidades/overrides (unidades 0 si no hay ventas). */
-export function ensureDiferenciaInDataset<T extends Record<string, unknown>>(
+export function ensureDiferenciaInDataset<T extends object = OverrideCostShape>(
   quantities: Record<string, number[]>,
   overrides: Record<string, T>,
   diferenciaName: string = DIFFERENCIA_COSTOS_PRODUCT_NAME
