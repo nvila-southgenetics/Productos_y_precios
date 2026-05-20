@@ -6,6 +6,15 @@ type OverrideRow = ProductCountryOverride & {
   col_config_type?: string | null
 }
 
+/** Valor por defecto en UI/BD; no cuenta como precio cargado (igual que en dashboard/P&L). */
+export const PLACEHOLDER_GROSS_SALES_USD = 10
+
+function isMeaningfulOverrideField(key: string, value: number): boolean {
+  if (value === 0) return false
+  if (key === "grossSalesUSD" && value === PLACEHOLDER_GROSS_SALES_USD) return false
+  return true
+}
+
 /** True si hay precio, costo, revisado u otro dato numérico cargado en overrides. */
 export function hasMeaningfulOverrideData(
   overrides?: ProductCountryOverride["overrides"] | null
@@ -14,7 +23,7 @@ export function hasMeaningfulOverrideData(
   if (overrides.reviewed === true) return true
   for (const [key, value] of Object.entries(overrides)) {
     if (key === "reviewed") continue
-    if (typeof value === "number" && value !== 0) return true
+    if (typeof value === "number" && isMeaningfulOverrideField(key, value)) return true
   }
   return false
 }
