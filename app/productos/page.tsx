@@ -26,6 +26,7 @@ import {
   productMatchesCategoryFilter,
 } from "@/lib/product-categories"
 import { filterProductsWithCountriesActivity } from "@/lib/product-country-activity"
+import { saveProductosListReturn } from "@/lib/productos-list-return"
 
 const VALID_COUNTRIES = new Set(["UY", "AR", "MX", "CL", "VE", "CO"])
 
@@ -130,10 +131,11 @@ function ProductosContent() {
     if (allowedCountries.length) loadCompanies()
   }, [allowedCountries])
 
-  // Compañías: URL, legacy ?country=, o todas por defecto
-  const [companiesInitialized, setCompaniesInitialized] = useState(false)
+  const [filtersReady, setFiltersReady] = useState(false)
+
+  // Restaurar compañías desde URL (también al volver atrás desde detalle)
   useEffect(() => {
-    if (!companies.length || companiesInitialized) return
+    if (!companies.length) return
 
     const companiesParam = searchParams.get("companies")
     if (companiesParam) {
@@ -143,7 +145,7 @@ function ProductosContent() {
         .filter((c) => companies.includes(c))
       if (picked.length) {
         setSelectedCompanies(picked)
-        setCompaniesInitialized(true)
+        setFiltersReady(true)
         return
       }
     }
@@ -152,16 +154,17 @@ function ProductosContent() {
       const matching = companies.filter((c) => getCountryForCompany(c) === legacyCountry)
       if (matching.length) {
         setSelectedCompanies(matching)
-        setCompaniesInitialized(true)
+        setFiltersReady(true)
         return
       }
     }
-    setSelectedCompanies(companies)
-    setCompaniesInitialized(true)
-  }, [searchParams, companies, companiesInitialized])
+    if (!companiesParam && !legacyCountry) {
+      setSelectedCompanies(companies)
+    }
+    setFiltersReady(true)
+  }, [searchParams, companies])
 
-  // Mantener la URL en sync con los filtros
-  useEffect(() => {
+  const listReturnUrl = useMemo(() => {
     const params = new URLSearchParams()
     if (
       selectedCompanies.length > 0 &&
@@ -176,12 +179,28 @@ function ProductosContent() {
     if (reviewFilter !== "all") params.set("review", reviewFilter)
     if (sortBy !== "name") params.set("sort", sortBy)
     const query = params.toString()
-    const url = query ? `/productos?${query}` : "/productos"
-    const current = typeof window !== "undefined" ? window.location.pathname + (window.location.search || "") : ""
-    if (current !== url) {
-      router.replace(url, { scroll: false })
+    return query ? `/productos?${query}` : "/productos"
+  }, [
+    selectedCompanies,
+    companies.length,
+    searchQuery,
+    selectedCategory,
+    selectedTipo,
+    reviewFilter,
+    sortBy,
+  ])
+
+  // Mantener la URL en sync (solo después de hidratar desde URL, para no borrar ?companies= al volver)
+  useEffect(() => {
+    if (!filtersReady || !companies.length) return
+
+    const current =
+      typeof window !== "undefined" ? window.location.pathname + (window.location.search || "") : ""
+    if (current !== listReturnUrl) {
+      router.replace(listReturnUrl, { scroll: false })
     }
-  }, [selectedCompanies, companies.length, searchQuery, selectedCategory, selectedTipo, reviewFilter, sortBy, router])
+    saveProductosListReturn(listReturnUrl)
+  }, [filtersReady, companies.length, listReturnUrl, router])
 
   const categories = PRODUCT_CATEGORIES_SORTED
 
@@ -443,7 +462,9 @@ function ProductosContent() {
       await reloadProducts()
 
       if (newProductId) {
-        router.push(`/productos/${newProductId}?country=${selectedCountry}`)
+        router.push(
+          `/productos/${newProductId}?country=${selectedCountry}&returnTo=${encodeURIComponent(listReturnUrl)}`
+        )
       }
     } catch (error) {
       console.error("Error al fusionar productos:", error)
@@ -458,7 +479,9 @@ function ProductosContent() {
     openCreateProductDialog({
       defaultName: "",
       onCreated: async (product) => {
-        router.push(`/productos/${product.id}?country=${selectedCountry}`)
+        router.push(
+          `/productos/${product.id}?country=${selectedCountry}&returnTo=${encodeURIComponent(listReturnUrl)}`
+        )
       },
     })
   }
@@ -529,6 +552,7 @@ function ProductosContent() {
           <ProductTable
             products={filteredProducts}
             selectedCountry={selectedCountry}
+            listReturnUrl={listReturnUrl}
             salesCountByProductId={salesCountByProductId}
             budgetUnitsByProductId={budgetUnitsByProductId}
             onViewProduct={() => {}}

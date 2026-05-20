@@ -1,16 +1,18 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, Link as LinkIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ProductDetailView } from "@/components/products/ProductDetailView"
 import { getProductById, type ProductWithOverrides } from "@/lib/supabase-mcp"
 import { usePermissions } from "@/lib/use-permissions"
+import { getProductosListReturn, parseProductosReturnTo } from "@/lib/productos-list-return"
 
 export default function ProductDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const productId = params.productId as string
   const { canEdit, allowedCountries } = usePermissions()
 
@@ -49,11 +51,9 @@ export default function ProductDetailPage() {
   }
 
   const handleBackToList = () => {
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back()
-    } else {
-      router.push("/productos")
-    }
+    const fromQuery = parseProductosReturnTo(searchParams.get("returnTo"))
+    const destination = fromQuery ?? getProductosListReturn()
+    router.push(destination)
   }
 
   if (isLoading) {
