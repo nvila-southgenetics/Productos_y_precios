@@ -7,6 +7,14 @@ import { Button } from "@/components/ui/button"
 import { capitalizeFirstLetter, displayProductName, displayProductLabelFromName, formatNumber } from "@/lib/utils"
 import { useProductCreateDialog } from "@/components/products/ProductCreateDialogProvider"
 import { PRODUCT_CATEGORIES_SORTED } from "@/lib/product-categories"
+import {
+  DIFFERENCIA_COSTOS_PRODUCT_NAME,
+  ensureDiferenciaInDataset,
+  fetchCompanyMonthlyProductCost,
+  reconcileMonthlyProductCost,
+  shouldReconcileProductCost,
+  sumRealProductCostByMonth,
+} from "@/lib/pl-cost-reconciliation"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -237,8 +245,13 @@ export function PLTable({
   const [detailMonth, setDetailMonth] = useState<number | null>(null)
   // Test mode: unidades simuladas por producto y mes
   const [testQuantities, setTestQuantities] = useState<Record<string, number[]> | null>(null)
+  const [companyMonthlyProductCost, setCompanyMonthlyProductCost] = useState<
+    Awaited<ReturnType<typeof fetchCompanyMonthlyProductCost>>
+  >([])
 
   const product = products.length === 1 ? products[0] : "all"
+  const reconcileProductCostEnabled =
+    modelo === "real" && !combineEnabled && !testMode && shouldReconcileProductCost(products)
   const { openCreateProductDialog } = useProductCreateDialog()
   const categoriesSet = new Set(categories)
   const allKnownCategoriesSelected = KNOWN_PL_CATEGORIES.every((c) => categoriesSet.has(c))
@@ -577,6 +590,42 @@ export function PLTable({
 
   const activeQuantities: Record<string, number[]> = (testMode && testQuantities) ? testQuantities : quantities
 
+  const productCostReconciliation = useMemo(() => {
+    if (!reconcileProductCostEnabled) {
+      return { productCostMonthly: null as number[] | null, hasRealData: false }
+    }
+    const realByMonth = sumRealProductCostByMonth(
+      companyMonthlyProductCost,
+      resolveSalesCompanies()
+    )
+    const { quantities: qty, overrides: ovs } = ensureDiferenciaInDataset(
+      activeQuantities,
+      overrides
+    )
+    const result = reconcileMonthlyProductCost(qty, ovs, realByMonth, { enabled: true })
+    return {
+      productCostMonthly: result.productCostMonthly,
+      diferenciaMonthly: result.diferenciaMonthly,
+      hasRealData: result.hasRealData,
+    }
+  }, [
+    reconcileProductCostEnabled,
+    companyMonthlyProductCost,
+    activeQuantities,
+    overrides,
+    resolveSalesCompanies,
+  ])
+
+  const computeRealProductCostLine = (
+    qty: Record<string, number[]>,
+    ovs: Record<string, OverrideData>
+  ): number[] => {
+    if (reconcileProductCostEnabled && productCostReconciliation.productCostMonthly) {
+      return productCostReconciliation.productCostMonthly
+    }
+    return computeMonthlyRealField(qty, ovs, "productCostUSD")
+  }
+
   // ── Data fetching ─────────────────────────────────────────────────────────
 
   const fetchData = useCallback(async () => {
@@ -599,6 +648,7 @@ export function PLTable({
         setCombineError(null)
         setHybridRealSnapshot(null)
         setSgaRowsRaw([])
+        setCompanyMonthlyProductCost([])
         return
       }
 
@@ -952,6 +1002,12 @@ export function PLTable({
         }
       } else {
         await Promise.all([fetchQuantities(), fetchOverrides(), fetchSGA()])
+        const rows = await fetchCompanyMonthlyProductCost(year, resolveSalesCompanies())
+        setCompanyMonthlyProductCost(rows)
+      }
+
+      if (modelo !== "real") {
+        setCompanyMonthlyProductCost([])
       }
 
       if (hybridForecastQ1Enabled) {
@@ -1585,8 +1641,13 @@ export function PLTable({
       }
     }
 
+    const qty =
+      reconcileProductCostEnabled
+        ? ensureDiferenciaInDataset(activeQuantities, overrides).quantities
+        : activeQuantities
+
     return {
-      qty: activeQuantities,
+      qty,
       odoo: modelo === "real" ? odooAmounts : {},
       grossSale,
     }
@@ -1671,7 +1732,7 @@ export function PLTable({
 
         const grossSales = computeMonthlyRealGrossSalesFromOdoo(amts)
         const commercialDiscount = computeMonthlyRealField(qty, ovs, "commercialDiscountUSD")
-        const productCost = computeMonthlyRealField(qty, ovs, "productCostUSD")
+        const productCost = computeRealProductCostLine(qty, ovs)
         const kitCost = computeMonthlyRealField(qty, ovs, "kitCostUSD")
         const paymentFee = computeMonthlyRealField(qty, ovs, "paymentFeeUSD")
         const bloodDraw = computeMonthlyRealField(qty, ovs, "bloodDrawSampleUSD")
@@ -2178,6 +2239,11 @@ export function PLTable({
             {canEdit && product !== "all" && channels.length !== 1 && (
               <span className="text-xs text-amber-400/70">
                 · SG&A de solo lectura — seleccioná un canal específico para editar
+              </span>
+            )}
+            {reconcileProductCostEnabled && productCostReconciliation.hasRealData && (
+              <span className="text-xs text-sky-300/90">
+                · Product Cost: cifra contable por compañía (ajuste en {DIFFERENCIA_COSTOS_PRODUCT_NAME})
               </span>
             )}
           </div>

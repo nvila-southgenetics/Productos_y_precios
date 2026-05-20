@@ -13,6 +13,7 @@ import { getCompanies } from "@/lib/supabase-mcp"
 import { filterCompaniesByCountries, getCountryForCompany } from "@/lib/auth-constants"
 import { companyQueryFromSelection } from "@/lib/company-filter"
 import { PRODUCT_CATEGORIES_SORTED } from "@/lib/product-categories"
+import { DIFFERENCIA_COSTOS_PRODUCT_NAME } from "@/lib/pl-cost-reconciliation"
 
 const BASE_COUNTRIES = [
   { code: "AR", name: "Argentina" },
@@ -186,13 +187,7 @@ export default function PLPage() {
         }
         const { data } = await q
         if (!data) return
-        setProducts(
-          data
-            .map((p: { name: string }) => p.name)
-            .sort((a: string, b: string) =>
-              productNameSortKey(a).localeCompare(productNameSortKey(b), "es", { sensitivity: "base" })
-            )
-        )
+        let names = data.map((p: { name: string }) => p.name) as string[]
 
         const map: Record<string, string> = {}
         for (const r of data as any[]) {
@@ -200,6 +195,25 @@ export default function PLPage() {
           const a = String(r?.alias || "")
           if (n && a) map[n] = a
         }
+
+        if (!names.includes(DIFFERENCIA_COSTOS_PRODUCT_NAME)) {
+          const { data: diffRow } = await supabase
+            .from("products")
+            .select("name, alias")
+            .eq("name", DIFFERENCIA_COSTOS_PRODUCT_NAME)
+            .maybeSingle()
+          if (diffRow?.name) {
+            names.push(diffRow.name)
+            const alias = String((diffRow as { alias?: string }).alias || "")
+            if (alias) map[diffRow.name] = alias
+          }
+        }
+
+        setProducts(
+          names.sort((a: string, b: string) =>
+            productNameSortKey(a).localeCompare(productNameSortKey(b), "es", { sensitivity: "base" })
+          )
+        )
         setAliasesByName(map)
       }
     } catch (err) {
