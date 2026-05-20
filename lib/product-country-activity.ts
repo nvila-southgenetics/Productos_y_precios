@@ -82,3 +82,21 @@ export function filterProductsWithCountryActivity(
     })
   )
 }
+
+/** Productos con actividad en al menos uno de los países indicados. */
+export function filterProductsWithCountriesActivity(
+  products: ProductWithOverrides[],
+  countryCodes: string[],
+  salesByCountry: Record<string, Record<string, number>>,
+  budgetByCountry: Record<string, Record<string, number>>
+): ProductWithOverrides[] {
+  if (!countryCodes.length) return []
+  return products.filter((p) =>
+    countryCodes.some((cc) =>
+      productHasActivityInCountry(p, cc, {
+        salesCount: salesByCountry[cc]?.[p.id] ?? 0,
+        budgetUnits: budgetByCountry[cc]?.[p.id] ?? 0,
+      })
+    )
+  )
+}
