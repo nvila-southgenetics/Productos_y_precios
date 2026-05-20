@@ -2,6 +2,12 @@
 
 La tabla `pl_company_monthly_product_cost` guarda el **Product Cost contable** mensual por compañía. La app lo usa solo en **P&L Real** con **todos los productos** seleccionados para reconciliar la fila Product Cost.
 
+## Filtro en n8n (Odoo por `account_id`)
+
+El HTTP Request agrupa por `date:month`, `company_id` y `account_id`. **No** subas todo `expense_direct_cost` a Product Cost: excluir cuentas tipo Kit, Courier, Commission, etc.
+
+Ver nodos Code listos en [`n8n-odoo-company-costs-code.md`](./n8n-odoo-company-costs-code.md).
+
 ## Upsert (n8n / REST Supabase)
 
 **Tabla:** `pl_company_monthly_product_cost`
