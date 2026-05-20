@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { ProductTable, type ProductDeleteScope } from "@/components/products/ProductTable"
 import { ProductFilters } from "@/components/products/ProductFilters"
 import { ProductMergeDialog } from "@/components/products/ProductMergeDialog"
+import { ProductosTableSkeleton } from "@/components/products/ProductosTableSkeleton"
 import { MultiCheckboxDropdown } from "@/components/filters/MultiCheckboxDropdown"
 import {
   getCompanies,
@@ -213,6 +214,8 @@ function ProductosContent() {
   }, [products])
 
   const reloadProducts = useCallback(async () => {
+    if (!filtersReady) return
+
     if (!activeCountryCodes.length || !selectedCompanies.length) {
       setProducts([])
       setSalesCountByProductId({})
@@ -315,11 +318,14 @@ function ProductosContent() {
     } finally {
       setIsLoading(false)
     }
-  }, [activeCountryCodes, selectedCompanies, marketLabel, allCompaniesSelected, companies.length])
+  }, [activeCountryCodes, selectedCompanies, marketLabel, allCompaniesSelected, companies.length, filtersReady])
 
   useEffect(() => {
+    if (!filtersReady) return
     reloadProducts()
-  }, [reloadProducts])
+  }, [reloadProducts, filtersReady])
+
+  const showTableLoading = !filtersReady || isLoading || companies.length === 0
 
   // Filtrar y ordenar productos
   useEffect(() => {
@@ -517,6 +523,7 @@ function ProductosContent() {
             label="Compañía"
             hideLabel
             allLabel="Todas las compañías"
+            pendingLabel="Cargando compañías…"
             options={companies.map((c) => ({ value: c, label: c }))}
             selectedValues={selectedCompanies.length ? selectedCompanies : companies}
             onSelectedValuesChange={setSelectedCompanies}
@@ -541,14 +548,15 @@ function ProductosContent() {
           />
         </div>
 
-        {isLoading ? (
-          <div className="text-center py-12 text-white/80">Cargando productos...</div>
+        {showTableLoading ? (
+          <ProductosTableSkeleton showReviewColumn={canEdit} />
         ) : error ? (
           <div className="rounded-lg border border-red-400/30 bg-red-500/10 backdrop-blur-sm p-4">
             <p className="text-red-200 font-medium">Error al cargar productos</p>
             <p className="text-red-300 text-sm mt-1">{error}</p>
           </div>
         ) : (
+          <div className="transition-opacity duration-300 ease-out">
           <ProductTable
             products={filteredProducts}
             selectedCountry={selectedCountry}
@@ -564,6 +572,7 @@ function ProductosContent() {
             canDeleteGlobally={canDeleteGlobally}
             onRequestMerge={handleRequestMerge}
           />
+          </div>
         )}
 
         <ProductMergeDialog
@@ -581,8 +590,14 @@ export default function ProductosPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-gradient-to-r from-blue-900 via-blue-950 to-slate-900 flex items-center justify-center">
-          <p className="text-white/80">Cargando...</p>
+        <div className="min-h-screen bg-gradient-to-r from-blue-900 via-blue-950 to-slate-900">
+          <div className="container mx-auto py-8 px-4 max-w-7xl">
+            <div className="h-9 w-48 rounded-md bg-white/10 animate-pulse mb-6" />
+            <div className="mb-6 rounded-lg bg-white/10 border border-white/20 p-4">
+              <div className="h-10 w-full max-w-[520px] rounded-md bg-white/10 animate-pulse" />
+            </div>
+            <ProductosTableSkeleton />
+          </div>
         </div>
       }
     >
