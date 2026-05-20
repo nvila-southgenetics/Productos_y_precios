@@ -17,6 +17,7 @@ export function MultiCheckboxDropdown({
   hideLabel = false,
   className,
   pendingLabel,
+  showSelectAllOption = true,
 }: {
   label: string
   options: MultiSelectOption[]
@@ -27,6 +28,8 @@ export function MultiCheckboxDropdown({
   className?: string
   /** Mientras no hay opciones (p. ej. permisos cargando), mostrar este texto. */
   pendingLabel?: string
+  /** Si false, solo se eligen opciones una por una (sin fila "Todas"). */
+  showSelectAllOption?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [menuStyle, setMenuStyle] = useState<{ top: number; left: number; width: number } | null>(null)
@@ -81,7 +84,9 @@ export function MultiCheckboxDropdown({
       : options.length === 0
         ? "Sin opciones"
         : isAll
-          ? allLabel
+          ? showSelectAllOption
+            ? allLabel
+            : `${selectedValues.length} seleccionadas`
           : selectedValues.length === 1
             ? options.find((o) => o.value === selectedValues[0])?.label ?? selectedValues[0]
             : `${selectedValues.length} seleccionados`
@@ -114,29 +119,31 @@ export function MultiCheckboxDropdown({
         maxWidth: "min(90vw, 640px)",
       }}
     >
-      <div className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/90">
-        <span className="shrink-0 flex items-center rounded p-0.5 hover:bg-white/10 focus-within:bg-white/10">
-          <Checkbox checked={isAll} onChange={toggleAllCheckbox} />
-        </span>
-        <span
-          role="button"
-          tabIndex={0}
-          className="min-w-0 flex-1 cursor-pointer text-left whitespace-nowrap rounded px-1 py-0.5 outline-none hover:bg-white/10 focus-visible:bg-white/10"
-          onClick={() => {
-            onSelectedValuesChange(allValues)
-            setOpen(false)
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault()
+      {showSelectAllOption ? (
+        <div className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/90">
+          <span className="shrink-0 flex items-center rounded p-0.5 hover:bg-white/10 focus-within:bg-white/10">
+            <Checkbox checked={isAll} onChange={toggleAllCheckbox} />
+          </span>
+          <span
+            role="button"
+            tabIndex={0}
+            className="min-w-0 flex-1 cursor-pointer text-left whitespace-nowrap rounded px-1 py-0.5 outline-none hover:bg-white/10 focus-visible:bg-white/10"
+            onClick={() => {
               onSelectedValuesChange(allValues)
               setOpen(false)
-            }
-          }}
-        >
-          {allLabel}
-        </span>
-      </div>
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault()
+                onSelectedValuesChange(allValues)
+                setOpen(false)
+              }
+            }}
+          >
+            {allLabel}
+          </span>
+        </div>
+      ) : null}
       {options.map((opt) => (
         <div
           key={opt.value}

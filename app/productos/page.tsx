@@ -78,11 +78,11 @@ function ProductosContent() {
     return activeCountryCodes[0] ?? "AR"
   }, [activeCountryCodes])
 
+  /** Catálogo completo: todas las compañías tildadas (una por una o todas). */
   const allCompaniesSelected = useMemo(() => {
     if (!companies.length || !selectedCompanies.length) return false
-    if (selectedCompanies.length !== companies.length) return false
     const set = new Set(selectedCompanies)
-    return companies.every((c) => set.has(c))
+    return companies.length === selectedCompanies.length && companies.every((c) => set.has(c))
   }, [companies, selectedCompanies])
 
   const marketLabel = useMemo(() => {
@@ -470,7 +470,7 @@ function ProductosContent() {
           <div>
             <h1 className="text-3xl font-bold text-white mb-2">Productos</h1>
             <p className="text-white/80 mt-1">
-              Con todas las compañías se listan todos los productos. Al filtrar por una o varias, solo los que tienen ventas, budget o precios en ese mercado.
+              Tildá cada compañía que quieras ver. Con todas tildadas se listan todos los productos; con una o varias, solo los activos en ese mercado.
               {marketLabel ? (
                 <span className="block text-white/60 text-sm mt-1">
                   Mostrando: <span className="text-white/90 font-medium">{marketLabel}</span>
@@ -494,6 +494,7 @@ function ProductosContent() {
             label="Compañía"
             hideLabel
             allLabel="Todas las compañías"
+            showSelectAllOption={false}
             options={companies.map((c) => ({ value: c, label: c }))}
             selectedValues={selectedCompanies.length ? selectedCompanies : companies}
             onSelectedValuesChange={setSelectedCompanies}
