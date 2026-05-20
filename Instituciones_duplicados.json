@@ -1,0 +1,37 @@
+[
+  {
+    "reason": "Misma ciudad Durazno y teléfono equivalente",
+    "records": [
+      {"id": 66478, "name": "CAMEDUR", "phone": "+598 4362 3381", "street": "19 de Abril 971", "city": "Durazno"},
+      {"id": 66431, "name": "CAMEDUR Durazno", "phone": "+59843623381", "street": "19 de April 0384", "city": "DURAZNO"}
+    ]
+  },
+  {
+    "reason": "Mismo domicilio Colón 1224 en Paysandú y teléfono equivalente",
+    "records": [
+      {"id": 66470, "name": "COMEPA", "phone": "+598 4723 2100", "street": "Colón 1224", "city": "Paysandú"},
+      {"id": 66445, "name": "COMEPA Paysandú", "phone": "+59847232100", "street": "Colón 1224", "city": "PAYSANDU"}
+    ]
+  },
+  {
+    "reason": "Mismo domicilio Gral. Flores 3387 en Florida y correo igual",
+    "records": [
+      {"id": 66480, "name": "COMEF", "phone": "+598 4352 5141", "street": "Gral. Flores 3387", "city": "Florida", "email": "test_comef@comef.com.uy"},
+      {"id": 66443, "name": "COMEF Florida", "phone": "+59843525140", "street": "Gral.Flores 3387", "city": "FLORIDA", "email": "test_comef@comef.com.uy"}
+    ]
+  },
+  {
+    "reason": "Mismo domicilio Fray Ubeda 647 en Flores y correo igual",
+    "records": [
+      {"id": 66479, "name": "COMEFLO", "phone": "+598 4364 2202", "street": "Fray Ubeda 647", "city": "Flores", "email": "test_comeflo@comeflo.com.uy"},
+      {"id": 66444, "name": "COMEFLO Flores", "phone": "+59843642200", "street": "Fray Ubeda 647", "city": "FLORES", "email": "test_comeflo@comeflo.com.uy"}
+    ]
+  },
+  {
+    "reason": "Misma zona/razón social CAMCEL y teléfonos muy cercanos",
+    "records": [
+      {"id": 66486, "name": "CAMCEL", "phone": "+598 4642 8686", "street": "Agustin De La Rosa", "city": "Cerro Largo"},
+      {"id": 66436, "name": "CAMCEL Cerro Largo", "phone": "+59846428680", "street": "Agustín de la Rosa 576", "city": "CERRO LARGO", "email": "test_atencionalcliente@camcel.com.uy"}
+    ]
+  }
+]

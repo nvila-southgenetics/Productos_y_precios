@@ -52,6 +52,8 @@ export default function InvoicesPage() {
     paid: 0,
     notPaid: 0,
     inPayment: 0,
+    totalAmount: 0,
+    paidAmount: 0,
   })
   const [monthlyData, setMonthlyData] = useState<Array<{ month: string; paid: number; notPaid: number; inPayment: number }>>([])
   const [rows, setRows] = useState<InvoiceRow[]>([])
@@ -129,8 +131,8 @@ export default function InvoicesPage() {
               <BarChart3 className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-white">Facturas</h1>
-              <p className="text-sm text-white/80 mt-1">Análisis de estado de pago y detalle por cliente</p>
+              <h1 className="text-3xl font-bold text-white">Cobranza</h1>
+              <p className="text-sm text-white/80 mt-1">Resumen y análisis de facturas por estado de pago</p>
             </div>
           </div>
         </div>
@@ -145,16 +147,16 @@ export default function InvoicesPage() {
             <p className="text-2xl font-semibold text-white">{formatNumber(metrics.total)}</p>
           </div>
           <div className="rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4">
-            <p className="text-sm text-white/70">Total pagas</p>
+            <p className="text-sm text-white/70">Precio total de facturas</p>
+            <p className="text-2xl font-semibold text-white">${formatNumber(metrics.totalAmount)}</p>
+          </div>
+          <div className="rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4">
+            <p className="text-sm text-white/70">Facturas cobradas</p>
             <p className="text-2xl font-semibold text-emerald-300">{formatNumber(metrics.paid)}</p>
           </div>
           <div className="rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4">
-            <p className="text-sm text-white/70">Total no pagas</p>
-            <p className="text-2xl font-semibold text-red-300">{formatNumber(metrics.notPaid)}</p>
-          </div>
-          <div className="rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4">
-            <p className="text-sm text-white/70">Total en proceso</p>
-            <p className="text-2xl font-semibold text-amber-300">{formatNumber(metrics.inPayment)}</p>
+            <p className="text-sm text-white/70">Precio cobrado</p>
+            <p className="text-2xl font-semibold text-emerald-300">${formatNumber(metrics.paidAmount)}</p>
           </div>
         </div>
 

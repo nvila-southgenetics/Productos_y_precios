@@ -26,6 +26,8 @@ export interface InvoiceMetrics {
   paid: number
   notPaid: number
   inPayment: number
+  totalAmount: number
+  paidAmount: number
 }
 
 export interface InvoiceMonthlyPoint {
@@ -64,11 +66,12 @@ async function fetchAllInvoices<T>(selectClause: string): Promise<T[]> {
 }
 
 export async function getInvoiceMetrics(): Promise<InvoiceMetrics> {
-  const [totalQ, paidQ, notPaidQ, inPaymentQ] = await Promise.all([
+  const [totalQ, paidQ, notPaidQ, inPaymentQ, amountRows] = await Promise.all([
     supabase.from("invoices").select("id", { count: "exact", head: true }),
     supabase.from("invoices").select("id", { count: "exact", head: true }).eq("payment_state", "paid"),
     supabase.from("invoices").select("id", { count: "exact", head: true }).eq("payment_state", "not_paid"),
     supabase.from("invoices").select("id", { count: "exact", head: true }).eq("payment_state", "in_payment"),
+    fetchAllInvoices<Record<string, unknown>>("*"),
   ])
 
   if (totalQ.error) throw totalQ.error
@@ -76,11 +79,41 @@ export async function getInvoiceMetrics(): Promise<InvoiceMetrics> {
   if (notPaidQ.error) throw notPaidQ.error
   if (inPaymentQ.error) throw inPaymentQ.error
 
+  const amountCandidates = [
+    "amount_total",
+    "amount_total_signed",
+    "price_total",
+    "invoice_total",
+    "total",
+    "amount",
+  ]
+
+  const amountField = amountCandidates.find((field) =>
+    amountRows.some((row) => row[field] !== null && row[field] !== undefined)
+  )
+
+  let totalAmount = 0
+  let paidAmount = 0
+  if (amountField) {
+    for (const row of amountRows) {
+      const value = row[amountField]
+      const numericValue = typeof value === "number" ? value : Number(value)
+      if (Number.isFinite(numericValue)) {
+        totalAmount += numericValue
+        if (row.payment_state === "paid") {
+          paidAmount += numericValue
+        }
+      }
+    }
+  }
+
   return {
     total: totalQ.count ?? 0,
     paid: paidQ.count ?? 0,
     notPaid: notPaidQ.count ?? 0,
     inPayment: inPaymentQ.count ?? 0,
+    totalAmount,
+    paidAmount,
   }
 }
 

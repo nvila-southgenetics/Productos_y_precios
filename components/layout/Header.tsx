@@ -32,7 +32,7 @@ export function Header() {
 
   const navItems = [
     { href: "/dashboard", label: "Dashboard" },
-    { href: "/invoices", label: "Facturas" },
+    { href: "/invoices", label: "Cobranza" },
     { href: "/productos", label: "Productos" },
     { href: "/pl-import", label: "Real Import" },
     { href: "/budget", label: "Budget" },
