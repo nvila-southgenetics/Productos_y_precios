@@ -494,7 +494,6 @@ function ProductosContent() {
             label="Compañía"
             hideLabel
             allLabel="Todas las compañías"
-            showSelectAllOption={false}
             options={companies.map((c) => ({ value: c, label: c }))}
             selectedValues={selectedCompanies.length ? selectedCompanies : companies}
             onSelectedValuesChange={setSelectedCompanies}
