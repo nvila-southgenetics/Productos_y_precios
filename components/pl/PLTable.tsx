@@ -8,13 +8,13 @@ import { capitalizeFirstLetter, displayProductName, displayProductLabelFromName,
 import { useProductCreateDialog } from "@/components/products/ProductCreateDialogProvider"
 import { PRODUCT_CATEGORIES_SORTED } from "@/lib/product-categories"
 import {
-  DIFFERENCIA_COSTOS_PRODUCT_NAME,
-  ensureDiferenciaInDataset,
-  fetchCompanyMonthlyProductCost,
-  hasCompanyProductCostForFilter,
-  reconcileMonthlyProductCost,
-  shouldReconcileProductCost,
-  sumRealProductCostByMonth,
+  ensureAllDiferenciaInDataset,
+  fetchCompanyMonthlyCos,
+  hasCompanyCosForFilter,
+  PL_COS_LINES,
+  reconcileAllCosLines,
+  shouldReconcileCos,
+  type CosCostLineKey,
 } from "@/lib/pl-cost-reconciliation"
 import { PlHoverTooltip } from "@/components/pl/PlHoverTooltip"
 import {
@@ -252,8 +252,8 @@ export function PLTable({
   const [detailMonth, setDetailMonth] = useState<number | null>(null)
   // Test mode: unidades simuladas por producto y mes
   const [testQuantities, setTestQuantities] = useState<Record<string, number[]> | null>(null)
-  const [companyMonthlyProductCost, setCompanyMonthlyProductCost] = useState<
-    Awaited<ReturnType<typeof fetchCompanyMonthlyProductCost>>
+  const [companyMonthlyCos, setCompanyMonthlyCos] = useState<
+    Awaited<ReturnType<typeof fetchCompanyMonthlyCos>>
   >([])
 
   const product = products.length === 1 ? products[0] : "all"
@@ -269,16 +269,16 @@ export function PLTable({
     return companies.length ? companies : null
   }, [salesCompanies, countries])
 
-  const hasContableProductCost = hasCompanyProductCostForFilter(
-    companyMonthlyProductCost,
+  const hasContableCos = hasCompanyCosForFilter(
+    companyMonthlyCos,
     year,
     resolveSalesCompanies()
   )
-  const reconcileProductCostEnabled =
+  const reconcileCosEnabled =
     modelo === "real" &&
     !combineEnabled &&
     !testMode &&
-    (shouldReconcileProductCost(products) || hasContableProductCost)
+    (shouldReconcileCos(products) || hasContableCos)
 
   // Dropdowns independientes por fila de totales.
   // Al expandir una fila, se muestra el desglose correspondiente (y dependencias),
@@ -644,41 +644,38 @@ export function PLTable({
 
   const activeQuantities: Record<string, number[]> = (testMode && testQuantities) ? testQuantities : quantities
 
-  const productCostReconciliation = useMemo(() => {
-    if (!reconcileProductCostEnabled) {
-      return { productCostMonthly: null as number[] | null, hasRealData: false }
-    }
-    const realByMonth = sumRealProductCostByMonth(
-      companyMonthlyProductCost,
-      resolveSalesCompanies()
-    )
-    const { quantities: qty, overrides: ovs } = ensureDiferenciaInDataset(
+  const cosReconciliation = useMemo(() => {
+    if (!reconcileCosEnabled) return null
+    const { quantities: qty, overrides: ovs } = ensureAllDiferenciaInDataset(
       activeQuantities,
       overrides
     )
-    const result = reconcileMonthlyProductCost(qty, ovs, realByMonth, { enabled: true })
-    return {
-      productCostMonthly: result.productCostMonthly,
-      diferenciaMonthly: result.diferenciaMonthly,
-      hasRealData: result.hasRealData,
-    }
+    return reconcileAllCosLines(qty, ovs, companyMonthlyCos, resolveSalesCompanies(), {
+      enabled: true,
+    })
   }, [
-    reconcileProductCostEnabled,
-    companyMonthlyProductCost,
+    reconcileCosEnabled,
+    companyMonthlyCos,
     activeQuantities,
     overrides,
     resolveSalesCompanies,
   ])
 
-  const computeRealProductCostLine = (
+  const computeRealCosLine = (
+    line: CosCostLineKey,
     qty: Record<string, number[]>,
     ovs: Record<string, OverrideData>
   ): number[] => {
-    if (reconcileProductCostEnabled && productCostReconciliation.productCostMonthly) {
-      return productCostReconciliation.productCostMonthly
+    const cfg = PL_COS_LINES.find((c) => c.line === line)!
+    if (reconcileCosEnabled && cosReconciliation?.[line]?.monthly) {
+      return cosReconciliation[line].monthly
     }
-    return computeMonthlyRealField(qty, ovs, "productCostUSD")
+    return computeMonthlyRealField(qty, ovs, cfg.overrideField as keyof OverrideData)
   }
+
+  const anyCosReconciliationActive =
+    reconcileCosEnabled &&
+    Boolean(cosReconciliation && PL_COS_LINES.some((c) => cosReconciliation[c.line]?.hasRealData))
 
   // ── Data fetching ─────────────────────────────────────────────────────────
 
@@ -702,7 +699,7 @@ export function PLTable({
         setCombineError(null)
         setHybridRealSnapshot(null)
         setSgaRowsRaw([])
-        setCompanyMonthlyProductCost([])
+        setCompanyMonthlyCos([])
         return
       }
 
@@ -1056,12 +1053,12 @@ export function PLTable({
         }
       } else {
         await Promise.all([fetchQuantities(), fetchOverrides(), fetchSGA()])
-        const rows = await fetchCompanyMonthlyProductCost(year, resolveSalesCompanies())
-        setCompanyMonthlyProductCost(rows)
+        const rows = await fetchCompanyMonthlyCos(year, resolveSalesCompanies())
+        setCompanyMonthlyCos(rows)
       }
 
       if (modelo !== "real") {
-        setCompanyMonthlyProductCost([])
+        setCompanyMonthlyCos([])
       }
 
       if (hybridForecastQ1Enabled) {
@@ -1696,8 +1693,8 @@ export function PLTable({
     }
 
     const qty =
-      reconcileProductCostEnabled
-        ? ensureDiferenciaInDataset(activeQuantities, overrides).quantities
+      reconcileCosEnabled
+        ? ensureAllDiferenciaInDataset(activeQuantities, overrides).quantities
         : activeQuantities
 
     return {
@@ -1786,15 +1783,15 @@ export function PLTable({
 
         const grossSales = computeMonthlyRealGrossSalesFromOdoo(amts)
         const commercialDiscount = computeMonthlyRealField(qty, ovs, "commercialDiscountUSD")
-        const productCost = computeRealProductCostLine(qty, ovs)
-        const kitCost = computeMonthlyRealField(qty, ovs, "kitCostUSD")
-        const paymentFee = computeMonthlyRealField(qty, ovs, "paymentFeeUSD")
-        const bloodDraw = computeMonthlyRealField(qty, ovs, "bloodDrawSampleUSD")
-        const sanitary = computeMonthlyRealField(qty, ovs, "sanitaryPermitsUSD")
-        const extCourier = computeMonthlyRealField(qty, ovs, "externalCourierUSD")
-        const intCourier = computeMonthlyRealField(qty, ovs, "internalCourierUSD")
-        const physiciansFees = computeMonthlyRealField(qty, ovs, "physiciansFeesUSD")
-        const salesCommission = computeMonthlyRealField(qty, ovs, "salesCommissionUSD")
+        const productCost = computeRealCosLine("product_cost", qty, ovs)
+        const kitCost = computeRealCosLine("kit_cost", qty, ovs)
+        const paymentFee = computeRealCosLine("payment_fee", qty, ovs)
+        const bloodDraw = computeRealCosLine("blood_draw", qty, ovs)
+        const sanitary = computeRealCosLine("sanitary", qty, ovs)
+        const extCourier = computeRealCosLine("external_courier", qty, ovs)
+        const intCourier = computeRealCosLine("internal_courier", qty, ovs)
+        const physiciansFees = computeRealCosLine("physicians_fees", qty, ovs)
+        const salesCommission = computeRealCosLine("sales_commission", qty, ovs)
 
         out[m] = {
           grossSales,
@@ -1937,8 +1934,8 @@ export function PLTable({
       }
     }
 
-    const qty = reconcileProductCostEnabled
-      ? ensureDiferenciaInDataset(activeQuantities, overrides).quantities
+    const qty = reconcileCosEnabled
+      ? ensureAllDiferenciaInDataset(activeQuantities, overrides).quantities
       : activeQuantities
 
     return {
@@ -1984,9 +1981,9 @@ export function PLTable({
     combineEnabled,
     testMode: Boolean(testMode),
     modelo,
-    reconcileProductCostEnabled,
-    productCostReconciliation,
-    companyMonthlyProductCost,
+    reconcileCosEnabled,
+    cosReconciliation,
+    companyMonthlyCos,
     resolveSalesCompanies,
     productAliases,
     getMonthSnapshot,
@@ -2445,10 +2442,10 @@ export function PLTable({
                 · SG&A de solo lectura — seleccioná un canal específico para editar
               </span>
             )}
-            {reconcileProductCostEnabled && productCostReconciliation.hasRealData && (
+            {anyCosReconciliationActive && (
               <span className="text-xs text-sky-300/90">
-                · Product Cost: cifra contable por compañía (ajuste en {DIFFERENCIA_COSTOS_PRODUCT_NAME})
-                {products.length > 0 ? " — con filtro de productos, el total sigue siendo el contable" : ""}
+                · Cost of Sales: cifras contables por compañía (ajuste en productos Diferencia)
+                {products.length > 0 ? " — con filtro de productos, los totales siguen siendo contables" : ""}
               </span>
             )}
             <span className="text-xs text-white/35">

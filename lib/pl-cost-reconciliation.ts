@@ -1,7 +1,18 @@
 import { supabase } from "@/lib/supabase"
 
-/** Nombre fijo del producto que absorbe real − suma por producto. */
+/** @deprecated Usar PL_COS_LINES; se mantiene por compatibilidad. */
 export const DIFFERENCIA_COSTOS_PRODUCT_NAME = "Diferencia de costos"
+
+export type CosCostLineKey =
+  | "product_cost"
+  | "kit_cost"
+  | "payment_fee"
+  | "blood_draw"
+  | "sanitary"
+  | "external_courier"
+  | "internal_courier"
+  | "physicians_fees"
+  | "sales_commission"
 
 export type OverrideCostShape = {
   productCostUSD: number
@@ -17,6 +28,82 @@ export type OverrideCostShape = {
   grossSalesUSD?: number
 }
 
+export type CosLineConfig = {
+  line: CosCostLineKey
+  overrideField: keyof OverrideCostShape
+  diferenciaName: string
+  label: string
+}
+
+/** Líneas COS del P&L con campo en overrides y producto Diferencia. */
+export const PL_COS_LINES: readonly CosLineConfig[] = [
+  {
+    line: "product_cost",
+    overrideField: "productCostUSD",
+    diferenciaName: "Diferencia de costos",
+    label: "Product Cost",
+  },
+  {
+    line: "kit_cost",
+    overrideField: "kitCostUSD",
+    diferenciaName: "Diferencia - Kit Cost",
+    label: "Kit Cost",
+  },
+  {
+    line: "payment_fee",
+    overrideField: "paymentFeeUSD",
+    diferenciaName: "Diferencia - Payment Fee",
+    label: "Payment Fee",
+  },
+  {
+    line: "blood_draw",
+    overrideField: "bloodDrawSampleUSD",
+    diferenciaName: "Diferencia - Blood Draw",
+    label: "Blood Draw",
+  },
+  {
+    line: "sanitary",
+    overrideField: "sanitaryPermitsUSD",
+    diferenciaName: "Diferencia - Sanitary Permits",
+    label: "Sanitary Permits",
+  },
+  {
+    line: "external_courier",
+    overrideField: "externalCourierUSD",
+    diferenciaName: "Diferencia - External Courier",
+    label: "External Courier",
+  },
+  {
+    line: "internal_courier",
+    overrideField: "internalCourierUSD",
+    diferenciaName: "Diferencia - Internal Courier",
+    label: "Internal Courier",
+  },
+  {
+    line: "physicians_fees",
+    overrideField: "physiciansFeesUSD",
+    diferenciaName: "Diferencia - Physicians Fees",
+    label: "Physicians Fees",
+  },
+  {
+    line: "sales_commission",
+    overrideField: "salesCommissionUSD",
+    diferenciaName: "Diferencia - Sales Commission",
+    label: "Sales Commission",
+  },
+] as const
+
+export const PL_COS_DIFERENCIA_PRODUCT_NAMES = PL_COS_LINES.map((c) => c.diferenciaName)
+
+export type MonthlyCosRow = {
+  year: number
+  month: number
+  company: string
+  cost_line: CosCostLineKey
+  amount_usd: number
+}
+
+/** @deprecated */
 export type MonthlyProductCostRow = {
   year: number
   month: number
@@ -24,14 +111,15 @@ export type MonthlyProductCostRow = {
   product_cost_usd: number
 }
 
-/** Sin filtro de productos = todos los productos visibles en P&L. */
-export function shouldReconcileProductCost(productsFilter: string[]): boolean {
+export function shouldReconcileCos(productsFilter: string[]): boolean {
   return productsFilter.length === 0
 }
 
-/** Hay filas contables cargadas para el año/compañías del filtro actual. */
-export function hasCompanyProductCostForFilter(
-  rows: MonthlyProductCostRow[],
+/** @deprecated */
+export const shouldReconcileProductCost = shouldReconcileCos
+
+export function hasCompanyCosForFilter(
+  rows: MonthlyCosRow[],
   year: number,
   companies: string[] | null
 ): boolean {
@@ -40,13 +128,31 @@ export function hasCompanyProductCostForFilter(
   return rows.some((r) => {
     if (r.year !== year) return false
     if (companySet && !companySet.has(String(r.company || "").trim())) return false
-    return Number(r.product_cost_usd || 0) !== 0
+    return Number(r.amount_usd || 0) !== 0
   })
 }
 
-/** Suma Product Cost mensual desde filas por compañía (mes 1–12 → índice 0–11). */
-export function sumRealProductCostByMonth(
+/** @deprecated */
+export const hasCompanyProductCostForFilter = (
   rows: MonthlyProductCostRow[],
+  year: number,
+  companies: string[] | null
+) =>
+  hasCompanyCosForFilter(
+    rows.map((r) => ({
+      year: r.year,
+      month: r.month,
+      company: r.company,
+      cost_line: "product_cost" as const,
+      amount_usd: r.product_cost_usd,
+    })),
+    year,
+    companies
+  )
+
+export function sumRealCosByMonth(
+  rows: MonthlyCosRow[],
+  costLine: CosCostLineKey,
   companies: string[] | null
 ): number[] {
   const monthly = Array(12).fill(0)
@@ -54,63 +160,78 @@ export function sumRealProductCostByMonth(
     companies && companies.length > 0 ? new Set(companies.map((c) => c.trim())) : null
 
   for (const row of rows) {
+    if (row.cost_line !== costLine) continue
     if (companySet && !companySet.has(String(row.company || "").trim())) continue
     const idx = Number(row.month) - 1
     if (idx < 0 || idx >= 12) continue
-    monthly[idx] += Number(row.product_cost_usd || 0)
+    monthly[idx] += Number(row.amount_usd || 0)
   }
   return monthly
 }
 
-/** Product Cost calculado por producto × unidades, excluyendo Diferencia de costos. */
-export function computeMonthlyProductCostExcludingDiferencia(
+/** @deprecated */
+export const sumRealProductCostByMonth = (
+  rows: MonthlyProductCostRow[],
+  companies: string[] | null
+) =>
+  sumRealCosByMonth(
+    rows.map((r) => ({
+      year: r.year,
+      month: r.month,
+      company: r.company,
+      cost_line: "product_cost" as const,
+      amount_usd: r.product_cost_usd,
+    })),
+    "product_cost",
+    companies
+  )
+
+function computeMonthlyExcludingDiferencia(
   quantities: Record<string, number[]>,
   overrides: Record<string, OverrideCostShape>,
-  diferenciaName: string = DIFFERENCIA_COSTOS_PRODUCT_NAME
+  overrideField: keyof OverrideCostShape,
+  diferenciaName: string
 ): number[] {
   return Array.from({ length: 12 }, (_, mIdx) =>
     Object.entries(quantities).reduce((sum, [name, qtArr]) => {
       if (name === diferenciaName) return sum
       const ov = overrides[name]
-      const unit = ov?.productCostUSD ?? 0
+      const unit = Number(ov?.[overrideField] ?? 0)
       return sum + unit * (qtArr[mIdx] || 0)
     }, 0)
   )
 }
 
-/**
- * Ajusta la serie mensual de Product Cost: total = real contable;
- * la porción Diferencia = real − suma(restos de productos).
- */
-export function reconcileMonthlyProductCost(
+export function reconcileMonthlyCosLine(
   quantities: Record<string, number[]>,
   overrides: Record<string, OverrideCostShape>,
   realByMonth: number[],
-  options?: { enabled?: boolean; diferenciaName?: string }
+  overrideField: keyof OverrideCostShape,
+  diferenciaName: string,
+  options?: { enabled?: boolean }
 ): {
-  productCostMonthly: number[]
+  monthly: number[]
   diferenciaMonthly: number[]
   hasRealData: boolean
 } {
   const enabled = options?.enabled !== false
-  const diferenciaName = options?.diferenciaName ?? DIFFERENCIA_COSTOS_PRODUCT_NAME
-
-  const computed = computeMonthlyProductCostExcludingDiferencia(quantities, overrides, diferenciaName)
+  const computed = computeMonthlyExcludingDiferencia(
+    quantities,
+    overrides,
+    overrideField,
+    diferenciaName
+  )
   const hasRealData = enabled && realByMonth.some((v) => v !== 0)
 
   if (!enabled) {
-    const fallback = Array.from({ length: 12 }, (_, m) => {
-      const fromProducts = Object.entries(quantities).reduce((sum, [name, qtArr]) => {
+    const fallback = Array.from({ length: 12 }, (_, m) =>
+      Object.entries(quantities).reduce((sum, [name, qtArr]) => {
+        if (name === diferenciaName) return sum
         const ov = overrides[name]
-        return sum + (ov?.productCostUSD ?? 0) * (qtArr[m] || 0)
+        return sum + Number(ov?.[overrideField] ?? 0) * (qtArr[m] || 0)
       }, 0)
-      return fromProducts
-    })
-    return {
-      productCostMonthly: fallback,
-      diferenciaMonthly: Array(12).fill(0),
-      hasRealData: false,
-    }
+    )
+    return { monthly: fallback, diferenciaMonthly: Array(12).fill(0), hasRealData: false }
   }
 
   const diferenciaMonthly = Array.from({ length: 12 }, (_, m) => {
@@ -119,22 +240,50 @@ export function reconcileMonthlyProductCost(
     return real - computed[m]
   })
 
-  const productCostMonthly = Array.from({ length: 12 }, (_, m) => {
+  const monthly = Array.from({ length: 12 }, (_, m) => {
     const real = Number(realByMonth[m] || 0)
     if (real === 0) {
       return Object.entries(quantities).reduce((sum, [name, qtArr]) => {
         if (name === diferenciaName) return sum
         const ov = overrides[name]
-        return sum + (ov?.productCostUSD ?? 0) * (qtArr[m] || 0)
+        return sum + Number(ov?.[overrideField] ?? 0) * (qtArr[m] || 0)
       }, 0)
     }
     return real
   })
 
-  return { productCostMonthly, diferenciaMonthly, hasRealData }
+  return { monthly, diferenciaMonthly, hasRealData }
 }
 
-/** Asegura que Diferencia aparezca en cantidades/overrides (unidades 0 si no hay ventas). */
+/** @deprecated */
+export function reconcileMonthlyProductCost(
+  quantities: Record<string, number[]>,
+  overrides: Record<string, OverrideCostShape>,
+  realByMonth: number[],
+  options?: { enabled?: boolean; diferenciaName?: string }
+) {
+  const r = reconcileMonthlyCosLine(
+    quantities,
+    overrides,
+    realByMonth,
+    "productCostUSD",
+    options?.diferenciaName ?? DIFFERENCIA_COSTOS_PRODUCT_NAME,
+    options
+  )
+  return {
+    productCostMonthly: r.monthly,
+    diferenciaMonthly: r.diferenciaMonthly,
+    hasRealData: r.hasRealData,
+  }
+}
+
+/** @deprecated */
+export const computeMonthlyProductCostExcludingDiferencia = (
+  quantities: Record<string, number[]>,
+  overrides: Record<string, OverrideCostShape>,
+  diferenciaName: string = DIFFERENCIA_COSTOS_PRODUCT_NAME
+) => computeMonthlyExcludingDiferencia(quantities, overrides, "productCostUSD", diferenciaName)
+
 export function ensureDiferenciaInDataset<T extends object = OverrideCostShape>(
   quantities: Record<string, number[]>,
   overrides: Record<string, T>,
@@ -142,22 +291,61 @@ export function ensureDiferenciaInDataset<T extends object = OverrideCostShape>(
 ): { quantities: Record<string, number[]>; overrides: Record<string, T> } {
   const qty = { ...quantities }
   const ovs = { ...overrides }
-  if (!qty[diferenciaName]) {
-    qty[diferenciaName] = Array(12).fill(0)
-  }
-  if (!ovs[diferenciaName]) {
-    ovs[diferenciaName] = {} as T
+  if (!qty[diferenciaName]) qty[diferenciaName] = Array(12).fill(0)
+  if (!ovs[diferenciaName]) ovs[diferenciaName] = {} as T
+  return { quantities: qty, overrides: ovs }
+}
+
+export function ensureAllDiferenciaInDataset<T extends object = OverrideCostShape>(
+  quantities: Record<string, number[]>,
+  overrides: Record<string, T>
+): { quantities: Record<string, number[]>; overrides: Record<string, T> } {
+  let qty = quantities
+  let ovs = overrides
+  for (const { diferenciaName } of PL_COS_LINES) {
+    const next = ensureDiferenciaInDataset(qty, ovs, diferenciaName)
+    qty = next.quantities
+    ovs = next.overrides
   }
   return { quantities: qty, overrides: ovs }
 }
 
-export async function fetchCompanyMonthlyProductCost(
+export function reconcileAllCosLines(
+  quantities: Record<string, number[]>,
+  overrides: Record<string, OverrideCostShape>,
+  rows: MonthlyCosRow[],
+  companies: string[] | null,
+  options?: { enabled?: boolean }
+): Record<
+  CosCostLineKey,
+  { monthly: number[]; diferenciaMonthly: number[]; hasRealData: boolean }
+> {
+  const enabled = options?.enabled !== false
+  const out = {} as Record<
+    CosCostLineKey,
+    { monthly: number[]; diferenciaMonthly: number[]; hasRealData: boolean }
+  >
+  for (const { line, overrideField, diferenciaName } of PL_COS_LINES) {
+    const realByMonth = sumRealCosByMonth(rows, line, companies)
+    const { quantities: qty, overrides: ovs } = ensureDiferenciaInDataset(
+      quantities,
+      overrides,
+      diferenciaName
+    )
+    out[line] = reconcileMonthlyCosLine(qty, ovs, realByMonth, overrideField, diferenciaName, {
+      enabled,
+    })
+  }
+  return out
+}
+
+export async function fetchCompanyMonthlyCos(
   year: number,
   companies: string[] | null
-): Promise<MonthlyProductCostRow[]> {
+): Promise<MonthlyCosRow[]> {
   let q = supabase
-    .from("pl_company_monthly_product_cost")
-    .select("year, month, company, product_cost_usd")
+    .from("pl_company_monthly_cos")
+    .select("year, month, company, cost_line, amount_usd")
     .eq("year", year)
 
   if (companies && companies.length > 0) {
@@ -166,19 +354,30 @@ export async function fetchCompanyMonthlyProductCost(
 
   const { data, error } = await q
   if (error) {
-    console.error("fetchCompanyMonthlyProductCost:", error)
+    console.error("fetchCompanyMonthlyCos:", error)
     return []
   }
-  return (data || []) as MonthlyProductCostRow[]
+  return (data || []) as MonthlyCosRow[]
 }
 
-export async function resolveDiferenciaProductName(): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("products")
-    .select("name")
-    .eq("name", DIFFERENCIA_COSTOS_PRODUCT_NAME)
-    .maybeSingle()
+/** @deprecated */
+export const fetchCompanyMonthlyProductCost = async (
+  year: number,
+  companies: string[] | null
+): Promise<MonthlyProductCostRow[]> => {
+  const rows = await fetchCompanyMonthlyCos(year, companies)
+  return rows
+    .filter((r) => r.cost_line === "product_cost")
+    .map((r) => ({
+      year: r.year,
+      month: r.month,
+      company: r.company,
+      product_cost_usd: r.amount_usd,
+    }))
+}
 
-  if (error || !data) return null
-  return String((data as { name: string }).name)
+export function getCosLineConfig(line: CosCostLineKey): CosLineConfig {
+  const cfg = PL_COS_LINES.find((c) => c.line === line)
+  if (!cfg) throw new Error(`Unknown COS line: ${line}`)
+  return cfg
 }

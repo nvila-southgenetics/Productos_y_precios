@@ -1,7 +1,9 @@
 import { formatNumber } from "@/lib/utils"
 import {
-  DIFFERENCIA_COSTOS_PRODUCT_NAME,
-  type MonthlyProductCostRow,
+  getCosLineConfig,
+  PL_COS_LINES,
+  type CosCostLineKey,
+  type MonthlyCosRow,
   type OverrideCostShape,
 } from "@/lib/pl-cost-reconciliation"
 
@@ -26,12 +28,11 @@ export type PlTooltipConfig = {
   combineEnabled: boolean
   testMode: boolean
   modelo: "budget" | "real"
-  reconcileProductCostEnabled: boolean
-  productCostReconciliation: {
-    hasRealData: boolean
-    diferenciaMonthly?: number[]
-  }
-  companyMonthlyProductCost: MonthlyProductCostRow[]
+  reconcileCosEnabled: boolean
+  cosReconciliation: Partial<
+    Record<CosCostLineKey, { hasRealData: boolean; diferenciaMonthly?: number[] }>
+  > | null
+  companyMonthlyCos: MonthlyCosRow[]
   resolveSalesCompanies: () => string[] | null
   productAliases: Record<string, string>
   getMonthSnapshot: (monthIdx: number) => PlMonthSnapshot
@@ -71,6 +72,18 @@ export type PlTooltipLine =
   | "income_tax_pct"
   | "incomeTax"
   | "netIncome"
+
+const TOOLTIP_LINE_TO_COS: Partial<Record<PlTooltipLine, CosCostLineKey>> = {
+  productCost: "product_cost",
+  kitCost: "kit_cost",
+  paymentFee: "payment_fee",
+  bloodDraw: "blood_draw",
+  sanitary: "sanitary",
+  extCourier: "external_courier",
+  intCourier: "internal_courier",
+  physiciansFees: "physicians_fees",
+  salesCommission: "sales_commission",
+}
 
 const OVERRIDE_LABELS: Record<OverrideFieldKey, string> = {
   grossSalesUSD: "Gross Sales",
@@ -150,9 +163,9 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
     combineEnabled,
     testMode,
     modelo,
-    reconcileProductCostEnabled,
-    productCostReconciliation,
-    companyMonthlyProductCost,
+    reconcileCosEnabled,
+    cosReconciliation,
+    companyMonthlyCos,
     resolveSalesCompanies,
     productAliases,
     getMonthSnapshot,
@@ -274,15 +287,73 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
     return joinLines(lines)
   }
 
+  const buildCosContable = (
+    monthIdx: number,
+    cosLine: CosCostLineKey,
+    label: string,
+    field: OverrideFieldKey
+  ): string | undefined => {
+    const snap = getMonthSnapshot(monthIdx)
+    const cfg = getCosLineConfig(cosLine)
+    const lines = [monthHeader(monthIdx, label)]
+    const monthNumber = monthIdx + 1
+    const companies = resolveSalesCompanies()
+    const companySet =
+      companies && companies.length > 0 ? new Set(companies.map((c) => c.trim())) : null
+
+    const companyRows = companyMonthlyCos.filter((r) => {
+      if (r.cost_line !== cosLine) return false
+      if (r.year !== year || r.month !== monthNumber) return false
+      if (companySet && !companySet.has(String(r.company || "").trim())) return false
+      return true
+    })
+
+    const recon = cosReconciliation?.[cosLine]
+    if (reconcileCosEnabled && recon?.hasRealData && companyRows.length > 0) {
+      lines.push(`Fuente total: pl_company_monthly_cos · ${cosLine} (contabilidad / Odoo)`)
+      const companyItems = companyRows
+        .map((r) => ({ label: r.company, amount: Number(r.amount_usd || 0) }))
+        .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+      appendTopContributions(lines, companyItems, "Total contable")
+
+      lines.push("Suma por producto (overrides × unidades, sin Diferencia):")
+      appendTopContributions(
+        lines,
+        breakdownOverrideField(snap, monthIdx, field, {
+          excludeProduct: cfg.diferenciaName,
+        })
+      )
+
+      const diff = recon.diferenciaMonthly?.[monthIdx] ?? 0
+      if (diff !== 0) {
+        lines.push(`${cfg.diferenciaName} (ajuste): ${tooltipFmt(diff)}`)
+      }
+      const plKey = Object.entries(TOOLTIP_LINE_TO_COS).find(([, v]) => v === cosLine)?.[0]
+      if (plKey) {
+        lines.push(`Total fila P&L: ${tooltipFmt(getLineValue(plKey as PlTooltipLine, monthIdx))}`)
+      }
+      return joinLines(lines)
+    }
+
+    lines.push(
+      snap.isBudget && !testMode
+        ? `Fuente: budget × override ${field}`
+        : `Fuente: product_country_overrides.${field} × unidades`
+    )
+    appendTopContributions(lines, breakdownOverrideField(snap, monthIdx, field))
+    return joinLines(lines)
+  }
+
   const buildOverrideLine = (monthIdx: number, field: OverrideFieldKey): string | undefined => {
     const label = OVERRIDE_LABELS[field]
     const snap = getMonthSnapshot(monthIdx)
-    const lines = [monthHeader(monthIdx, label)]
+    const cosKeyForField = PL_COS_LINES.find((c) => c.overrideField === field)?.line
 
-    if (field === "productCostUSD") {
-      return buildProductCost(monthIdx)
+    if (cosKeyForField) {
+      return buildCosContable(monthIdx, cosKeyForField, label, field)
     }
 
+    const lines = [monthHeader(monthIdx, label)]
     if (snap.isBudget && !testMode) {
       lines.push(`Fuente: budget × override ${field}`)
     } else if (snap.isReal) {
@@ -293,58 +364,6 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
       lines.push(`Fuente: overrides × unidades`)
     }
     appendTopContributions(lines, breakdownOverrideField(snap, monthIdx, field))
-    return joinLines(lines)
-  }
-
-  const buildProductCost = (monthIdx: number): string | undefined => {
-    const snap = getMonthSnapshot(monthIdx)
-    const lines = [monthHeader(monthIdx, "Product Cost")]
-    const monthNumber = monthIdx + 1
-    const companies = resolveSalesCompanies()
-    const companySet =
-      companies && companies.length > 0 ? new Set(companies.map((c) => c.trim())) : null
-
-    const companyRows = companyMonthlyProductCost.filter((r) => {
-      if (r.year !== year || r.month !== monthNumber) return false
-      if (companySet && !companySet.has(String(r.company || "").trim())) return false
-      return true
-    })
-
-    if (
-      reconcileProductCostEnabled &&
-      productCostReconciliation.hasRealData &&
-      companyRows.length > 0
-    ) {
-      lines.push("Fuente total: pl_company_monthly_product_cost (contabilidad / Odoo)")
-      const companyItems = companyRows
-        .map((r) => ({ label: r.company, amount: Number(r.product_cost_usd || 0) }))
-        .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
-      appendTopContributions(lines, companyItems, "Total contable")
-
-      lines.push("Suma por producto (overrides × unidades, sin Diferencia):")
-      appendTopContributions(
-        lines,
-        breakdownOverrideField(snap, monthIdx, "productCostUSD", {
-          excludeProduct: DIFFERENCIA_COSTOS_PRODUCT_NAME,
-        })
-      )
-
-      const diff = productCostReconciliation.diferenciaMonthly?.[monthIdx] ?? 0
-      if (diff !== 0) {
-        lines.push(
-          `${DIFFERENCIA_COSTOS_PRODUCT_NAME} (ajuste): ${tooltipFmt(diff)}`
-        )
-      }
-      lines.push(`Total fila P&L: ${tooltipFmt(getLineValue("productCost", monthIdx))}`)
-      return joinLines(lines)
-    }
-
-    lines.push(
-      snap.isBudget && !testMode
-        ? "Fuente: budget × override productCostUSD"
-        : "Fuente: product_country_overrides.productCostUSD × unidades"
-    )
-    appendTopContributions(lines, breakdownOverrideField(snap, monthIdx, "productCostUSD"))
     return joinLines(lines)
   }
 
@@ -454,7 +473,7 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
       case "commercialDiscount":
         return (mi) => buildOverrideLine(mi, "commercialDiscountUSD")
       case "productCost":
-        return buildProductCost
+        return (mi) => buildOverrideLine(mi, "productCostUSD")
       case "kitCost":
         return (mi) => buildOverrideLine(mi, "kitCostUSD")
       case "paymentFee":

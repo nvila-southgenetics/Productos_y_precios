@@ -1,59 +1,61 @@
-# Product Cost real por compañía (n8n → P&L)
+# Cost of Sales contable por compañía (n8n → P&L)
 
-La tabla `pl_company_monthly_product_cost` guarda el **Product Cost contable** mensual por compañía. La app lo usa solo en **P&L Real** con **todos los productos** seleccionados para reconciliar la fila Product Cost.
+La tabla `pl_company_monthly_cos` guarda el **monto contable mensual** por compañía y **línea COS**. La app reconcilia cada fila del P&L Real (mismo criterio que Product Cost).
 
-## Filtro en n8n (Odoo por `account_id`)
+## Líneas (`cost_line`)
 
-El HTTP Request agrupa por `date:month`, `company_id` y `account_id`. El nodo 1 solo normaliza datos; el filtro (qué cuenta es Product Cost, LLC, etc.) lo definís vos en n8n.
+| `cost_line` | Fila P&L | Producto Diferencia |
+|-------------|----------|---------------------|
+| `product_cost` | Product Cost | Diferencia de costos |
+| `kit_cost` | Kit Cost | Diferencia - Kit Cost |
+| `payment_fee` | Payment Fee Costs | Diferencia - Payment Fee |
+| `blood_draw` | Blood Drawn & Sample Handling | Diferencia - Blood Draw |
+| `sanitary` | Sanitary Permits… | Diferencia - Sanitary Permits |
+| `external_courier` | External Courier | Diferencia - External Courier |
+| `internal_courier` | Internal Courier | Diferencia - Internal Courier |
+| `physicians_fees` | Physicians Fees | Diferencia - Physicians Fees |
+| `sales_commission` | Sales Commission | Diferencia - Sales Commission |
 
-Ver [`n8n-odoo-company-costs-code.md`](./n8n-odoo-company-costs-code.md).
+## Upsert (n8n / Supabase)
 
-## Upsert (n8n / REST Supabase)
+**Tabla:** `pl_company_monthly_cos`
 
-**Tabla:** `pl_company_monthly_product_cost`
+**Clave única:** `(year, month, company, cost_line)`
 
-**Clave única:** `(year, month, company)`
-
-**Payload por fila:**
+**Payload:**
 
 ```json
 {
   "year": 2026,
-  "month": 3,
-  "company": "SouthGenetics LLC Argentina",
-  "product_cost_usd": 125430.50
+  "month": 5,
+  "company": "SouthGenetics LLC Uruguay",
+  "cost_line": "product_cost",
+  "amount_usd": 34892
 }
 ```
 
-- `year`: año del modelo P&L (2025 o 2026).
-- `month`: entero 1–12.
-- `company`: texto **exactamente igual** al usado en ventas / filtros P&L (mismos valores que devuelve `getCompanies()` en la app).
-- `product_cost_usd`: total real del mes en USD (sin desglose por producto).
-
-### Ejemplo con PostgREST (Supabase)
-
-`POST` o `PATCH` con header `Prefer: resolution=merge-duplicates` y query `on_conflict=year,month,company`, o usar el cliente Supabase:
-
 ```js
-await supabase.from("pl_company_monthly_product_cost").upsert(
-  { year: 2026, month: 3, company: "SouthGenetics LLC Argentina", product_cost_usd: 125430.5 },
-  { onConflict: "year,month,company" }
+await supabase.from("pl_company_monthly_cos").upsert(
+  {
+    year: 2026,
+    month: 5,
+    company: "SouthGenetics LLC Uruguay",
+    cost_line: "kit_cost",
+    amount_usd: 1200,
+  },
+  { onConflict: "year,month,company,cost_line" }
 )
 ```
 
-Tras cada carga, al refrescar P&L la app recalcula la diferencia; **no hace falta un segundo paso en n8n**.
+Una fila por mes, compañía y línea. Ver normalización Odoo en [`n8n-odoo-company-costs-code.md`](./n8n-odoo-company-costs-code.md).
 
-## Comportamiento en P&L
+## Comportamiento en P&L (Real)
 
-1. Suma `productCostUSD × unidades` de todos los productos **excepto** «Diferencia de costos».
-2. `diferencia = real − suma` por mes (agregando compañías del filtro).
-3. El total de **Product Cost** en P&L = **real**.
-4. El producto **«Diferencia de costos»** absorbe ese ajuste en el desglose.
+Con **todos los productos** (o datos contables cargados para el filtro):
 
-Si falta dato real para un mes/compañía, `diferencia = 0` (solo suma por productos, como antes).
+1. Suma `override × unidades` por producto (sin el producto Diferencia de esa línea).
+2. `diferencia = contable − suma`.
+3. Total de la fila = **contable**.
+4. El producto **Diferencia - …** absorbe el ajuste.
 
-Si el usuario filtra **uno o más productos** y no incluye «Diferencia de costos», no se fuerza el total al real.
-
-## Producto catálogo
-
-«Diferencia de costos» se crea en la migración `20260520100000_pl_company_monthly_product_cost.sql` con overrides vacíos por país (canal Paciente). **n8n no debe escribir overrides** de ese producto.
+Migración desde `pl_company_monthly_product_cost`: `20260521100000_pl_company_monthly_cos.sql`.

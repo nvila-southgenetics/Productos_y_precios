@@ -13,7 +13,7 @@ import { getCompanies } from "@/lib/supabase-mcp"
 import { filterCompaniesByCountries, getCountryForCompany } from "@/lib/auth-constants"
 import { companyQueryFromSelection } from "@/lib/company-filter"
 import { PRODUCT_CATEGORIES_SORTED } from "@/lib/product-categories"
-import { DIFFERENCIA_COSTOS_PRODUCT_NAME } from "@/lib/pl-cost-reconciliation"
+import { PL_COS_DIFERENCIA_PRODUCT_NAMES } from "@/lib/pl-cost-reconciliation"
 
 const BASE_COUNTRIES = [
   { code: "AR", name: "Argentina" },
@@ -196,16 +196,18 @@ export default function PLPage() {
           if (n && a) map[n] = a
         }
 
-        if (!names.includes(DIFFERENCIA_COSTOS_PRODUCT_NAME)) {
-          const { data: diffRow } = await supabase
+        const missingDif = PL_COS_DIFERENCIA_PRODUCT_NAMES.filter((n) => !names.includes(n))
+        if (missingDif.length) {
+          const { data: diffRows } = await supabase
             .from("products")
             .select("name, alias")
-            .eq("name", DIFFERENCIA_COSTOS_PRODUCT_NAME)
-            .maybeSingle()
-          if (diffRow?.name) {
-            names.push(diffRow.name)
-            const alias = String((diffRow as { alias?: string }).alias || "")
-            if (alias) map[diffRow.name] = alias
+            .in("name", missingDif)
+          for (const r of diffRows || []) {
+            const n = String((r as { name?: string }).name || "")
+            if (!n || names.includes(n)) continue
+            names.push(n)
+            const alias = String((r as { alias?: string }).alias || "")
+            if (alias) map[n] = alias
           }
         }
 
