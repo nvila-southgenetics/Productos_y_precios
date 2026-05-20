@@ -4,6 +4,7 @@
  */
 
 import { supabase } from './supabase'
+import { productMatchesCategoryFilter } from './product-categories'
 
 export interface Product {
   id: string
@@ -494,8 +495,8 @@ export async function getMedicoInstitucionSales(
 
     const product = resolveProductForSale(products, test, ventasTestToProductId)
     if (categoryFilter) {
-      const cat = product?.category?.trim() || 'Otros'
-      if (!categoryFilter.has(cat)) continue
+      if (!product) continue
+      if (!productMatchesCategoryFilter(product.category, categoryFilter)) continue
     }
     const product_id = product?.id ?? row.id_producto ?? null
     const productKey = product_id ?? test

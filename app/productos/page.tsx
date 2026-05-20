@@ -21,6 +21,10 @@ import { supabase } from "@/lib/supabase"
 import { productNameSortKey } from "@/lib/utils"
 import { useProductCreateDialog } from "@/components/products/ProductCreateDialogProvider"
 import { COUNTRY_CODES_LIST, filterCompaniesByCountries, getCountryForCompany } from "@/lib/auth-constants"
+import {
+  PRODUCT_CATEGORIES_SORTED,
+  productMatchesCategoryFilter,
+} from "@/lib/product-categories"
 
 const VALID_COUNTRIES = new Set(["UY", "AR", "MX", "CL", "VE", "CO"])
 
@@ -139,14 +143,7 @@ function ProductosContent() {
     }
   }, [selectedCountry, searchQuery, selectedCategory, selectedTipo, reviewFilter, sortBy, router])
 
-  // Obtener categorías y tipos únicos
-  const categories = useMemo(() => {
-    const cats = new Set<string>()
-    products.forEach((p) => {
-      if (p.category) cats.add(p.category)
-    })
-    return Array.from(cats).sort()
-  }, [products])
+  const categories = PRODUCT_CATEGORIES_SORTED
 
   const tipos = useMemo(() => {
     const tps = new Set<string>()
@@ -234,7 +231,9 @@ function ProductosContent() {
     }
 
     if (selectedCategory) {
-      filtered = filtered.filter((p) => p.category === selectedCategory)
+      filtered = filtered.filter((p) =>
+        productMatchesCategoryFilter(p.category, new Set([selectedCategory]))
+      )
     }
 
     if (selectedTipo) {
