@@ -28,12 +28,24 @@ export function hasMeaningfulOverrideData(
   return false
 }
 
-function hasCountryConfig(row: OverrideRow): boolean {
-  return !!(
-    row.mx_config_type?.trim() ||
-    row.cl_config_type?.trim() ||
-    row.col_config_type?.trim()
-  )
+const CONFIG_TYPE_PLACEHOLDERS = new Set(["", "default"])
+
+/** Config P&L solo aplica al país correspondiente; "default" no cuenta como dato cargado. */
+function hasCountryConfig(row: OverrideRow, countryCode: string): boolean {
+  const isRealConfig = (value?: string | null) => {
+    const v = value?.trim().toLowerCase()
+    return !!v && !CONFIG_TYPE_PLACEHOLDERS.has(v)
+  }
+  switch (countryCode) {
+    case "MX":
+      return isRealConfig(row.mx_config_type)
+    case "CL":
+      return isRealConfig(row.cl_config_type)
+    case "CO":
+      return isRealConfig(row.col_config_type)
+    default:
+      return false
+  }
 }
 
 /**
@@ -52,7 +64,7 @@ export function productHasActivityInCountry(
   ) as OverrideRow[]
 
   if (countryOverrides.some((o) => hasMeaningfulOverrideData(o.overrides))) return true
-  if (countryOverrides.some(hasCountryConfig)) return true
+  if (countryOverrides.some((o) => hasCountryConfig(o, countryCode))) return true
 
   return false
 }
