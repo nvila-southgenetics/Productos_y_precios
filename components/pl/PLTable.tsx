@@ -15,6 +15,11 @@ import {
   shouldReconcileProductCost,
   sumRealProductCostByMonth,
 } from "@/lib/pl-cost-reconciliation"
+import {
+  createPlTooltipBuilders,
+  type PlMonthSnapshot,
+  type PlTooltipLine,
+} from "@/lib/pl-table-tooltips"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -376,6 +381,44 @@ export function PLTable({
     }
     return trimmed
   }, [catalogKeyToName])
+
+  const pickBudgetOvForRow = useCallback(
+    (row: Record<string, unknown>, ovs: Record<string, OverrideData>): OverrideData => {
+      const prodId = String(row?.product_id || "")
+      const name = resolveToCatalogName(String(row?.product_name || ""))
+      const rowChannel = String(row?.channel || "")
+      const nameNorm = normalizeProductKeyLoose(name)
+      const nameMatch = normalizeBudgetMatchKey(name)
+      const idChannelKey = prodId ? `${prodId}|${rowChannel}` : ""
+      const idPacienteKey = prodId ? `${prodId}|Paciente` : ""
+      const idBaseKey = prodId ? `${prodId}|` : ""
+      const nameChannelKey = `${name}|${rowChannel}`
+      const namePacienteKey = `${name}|Paciente`
+      const nameBaseKey = `${name}|`
+      const normChannelKey = nameNorm ? `${nameNorm}|${rowChannel}` : ""
+      const normPacienteKey = nameNorm ? `${nameNorm}|Paciente` : ""
+      const normBaseKey = nameNorm ? `${nameNorm}|` : ""
+      const matchChannelKey = nameMatch ? `${nameMatch}|${rowChannel}` : ""
+      const matchPacienteKey = nameMatch ? `${nameMatch}|Paciente` : ""
+      const matchBaseKey = nameMatch ? `${nameMatch}|` : ""
+      return (
+        (idChannelKey && ovs[idChannelKey]) ||
+        (idPacienteKey && ovs[idPacienteKey]) ||
+        (idBaseKey && ovs[idBaseKey]) ||
+        ovs[nameChannelKey] ||
+        ovs[namePacienteKey] ||
+        ovs[nameBaseKey] ||
+        (normChannelKey && ovs[normChannelKey]) ||
+        (normPacienteKey && ovs[normPacienteKey]) ||
+        (normBaseKey && ovs[normBaseKey]) ||
+        (matchChannelKey && ovs[matchChannelKey]) ||
+        (matchPacienteKey && ovs[matchPacienteKey]) ||
+        (matchBaseKey && ovs[matchBaseKey]) ||
+        emptyOverride()
+      )
+    },
+    [resolveToCatalogName]
+  )
 
   const calcMonthModelAt = (monthIdx0: number): MonthModel => {
     if (combineEnabled) return effectiveMonthModels[monthIdx0]
@@ -1821,6 +1864,137 @@ export function PLTable({
   const periodSum = (arr: number[]) => monthIndices.reduce((s, i) => s + (arr[i] || 0), 0)
   const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0)
 
+  const getMonthSnapshot = (monthIdx: number): PlMonthSnapshot => {
+    const m = calcMonthModelAt(monthIdx)
+    const isBudget = m.startsWith("budget:")
+    const modelLabel = combineEnabled
+      ? `Combinar · ${isBudget ? m.slice("budget:".length) : m.replace("_", " ")}`
+      : hybridForecastQ1Enabled
+        ? monthIdx <= 2
+          ? "Real 2026 (Q1)"
+          : `Budget ${budgetName}`
+        : modelo === "budget"
+          ? `Budget ${budgetName}`
+          : year === 2025
+            ? "Real 2025"
+            : "Real 2026"
+
+    if (combineEnabled) {
+      const snap = combinedSnapshots[m]
+      const snapBudgetOvs = snap?.budgetOverrides || {}
+      return {
+        modelLabel,
+        isBudget,
+        isReal: !isBudget,
+        quantities: snap?.quantities || {},
+        overrides: snap?.overrides || {},
+        odooAmounts: snap?.odooAmounts || {},
+        budgetRows: (snap?.budgetRows || []) as Record<string, unknown>[],
+        budgetOverrides: snapBudgetOvs,
+        pickBudgetOv: (row) => pickBudgetOvForRow(row, snapBudgetOvs),
+      }
+    }
+
+    if (hybridForecastQ1Enabled && monthIdx <= 2 && hybridRealSnapshot) {
+      return {
+        modelLabel,
+        isBudget: false,
+        isReal: true,
+        quantities: hybridRealSnapshot.quantities || {},
+        overrides: hybridRealSnapshot.overrides || {},
+        odooAmounts: hybridRealSnapshot.odooAmounts || {},
+        budgetRows: [],
+        budgetOverrides: {},
+        pickBudgetOv: () => emptyOverride(),
+      }
+    }
+
+    if (
+      (modelo === "budget" && !testMode) ||
+      (hybridForecastQ1Enabled && monthIdx > 2)
+    ) {
+      return {
+        modelLabel,
+        isBudget: true,
+        isReal: false,
+        quantities,
+        overrides: budgetOverrides,
+        odooAmounts: {},
+        budgetRows: (budgetRows || []) as Record<string, unknown>[],
+        budgetOverrides,
+        pickBudgetOv: (row) => pickBudgetOvForRow(row, budgetOverrides),
+      }
+    }
+
+    const qty = reconcileProductCostEnabled
+      ? ensureDiferenciaInDataset(activeQuantities, overrides).quantities
+      : activeQuantities
+
+    return {
+      modelLabel,
+      isBudget: false,
+      isReal: modelo === "real",
+      quantities: qty,
+      overrides,
+      odooAmounts,
+      budgetRows: [],
+      budgetOverrides: {},
+      pickBudgetOv: () => emptyOverride(),
+    }
+  }
+
+  const lineValues: Record<PlTooltipLine, number[]> = {
+    units: totalUnits,
+    grossSales,
+    commercialDiscount,
+    salesRevenue,
+    productCost,
+    kitCost,
+    paymentFee,
+    bloodDraw,
+    sanitary,
+    extCourier,
+    intCourier,
+    physiciansFees,
+    salesCommission,
+    totalCOS,
+    grossProfit,
+    iibb_pct: taxRates.map((t) => t.iibb_pct),
+    iibbAmount,
+    income_tax_pct: taxRates.map((t) => t.income_tax_pct),
+    incomeTax,
+    netIncome,
+  }
+
+  const plTooltips = createPlTooltipBuilders({
+    monthLabels: MONTH_LABELS,
+    monthKeys: MONTH_KEYS,
+    year,
+    combineEnabled,
+    testMode: Boolean(testMode),
+    modelo,
+    reconcileProductCostEnabled,
+    productCostReconciliation,
+    companyMonthlyProductCost,
+    resolveSalesCompanies,
+    productAliases,
+    getMonthSnapshot,
+    getTaxSnapshot: (monthIdx) => ({
+      iibb_pct: taxRates[monthIdx]?.iibb_pct ?? 0,
+      income_tax_pct: taxRates[monthIdx]?.income_tax_pct ?? 0,
+      salesRevenue: salesRevenue[monthIdx] ?? 0,
+      grossProfit: grossProfit[monthIdx] ?? 0,
+      totalSGA: totalSGA[monthIdx] ?? 0,
+      iibbAmount: iibbAmount[monthIdx] ?? 0,
+      incomeTax: incomeTax[monthIdx] ?? 0,
+      netIncome: netIncome[monthIdx] ?? 0,
+    }),
+    getLineValue: (line, monthIdx) => lineValues[line][monthIdx] ?? 0,
+  })
+
+  const tooltipFor = (line: PlTooltipLine) => plTooltips.forLine(line)
+  const periodTooltipFor = (line: PlTooltipLine) => plTooltips.buildPeriodHint(line, monthIndices)
+
   // ── Editing ───────────────────────────────────────────────────────────────
 
   const startEdit = (field: keyof SGAData | keyof TaxData, monthIdx: number) => {
@@ -2010,6 +2184,7 @@ export function PLTable({
     forceGray = false,
     calculatedHighlight = false,
     cellTitle,
+    cellPeriodTitle,
     formatValue,
   }: {
     label: string
@@ -2026,6 +2201,7 @@ export function PLTable({
     /** Resaltado suave (indigo/cyan) para totales calculados: Gross Profit, Net Income. */
     calculatedHighlight?: boolean
     cellTitle?: (monthIdx: number) => string | undefined
+    cellPeriodTitle?: string | undefined
     formatValue?: (val: number) => string
   }) => {
     const ytdVal = periodSum(values)
@@ -2069,17 +2245,27 @@ export function PLTable({
         </td>
         {monthIndices.map((i) => {
           const v = values[i] ?? 0
+          const tip = cellTitle ? cellTitle(i) : undefined
           return (
             <td key={i} className={`${cellCls} ${cellSizeCls} ${numColor} ${bold || prominent ? "font-semibold" : ""}`}>
-              <span title={cellTitle ? cellTitle(i) : undefined}>{fmtCell(v)}</span>
+              <span title={tip} className={tip ? "cursor-help border-b border-dotted border-white/25" : undefined}>
+                {fmtCell(v)}
+              </span>
             </td>
           )
         })}
-        <td className={`${cellCls} ${cellSizeCls} ${numColor} ${bold || prominent ? "font-semibold" : ""} border-l border-white/10`}>
-          {fmtCell(ytdVal)}
+        <td
+          className={`${cellCls} ${cellSizeCls} ${numColor} ${bold || prominent ? "font-semibold" : ""} border-l border-white/10`}
+          title={cellPeriodTitle}
+        >
+          <span className={cellPeriodTitle ? "cursor-help border-b border-dotted border-white/25" : undefined}>
+            {fmtCell(ytdVal)}
+          </span>
         </td>
-        <td className={`${cellCls} ${cellSizeCls} ${numColor} ${bold || prominent ? "font-semibold" : ""}`}>
-          {fmtCell(totalVal)}
+        <td className={`${cellCls} ${cellSizeCls} ${numColor} ${bold || prominent ? "font-semibold" : ""}`} title={cellPeriodTitle}>
+          <span className={cellPeriodTitle ? "cursor-help border-b border-dotted border-white/25" : undefined}>
+            {fmtCell(totalVal)}
+          </span>
         </td>
       </tr>
     )
@@ -2122,16 +2308,37 @@ export function PLTable({
                   autoFocus
                 />
               ) : (
-                <span title={buildSgaTooltip(mIdx, field)}>{fmtSga(v)}</span>
+                <span
+                  title={buildSgaTooltip(mIdx, field)}
+                  className={buildSgaTooltip(mIdx, field) ? "cursor-help border-b border-dotted border-white/25" : undefined}
+                >
+                  {fmtSga(v)}
+                </span>
               )}
             </td>
           )
         })}
-        <td className={`${cellCls} ${sgaDisplay(ytdVal) > 0 ? "text-emerald-300/90" : sgaDisplay(ytdVal) < 0 ? "text-rose-300" : "text-white/25"} border-l border-white/10`}>
-          {fmtSga(ytdVal)}
+        <td
+          className={`${cellCls} ${sgaDisplay(ytdVal) > 0 ? "text-emerald-300/90" : sgaDisplay(ytdVal) < 0 ? "text-rose-300" : "text-white/25"} border-l border-white/10`}
+          title={
+            monthIndices.length
+              ? `PERIODO: ${fmtSga(ytdVal)}\nPase el mouse en cada mes para desglose pl_sga.`
+              : undefined
+          }
+        >
+          <span
+            className={
+              monthIndices.length ? "cursor-help border-b border-dotted border-white/25" : undefined
+            }
+          >
+            {fmtSga(ytdVal)}
+          </span>
         </td>
-        <td className={`${cellCls} ${sgaDisplay(totalVal) > 0 ? "text-emerald-300/90" : sgaDisplay(totalVal) < 0 ? "text-rose-300" : "text-white/25"}`}>
-          {fmtSga(totalVal)}
+        <td
+          className={`${cellCls} ${sgaDisplay(totalVal) > 0 ? "text-emerald-300/90" : sgaDisplay(totalVal) < 0 ? "text-rose-300" : "text-white/25"}`}
+          title="Total anual. Desglose mensual al pasar el mouse en cada mes."
+        >
+          <span className="cursor-help border-b border-dotted border-white/25">{fmtSga(totalVal)}</span>
         </td>
       </tr>
     )
@@ -2164,7 +2371,14 @@ export function PLTable({
                 onKeyDown={(e) => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") cancelEdit() }}
                 autoFocus
               />
-            ) : `${v}%`}
+            ) : (
+              <span
+                title={tooltipFor(field)(mIdx)}
+                className={tooltipFor(field)(mIdx) ? "cursor-help border-b border-dotted border-white/25" : undefined}
+              >
+                {`${v}%`}
+              </span>
+            )}
           </td>
         )
       })}
@@ -2246,6 +2460,9 @@ export function PLTable({
                 · Product Cost: cifra contable por compañía (ajuste en {DIFFERENCIA_COSTOS_PRODUCT_NAME})
               </span>
             )}
+            <span className="text-xs text-white/35">
+              · Pasá el mouse sobre un número para ver de dónde sale
+            </span>
           </div>
           {/* Dropdowns de agrupación van en cada fila de totales */}
         </div>
@@ -2303,6 +2520,7 @@ export function PLTable({
                 </td>
                 {monthIndices.map((i) => {
                   const v = totalUnits[i] ?? 0
+                  const tip = tooltipFor("units")(i)
                   return (
                     <td
                       key={i}
@@ -2310,7 +2528,9 @@ export function PLTable({
                         v > 0 ? "text-blue-200" : v < 0 ? "text-rose-300" : "text-white/25"
                       }`}
                     >
-                      {v !== 0 ? formatNumber(v, "es-AR") : "-"}
+                      <span title={tip} className={tip ? "cursor-help border-b border-dotted border-white/25" : undefined}>
+                        {v !== 0 ? formatNumber(v, "es-AR") : "-"}
+                      </span>
                     </td>
                   )
                 })}
@@ -2318,21 +2538,43 @@ export function PLTable({
                   className={`${cellCls} font-bold border-l border-white/10 ${
                     periodSum(totalUnits) > 0 ? "text-blue-200" : periodSum(totalUnits) < 0 ? "text-rose-300" : "text-white/25"
                   }`}
+                  title={periodTooltipFor("units")}
                 >
-                  {periodSum(totalUnits) !== 0 ? formatNumber(periodSum(totalUnits), "es-AR") : "-"}
+                  <span className={periodTooltipFor("units") ? "cursor-help border-b border-dotted border-white/25" : undefined}>
+                    {periodSum(totalUnits) !== 0 ? formatNumber(periodSum(totalUnits), "es-AR") : "-"}
+                  </span>
                 </td>
                 <td
                   className={`${cellCls} font-bold ${
                     sum(totalUnits) > 0 ? "text-blue-200" : sum(totalUnits) < 0 ? "text-rose-300" : "text-white/25"
                   }`}
+                  title={periodTooltipFor("units")}
                 >
-                  {sum(totalUnits) !== 0 ? formatNumber(sum(totalUnits), "es-AR") : "-"}
+                  <span className={periodTooltipFor("units") ? "cursor-help border-b border-dotted border-white/25" : undefined}>
+                    {sum(totalUnits) !== 0 ? formatNumber(sum(totalUnits), "es-AR") : "-"}
+                  </span>
                 </td>
               </tr>
 
               {/* ─ Revenue ────────────────────────────────────────────── */}
-              {showGrossSalesAndDiscount && <Row label="Gross Sales (sin IVA)" values={grossSales} />}
-              {showGrossSalesAndDiscount && <Row label="Commercial Discount" values={commercialDiscount} negative indent />}
+              {showGrossSalesAndDiscount && (
+                <Row
+                  label="Gross Sales (sin IVA)"
+                  values={grossSales}
+                  cellTitle={tooltipFor("grossSales")}
+                  cellPeriodTitle={periodTooltipFor("grossSales")}
+                />
+              )}
+              {showGrossSalesAndDiscount && (
+                <Row
+                  label="Commercial Discount"
+                  values={commercialDiscount}
+                  negative
+                  indent
+                  cellTitle={tooltipFor("commercialDiscount")}
+                  cellPeriodTitle={periodTooltipFor("commercialDiscount")}
+                />
+              )}
               <Row
                 label="Sales Revenue"
                 labelNode={
@@ -2359,20 +2601,85 @@ export function PLTable({
                 prominent
                 forceGray
                 colorClass="text-white"
+                cellTitle={tooltipFor("salesRevenue")}
+                cellPeriodTitle={periodTooltipFor("salesRevenue")}
               />
 
               {/* ─ Total Cost of Sales (sección propia; no depende de Gross Profit) ─ */}
               {expandedCostOfSalesBreakdown && (
                 <>
-                  <Row label="Product Cost" values={productCost} negative indent />
-                  <Row label="Kit Cost" values={kitCost} negative indent />
-                  <Row label="Payment Fee Costs" values={paymentFee} negative indent />
-                  <Row label="Blood Drawn & Sample Handling" values={bloodDraw} negative indent />
-                  <Row label="Sanitary Permits to export blood" values={sanitary} negative indent />
-                  <Row label="External Courier" values={extCourier} negative indent />
-                  <Row label="Internal Courier" values={intCourier} negative indent />
-                  <Row label="Physicians Fees" values={physiciansFees} negative indent />
-                  <Row label="Sales Commission" values={salesCommission} negative indent />
+                  <Row
+                    label="Product Cost"
+                    values={productCost}
+                    negative
+                    indent
+                    cellTitle={tooltipFor("productCost")}
+                    cellPeriodTitle={periodTooltipFor("productCost")}
+                  />
+                  <Row
+                    label="Kit Cost"
+                    values={kitCost}
+                    negative
+                    indent
+                    cellTitle={tooltipFor("kitCost")}
+                    cellPeriodTitle={periodTooltipFor("kitCost")}
+                  />
+                  <Row
+                    label="Payment Fee Costs"
+                    values={paymentFee}
+                    negative
+                    indent
+                    cellTitle={tooltipFor("paymentFee")}
+                    cellPeriodTitle={periodTooltipFor("paymentFee")}
+                  />
+                  <Row
+                    label="Blood Drawn & Sample Handling"
+                    values={bloodDraw}
+                    negative
+                    indent
+                    cellTitle={tooltipFor("bloodDraw")}
+                    cellPeriodTitle={periodTooltipFor("bloodDraw")}
+                  />
+                  <Row
+                    label="Sanitary Permits to export blood"
+                    values={sanitary}
+                    negative
+                    indent
+                    cellTitle={tooltipFor("sanitary")}
+                    cellPeriodTitle={periodTooltipFor("sanitary")}
+                  />
+                  <Row
+                    label="External Courier"
+                    values={extCourier}
+                    negative
+                    indent
+                    cellTitle={tooltipFor("extCourier")}
+                    cellPeriodTitle={periodTooltipFor("extCourier")}
+                  />
+                  <Row
+                    label="Internal Courier"
+                    values={intCourier}
+                    negative
+                    indent
+                    cellTitle={tooltipFor("intCourier")}
+                    cellPeriodTitle={periodTooltipFor("intCourier")}
+                  />
+                  <Row
+                    label="Physicians Fees"
+                    values={physiciansFees}
+                    negative
+                    indent
+                    cellTitle={tooltipFor("physiciansFees")}
+                    cellPeriodTitle={periodTooltipFor("physiciansFees")}
+                  />
+                  <Row
+                    label="Sales Commission"
+                    values={salesCommission}
+                    negative
+                    indent
+                    cellTitle={tooltipFor("salesCommission")}
+                    cellPeriodTitle={periodTooltipFor("salesCommission")}
+                  />
                 </>
               )}
               <Row
@@ -2400,6 +2707,8 @@ export function PLTable({
                 forceGray
                 negative
                 colorClass="text-white"
+                cellTitle={tooltipFor("totalCOS")}
+                cellPeriodTitle={periodTooltipFor("totalCOS")}
               />
 
               {/* ─ Gross Profit = Sales Revenue − Total Cost of Sales (sin desglose anidado) ─ */}
@@ -2409,6 +2718,8 @@ export function PLTable({
                 bold
                 prominent
                 calculatedHighlight
+                cellTitle={tooltipFor("grossProfit")}
+                cellPeriodTitle={periodTooltipFor("grossProfit")}
               />
 
               {/* ─ SG&A (sin título) ──────────────────────────────────── */}
@@ -2447,6 +2758,11 @@ export function PLTable({
                 forceGray
                 colorClass="text-white"
                 cellTitle={(mi) => buildSgaTooltip(mi, "TOTAL")}
+                cellPeriodTitle={
+                  monthIndices.length
+                    ? `PERIODO (${MONTH_LABELS[monthIndices[0]]}–${MONTH_LABELS[monthIndices[monthIndices.length - 1]]}): ${fmtSga(periodSum(totalSGA))}\nPase el mouse en cada mes para desglose por producto/canal (pl_sga).`
+                    : undefined
+                }
                 formatValue={(v) => fmtSga(v)}
               />
 
@@ -2454,9 +2770,23 @@ export function PLTable({
               {showTaxRows && (
                 <>
                   <TaxConfigRow field="iibb_pct" label="IIBB — tasa (% sobre revenue)" />
-                  <Row label="IIBB (% sobre revenue)" values={iibbAmount} negative indent />
+                  <Row
+                    label="IIBB (% sobre revenue)"
+                    values={iibbAmount}
+                    negative
+                    indent
+                    cellTitle={tooltipFor("iibbAmount")}
+                    cellPeriodTitle={periodTooltipFor("iibbAmount")}
+                  />
                   <TaxConfigRow field="income_tax_pct" label="Income tax — tasa (% sobre ganancia)" />
-                  <Row label="Income tax (% sobre ganancia)" values={incomeTax} negative indent />
+                  <Row
+                    label="Income tax (% sobre ganancia)"
+                    values={incomeTax}
+                    negative
+                    indent
+                    cellTitle={tooltipFor("incomeTax")}
+                    cellPeriodTitle={periodTooltipFor("incomeTax")}
+                  />
                 </>
               )}
               <Row
@@ -2494,6 +2824,8 @@ export function PLTable({
                 bold
                 prominent
                 calculatedHighlight
+                cellTitle={tooltipFor("netIncome")}
+                cellPeriodTitle={periodTooltipFor("netIncome")}
               />
             </tbody>
           </table>
