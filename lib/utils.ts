@@ -59,6 +59,15 @@ export function productNameSortKey(name: string): string {
   return name.replace(/^\[+/, "").trim()
 }
 
+/** Primera letra en mayúsculas; el resto del texto sin cambiar (ej. `forecast Q1` → `Forecast Q1`). */
+export function capitalizeFirstLetter(text: string): string {
+  const s = String(text ?? "")
+  if (s.length === 0) return ""
+  const first = s[0]
+  if (!/\p{L}/u.test(first)) return s
+  return first.toLocaleUpperCase("es") + s.slice(1)
+}
+
 /** Nombre a mostrar para productos en el frontend (alias legibles). */
 export function displayProductName(name: string | null | undefined): string {
   const trimmed = (name ?? "").trim()

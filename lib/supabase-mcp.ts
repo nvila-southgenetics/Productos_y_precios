@@ -267,6 +267,8 @@ export interface VentaByDate {
   test: string
   amount: number
   company: string
+  medico: string | null
+  institucion: string | null
 }
 
 /**
@@ -276,7 +278,7 @@ export interface VentaByDate {
 export async function getSalesByDate(fecha: string): Promise<VentaByDate[]> {
   const { data, error } = await supabase
     .from('ventas')
-    .select('id, fecha, test, amount, company')
+    .select('id, fecha, test, amount, company, medico, institucion')
     .eq('fecha', fecha)
     .order('company', { ascending: true })
     .order('test', { ascending: true })
@@ -284,12 +286,14 @@ export async function getSalesByDate(fecha: string): Promise<VentaByDate[]> {
   if (error) throw error
   if (!data) return []
 
-  return data.map((row: { id: string; fecha: string; test: string; amount: string | number; company: string }) => ({
+  return data.map((row: { id: string; fecha: string; test: string; amount: string | number; company: string; medico: string | null; institucion: string | null }) => ({
     id: row.id,
     fecha: row.fecha,
     test: row.test,
     amount: typeof row.amount === 'string' ? parseFloat(row.amount) : row.amount,
     company: row.company,
+    medico: row.medico ?? null,
+    institucion: row.institucion ?? null,
   }))
 }
 
@@ -316,6 +320,211 @@ export async function deleteSalesByYear(year: string): Promise<{ deleted: number
   const deletedCount = data?.length || 0
   console.log(`✅ Borradas ${deletedCount} ventas del año ${year}`)
   return { deleted: deletedCount, error: null }
+}
+
+export const SIN_INSTITUCION_KEY = '__sin_institucion__'
+export const SIN_INSTITUCION_LABEL = 'Sin institución'
+
+/** Año por defecto en la página Médicos (2025 no tiene médicos cargados). */
+export const MEDICOS_PAGE_YEAR = 2026
+
+export interface MedicoInstitucionSalesParams {
+  year?: number
+  monthFrom?: number
+  monthTo?: number
+  /** Vacío = todas las compañías ya filtradas por permisos en la página. */
+  companies?: string[]
+  /** Vacío = todos los productos (nombres `test` / producto en ventas). */
+  products?: string[]
+  /** Vacío = todas las categorías del catálogo. */
+  categories?: string[]
+  /** Vacío = todos los médicos. */
+  medicos?: string[]
+}
+
+export interface MedicoInstitucionSaleRow {
+  productKey: string
+  producto: string
+  product_id: string | null
+  institucionKey: string
+  institucionLabel: string
+  medico: string
+  cantidad: number
+}
+
+type VentaMedicoRow = {
+  test: string | null
+  id_producto: string | null
+  medico: string | null
+  institucion: string | null
+  quantity: string | number
+  company: string
+  fecha: string
+}
+
+function padMonth(month: number): string {
+  return String(month).padStart(2, '0')
+}
+
+function lastDayOfMonth(year: number, month: number): string {
+  return new Date(year, month, 0).toISOString().slice(0, 10)
+}
+
+function normalizeInstitucion(inst: string | null | undefined): { key: string; label: string } {
+  const trimmed = (inst ?? '').trim()
+  if (!trimmed) return { key: SIN_INSTITUCION_KEY, label: SIN_INSTITUCION_LABEL }
+  return { key: trimmed, label: trimmed }
+}
+
+async function fetchVentasForMedicoMatrix(params: {
+  fechaStart: string
+  fechaEnd: string
+  companies?: string[]
+}): Promise<VentaMedicoRow[]> {
+  const pageSize = 1000
+  let offset = 0
+  const all: VentaMedicoRow[] = []
+
+  while (true) {
+    let q = supabase
+      .from('ventas')
+      .select('test, id_producto, medico, institucion, quantity, company, fecha')
+      .gte('fecha', params.fechaStart)
+      .lte('fecha', params.fechaEnd)
+      .order('fecha', { ascending: true })
+      .range(offset, offset + pageSize - 1)
+
+    if (params.companies?.length) {
+      q = q.in('company', params.companies)
+    }
+
+    const { data, error } = await q
+    if (error) throw error
+    const batch = (data || []) as VentaMedicoRow[]
+    all.push(...batch)
+    if (batch.length < pageSize) break
+    offset += pageSize
+  }
+
+  return all
+}
+
+/**
+ * Lista de médicos distintos en ventas (con médico cargado) para un período.
+ */
+export async function getMedicosFromVentas(params: {
+  year?: number
+  monthFrom?: number
+  monthTo?: number
+  companies?: string[]
+}): Promise<string[]> {
+  const year = params.year ?? MEDICOS_PAGE_YEAR
+  const monthFrom = params.monthFrom ?? 1
+  const monthTo = params.monthTo ?? 12
+  const fechaStart = `${year}-${padMonth(monthFrom)}-01`
+  const fechaEnd = lastDayOfMonth(year, monthTo)
+
+  const rawRows = await fetchVentasForMedicoMatrix({
+    fechaStart,
+    fechaEnd,
+    companies: params.companies?.length ? params.companies : undefined,
+  })
+
+  const set = new Set<string>()
+  for (const row of rawRows) {
+    const m = row.medico?.trim()
+    if (m) set.add(m)
+  }
+  return [...set].sort((a, b) => a.localeCompare(b, 'es'))
+}
+
+/**
+ * Ventas agregadas por producto, institución y médico (suma de quantity).
+ * Solo filas con médico cargado.
+ */
+export async function getMedicoInstitucionSales(
+  params: MedicoInstitucionSalesParams
+): Promise<MedicoInstitucionSaleRow[]> {
+  const year = params.year ?? MEDICOS_PAGE_YEAR
+  const monthFrom = params.monthFrom ?? 1
+  const monthTo = params.monthTo ?? 12
+  const fechaStart = `${year}-${padMonth(monthFrom)}-01`
+  const fechaEnd = lastDayOfMonth(year, monthTo)
+
+  const rawRows = await fetchVentasForMedicoMatrix({
+    fechaStart,
+    fechaEnd,
+    companies: params.companies?.length ? params.companies : undefined,
+  })
+
+  const productNames = [
+    ...new Set(
+      rawRows
+        .map((r) => r.test?.trim())
+        .filter((t): t is string => Boolean(t))
+    ),
+  ]
+  const { data: productsData, error: productsError } = await supabase
+    .from('products')
+    .select('*')
+  if (productsError) throw productsError
+  const products = (productsData || []) as Product[]
+  const ventasTestToProductId = await fetchProductIdMapFromVentasTable(productNames)
+
+  const productFilter = params.products?.length
+    ? new Set(params.products)
+    : null
+  const categoryFilter = params.categories?.length
+    ? new Set(params.categories)
+    : null
+  const medicoFilter = params.medicos?.length ? new Set(params.medicos) : null
+
+  const agg = new Map<string, MedicoInstitucionSaleRow>()
+
+  for (const row of rawRows) {
+    const medico = row.medico?.trim()
+    if (!medico) continue
+    if (medicoFilter && !medicoFilter.has(medico)) continue
+
+    const test = row.test?.trim() || 'Sin producto'
+    if (productFilter && !productFilter.has(test)) {
+      const resolved = resolveProductForSale(products, test, ventasTestToProductId)
+      if (!resolved || !productFilter.has(resolved.name)) continue
+    }
+
+    const product = resolveProductForSale(products, test, ventasTestToProductId)
+    if (categoryFilter) {
+      const cat = product?.category?.trim() || 'Otros'
+      if (!categoryFilter.has(cat)) continue
+    }
+    const product_id = product?.id ?? row.id_producto ?? null
+    const productKey = product_id ?? test
+    const producto = product
+      ? product.alias?.trim() || product.name
+      : test
+
+    const { key: institucionKey, label: institucionLabel } = normalizeInstitucion(row.institucion)
+    const qty =
+      typeof row.quantity === 'string' ? parseFloat(row.quantity) : Number(row.quantity) || 0
+
+    const cellKey = `${productKey}|${institucionKey}|${medico}`
+    const existing = agg.get(cellKey)
+    if (existing) {
+      existing.cantidad += qty
+    } else {
+      agg.set(cellKey, {
+        productKey,
+        producto,
+        product_id,
+        institucionKey,
+        institucionLabel,
+        medico,
+        cantidad: qty,
+      })
+    }
+  }
+
+  return [...agg.values()]
 }
 
 /**
@@ -398,13 +607,9 @@ export async function createProduct(input: {
     throw new Error('El nombre del producto es obligatorio')
   }
 
-  // Alias requerido por DB: lo generamos a partir del nombre (sin necesidad de input del usuario).
-  const generatedAlias = baseName
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .toUpperCase() || `ALIAS-${Date.now()}`
+  // Por UX: al crear desde el "+", usamos el mismo texto como alias.
+  // Si choca por unicidad en DB, reintentamos con sufijo.
+  const generatedAliasBase = baseName
 
   // productos.user_id y productos.base_price son NOT NULL, así que deben setearse al insertar.
   const {
@@ -464,19 +669,33 @@ export async function createProduct(input: {
     }
   }
 
-  const { data, error } = await supabase
-    .from('products')
-    .insert({
-      name: baseName,
-      alias: generatedAlias,
-      base_price: 0,
-      user_id: user.id,
-      description: input.description ?? null,
-      category: input.category ?? null,
-      tipo: input.tipo ?? null,
-    })
-    .select('*')
-    .single()
+  const insertPayload = (aliasToUse: string) => ({
+    name: baseName,
+    alias: aliasToUse,
+    base_price: 0,
+    user_id: user.id,
+    description: input.description ?? null,
+    category: input.category ?? null,
+    tipo: input.tipo ?? null,
+  })
+
+  let data: any | null = null
+  let error: any | null = null
+
+  // Intento 1: alias igual al nombre
+  {
+    const res = await supabase.from('products').insert(insertPayload(generatedAliasBase)).select('*').single()
+    data = res.data
+    error = res.error
+  }
+
+  // Si el alias ya existe, reintentar una vez con sufijo
+  if (error?.code === '23505') {
+    const retryAlias = `${generatedAliasBase}-${Date.now().toString().slice(-6)}`
+    const res2 = await supabase.from('products').insert(insertPayload(retryAlias)).select('*').single()
+    data = res2.data
+    error = res2.error
+  }
 
   if (error || !data) {
     console.error('Error creating product:', error)

@@ -16,12 +16,16 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
-import { cn, formatDate, formatNumber } from "@/lib/utils"
+import { cn, formatCurrency, formatDate, formatNumber } from "@/lib/utils"
 import {
+  getCountryMonthAmounts,
+  getCountryMonthCollectionPercentages,
   getInvoiceCompanies,
   getInvoiceMetrics,
   getInvoicesPage,
   getMonthlyInvoicesSummary,
+  type InvoiceCountryMonthAmounts,
+  type InvoiceCountryMonthPercentages,
   type InvoiceMetrics,
   type InvoiceRow,
 } from "@/lib/invoices"
@@ -46,16 +50,54 @@ function paymentLabel(paymentState: string | null): string {
   return paymentState
 }
 
+function formatMonthHeader(monthKey: string): string {
+  const [yearPart, monthPart] = monthKey.split("-")
+  const month = Number(monthPart)
+  const year = Number(yearPart)
+  if (!Number.isFinite(month) || !Number.isFinite(year)) return monthKey
+  const date = new Date(year, month - 1, 1)
+  const monthLabel = date.toLocaleDateString("es-ES", { month: "short" }).replace(".", "")
+  const shortYear = String(year).slice(-2)
+  return `${monthLabel.charAt(0).toUpperCase()}${monthLabel.slice(1)}-${shortYear}`
+}
+
+function percentageDotClass(value: number): string {
+  if (value >= 85) return "bg-emerald-500"
+  if (value >= 70) return "bg-yellow-400"
+  return "bg-red-500"
+}
+
+function percentageTextClass(value: number): string {
+  if (value >= 85) return "text-emerald-600"
+  if (value >= 70) return "text-amber-600"
+  return "text-red-600"
+}
+
 export default function InvoicesPage() {
   const [metrics, setMetrics] = useState<InvoiceMetrics>({
     total: 0,
     paid: 0,
     notPaid: 0,
     inPayment: 0,
-    totalAmount: 0,
-    paidAmount: 0,
+    billedAmount: 0,
+    collectedAmount: 0,
+    inProcessAmount: 0,
   })
+  const paidAndInProcessCount = metrics.paid + metrics.inPayment
+  const paidAndInProcessAmount = metrics.collectedAmount + metrics.inProcessAmount
   const [monthlyData, setMonthlyData] = useState<Array<{ month: string; paid: number; notPaid: number; inPayment: number }>>([])
+  const [activeView, setActiveView] = useState<"overview" | "country-amounts" | "country-percentages">("overview")
+  const [countryAmounts, setCountryAmounts] = useState<InvoiceCountryMonthAmounts>({
+    months: [],
+    rows: [],
+    totalsByMonth: {},
+    grandTotal: 0,
+  })
+  const [countryPercentages, setCountryPercentages] = useState<InvoiceCountryMonthPercentages>({
+    months: [],
+    rows: [],
+  })
+  const [countryPercentageMode, setCountryPercentageMode] = useState<"percentage" | "amount">("percentage")
   const [rows, setRows] = useState<InvoiceRow[]>([])
   const [companies, setCompanies] = useState<string[]>([])
   const [paymentState, setPaymentState] = useState<"all" | "paid" | "not_paid" | "in_payment">("all")
@@ -75,17 +117,21 @@ export default function InvoicesPage() {
       setIsLoading(true)
       setError(null)
       try {
-        const [metricsResult, monthlyResult, companiesResult] = await Promise.all([
+        const [countryAmountsResult, countryPercentagesResult, metricsResult, monthlyResult, companiesResult] = await Promise.all([
+          getCountryMonthAmounts(),
+          getCountryMonthCollectionPercentages(),
           getInvoiceMetrics(),
           getMonthlyInvoicesSummary(),
           getInvoiceCompanies(),
         ])
+        setCountryAmounts(countryAmountsResult)
+        setCountryPercentages(countryPercentagesResult)
         setMetrics(metricsResult)
         setMonthlyData(monthlyResult)
         setCompanies(companiesResult)
       } catch (err) {
         console.error(err)
-        setError("No se pudieron cargar las métricas de facturas.")
+        setError("No se pudieron cargar las métricas de cobranza.")
       } finally {
         setIsLoading(false)
       }
@@ -131,8 +177,8 @@ export default function InvoicesPage() {
               <BarChart3 className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-white">Cobranza</h1>
-              <p className="text-sm text-white/80 mt-1">Resumen y análisis de facturas por estado de pago</p>
+              <h1 className="text-3xl font-bold text-white">Cobranza anualidades</h1>
+              <p className="text-sm text-white/80 mt-1">Análisis de estado de pago y detalle por cliente</p>
             </div>
           </div>
         </div>
@@ -141,22 +187,82 @@ export default function InvoicesPage() {
           <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="mb-4 flex flex-wrap gap-2">
+          <Button
+            variant={activeView === "overview" ? "default" : "outline"}
+            onClick={() => setActiveView("overview")}
+            className={cn(
+              "text-sm",
+              activeView === "overview"
+                ? "bg-white text-slate-900 hover:bg-slate-100"
+                : "bg-transparent text-white border-white/40 hover:bg-white/10"
+            )}
+          >
+            Vista general
+          </Button>
+          <Button
+            variant={activeView === "country-amounts" ? "default" : "outline"}
+            onClick={() => setActiveView("country-amounts")}
+            className={cn(
+              "text-sm",
+              activeView === "country-amounts"
+                ? "bg-white text-slate-900 hover:bg-slate-100"
+                : "bg-transparent text-white border-white/40 hover:bg-white/10"
+            )}
+          >
+            Facturado por mes y país
+          </Button>
+          <Button
+            variant={activeView === "country-percentages" ? "default" : "outline"}
+            onClick={() => setActiveView("country-percentages")}
+            className={cn(
+              "text-sm",
+              activeView === "country-percentages"
+                ? "bg-white text-slate-900 hover:bg-slate-100"
+                : "bg-transparent text-white border-white/40 hover:bg-white/10"
+            )}
+          >
+            % de cobranza por mes y país
+          </Button>
+        </div>
+
+        {activeView === "overview" && (
+          <>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
           <div className="rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4">
             <p className="text-sm text-white/70">Total de facturas</p>
             <p className="text-2xl font-semibold text-white">{formatNumber(metrics.total)}</p>
           </div>
           <div className="rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4">
-            <p className="text-sm text-white/70">Precio total de facturas</p>
-            <p className="text-2xl font-semibold text-white">${formatNumber(metrics.totalAmount)}</p>
-          </div>
-          <div className="rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4">
-            <p className="text-sm text-white/70">Facturas cobradas</p>
+            <p className="text-sm text-white/70">Total pagas</p>
             <p className="text-2xl font-semibold text-emerald-300">{formatNumber(metrics.paid)}</p>
           </div>
           <div className="rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4">
-            <p className="text-sm text-white/70">Precio cobrado</p>
-            <p className="text-2xl font-semibold text-emerald-300">${formatNumber(metrics.paidAmount)}</p>
+            <p className="text-sm text-white/70">Total no pagas</p>
+            <p className="text-2xl font-semibold text-red-300">{formatNumber(metrics.notPaid)}</p>
+          </div>
+          <div className="rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4">
+            <p className="text-sm text-white/70">Total en proceso</p>
+            <p className="text-2xl font-semibold text-amber-300">{formatNumber(metrics.inPayment)}</p>
+          </div>
+          <div className="rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4">
+            <p className="text-sm text-white/70">Pagado + En proceso de pago</p>
+            <p className="text-2xl font-semibold text-cyan-300">{formatNumber(paidAndInProcessCount)}</p>
+            <p className="text-sm font-medium text-cyan-200 mt-1">{formatCurrency(paidAndInProcessAmount)}</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4">
+            <p className="text-sm text-white/70">Total facturado (monto)</p>
+            <p className="text-2xl font-semibold text-white">{formatCurrency(metrics.billedAmount)}</p>
+          </div>
+          <div className="rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4">
+            <p className="text-sm text-white/70">Total cobrado (monto)</p>
+            <p className="text-2xl font-semibold text-emerald-300">{formatCurrency(metrics.collectedAmount)}</p>
+          </div>
+          <div className="rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4">
+            <p className="text-sm text-white/70">Total en proceso (monto)</p>
+            <p className="text-2xl font-semibold text-amber-300">{formatCurrency(metrics.inProcessAmount)}</p>
           </div>
         </div>
 
@@ -177,6 +283,118 @@ export default function InvoicesPage() {
             </ResponsiveContainer>
           </div>
         </div>
+        </>
+        )}
+
+        {activeView === "country-amounts" && (
+          <div className="rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4 mb-6">
+            <h2 className="text-white text-lg font-semibold mb-1">Facturado por mes y país</h2>
+            <p className="text-sm text-white/80 mb-4">Monto total facturado por cada país y mes de factura.</p>
+            <div className="overflow-x-auto rounded-md border border-white/20">
+              <table className="min-w-full text-sm bg-white text-slate-900">
+                <thead className="bg-slate-100">
+                  <tr className="text-left text-slate-700">
+                    <th className="px-3 py-2 font-semibold sticky left-0 bg-slate-100">País</th>
+                    {countryAmounts.months.map((month) => (
+                      <th key={month} className="px-3 py-2 font-semibold whitespace-nowrap">
+                        {formatMonthHeader(month)}
+                      </th>
+                    ))}
+                    <th className="px-3 py-2 font-semibold">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {countryAmounts.rows.map((row) => (
+                    <tr key={row.country} className="border-t border-slate-200">
+                      <td className="px-3 py-2 font-medium sticky left-0 bg-white">{row.country}</td>
+                      {countryAmounts.months.map((month) => (
+                        <td key={`${row.country}-${month}`} className="px-3 py-2 whitespace-nowrap">
+                          {formatNumber(row.values[month] ?? 0)}
+                        </td>
+                      ))}
+                      <td className="px-3 py-2 font-semibold whitespace-nowrap">{formatNumber(row.total)}</td>
+                    </tr>
+                  ))}
+                  <tr className="border-t-2 border-slate-300 bg-slate-50">
+                    <td className="px-3 py-2 font-semibold sticky left-0 bg-slate-50">Total</td>
+                    {countryAmounts.months.map((month) => (
+                      <td key={`total-${month}`} className="px-3 py-2 font-semibold whitespace-nowrap">
+                        {formatNumber(countryAmounts.totalsByMonth[month] ?? 0)}
+                      </td>
+                    ))}
+                    <td className="px-3 py-2 font-bold whitespace-nowrap">{formatNumber(countryAmounts.grandTotal)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeView === "country-percentages" && (
+          <div className="rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4 mb-6">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="text-white text-lg font-semibold mb-1">% de cobranza por mes y país</h2>
+                <p className="text-sm text-white/80">
+                  {countryPercentageMode === "percentage"
+                    ? "Porcentaje cobrado ((pagado + en proceso) / monto facturado) por cada país y mes."
+                    : "Dinero cobrado (pagado + en proceso) por cada país y mes."}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() =>
+                  setCountryPercentageMode((current) => (current === "percentage" ? "amount" : "percentage"))
+                }
+                className="bg-transparent text-white border-white/40 hover:bg-white/10"
+              >
+                {countryPercentageMode === "percentage" ? "Ver dinero" : "Ver porcentajes"}
+              </Button>
+            </div>
+            <div className="overflow-x-auto rounded-md border border-white/20">
+              <table className="min-w-full text-sm bg-white text-slate-900">
+                <thead className="bg-slate-100">
+                  <tr className="text-left text-slate-700">
+                    <th className="px-3 py-2 font-semibold sticky left-0 bg-slate-100">País</th>
+                    {countryPercentages.months.map((month) => (
+                      <th key={month} className="px-3 py-2 font-semibold whitespace-nowrap">
+                        {formatMonthHeader(month)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {countryPercentages.rows.map((row) => (
+                    <tr key={row.country} className="border-t border-slate-200">
+                      <td className="px-3 py-2 font-medium sticky left-0 bg-white">{row.country}</td>
+                      {countryPercentages.months.map((month) => {
+                        const value = row.percentageValues[month] ?? 0
+                        const amount = row.collectedAmountValues[month] ?? 0
+                        return (
+                          <td key={`${row.country}-${month}`} className="px-3 py-2 whitespace-nowrap">
+                            {countryPercentageMode === "percentage" ? (
+                              <span className="inline-flex items-center gap-2">
+                                <span className={cn("h-3 w-3 rounded-full", percentageDotClass(value))} />
+                                {formatNumber(value, "es-UY", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}%
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5">
+                                <span>{formatNumber(amount)}</span>
+                                <span className={cn("text-xs", percentageTextClass(value))}>
+                                  ({formatNumber(value, "es-UY", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}%)
+                                </span>
+                              </span>
+                            )}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         <div className="rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4">
           <div className="flex flex-col md:flex-row gap-3 mb-4">

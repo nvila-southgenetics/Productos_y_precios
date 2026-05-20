@@ -11,6 +11,12 @@ import { displayProductName, formatNumber } from "@/lib/utils"
 import type { ProductWithOverrides } from "@/lib/supabase-mcp"
 import { updateProductCountryOverride } from "@/lib/supabase-mcp"
 import { DeleteProductDialog } from "@/components/products/DeleteProductDialog"
+import { PRODUCT_CATEGORY_COLORS } from "@/lib/product-categories"
+
+export type ProductDeleteScope =
+  | "current-country"
+  | "all-countries"
+  | { countryCodes: string[] }
 
 interface ProductTableProps {
   products: ProductWithOverrides[]
@@ -19,24 +25,14 @@ interface ProductTableProps {
   budgetUnitsByProductId?: Record<string, number>
   onViewProduct: (product: ProductWithOverrides) => void
   onEditProduct: (product: ProductWithOverrides) => void
-  onDeleteProduct: (product: ProductWithOverrides, deleteFromAllCountries: boolean) => Promise<void>
+  onDeleteProduct: (product: ProductWithOverrides, scope: ProductDeleteScope) => Promise<void>
   onReviewToggle?: (productId: string, countryCode: string, checked: boolean) => Promise<void>
   /** Si false, se ocultan botones de editar/eliminar/revisado. */
   canEdit?: boolean
+  allowedCountries?: string[]
+  canDeleteGlobally?: boolean
   /** Callback para iniciar el flujo de fusión con los productos seleccionados. */
   onRequestMerge?: (products: ProductWithOverrides[]) => void
-}
-
-const categoryColors: Record<string, string> = {
-  "Ginecología": "bg-pink-300/20 text-pink-200 border-pink-300/30",
-  "Oncología": "bg-rose-300/20 text-rose-200 border-rose-300/30",
-  "Urología": "bg-sky-300/20 text-sky-200 border-sky-300/30",
-  "Endocrinología": "bg-violet-300/20 text-violet-200 border-violet-300/30",
-  "Prenatales": "bg-teal-300/20 text-teal-200 border-teal-300/30",
-  "Anualidades": "bg-amber-300/20 text-amber-200 border-amber-300/30",
-  "Carrier": "bg-indigo-300/20 text-indigo-200 border-indigo-300/30",
-  "Nutrición": "bg-lime-300/20 text-lime-200 border-lime-300/30",
-  "Otros": "bg-slate-300/20 text-slate-200 border-slate-300/30",
 }
 
 const tipoColors: Record<string, string> = {
@@ -59,6 +55,8 @@ export function ProductTable({
   onDeleteProduct,
   onReviewToggle,
   canEdit = true,
+  allowedCountries = [],
+  canDeleteGlobally = true,
   onRequestMerge,
 }: ProductTableProps) {
   const router = useRouter()
@@ -121,7 +119,7 @@ export function ProductTable({
       const failures: Array<{ id: string; name: string; error: string }> = []
       for (const p of list) {
         try {
-          await onDeleteProduct(p, false)
+          await onDeleteProduct(p, "current-country")
         } catch (e) {
           failures.push({ id: p.id, name: p.name, error: e instanceof Error ? e.message : String(e) })
         }
@@ -149,7 +147,7 @@ export function ProductTable({
       const failures: Array<{ id: string; name: string; error: string }> = []
       for (const p of list) {
         try {
-          await onDeleteProduct(p, true)
+          await onDeleteProduct(p, "all-countries")
         } catch (e) {
           failures.push({ id: p.id, name: p.name, error: e instanceof Error ? e.message : String(e) })
         }
@@ -161,6 +159,34 @@ export function ProductTable({
       if (failures.length) {
         alert(
           `Algunos productos no se pudieron eliminar de todos los países:\n` +
+            failures.map((f) => `- ${f.name}: ${f.error}`).join("\n")
+        )
+      }
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const handleDeleteFromCountries = async (countryCodes: string[]) => {
+    const list = productsToDelete?.length ? productsToDelete : (productToDelete ? [productToDelete] : [])
+    if (list.length === 0 || countryCodes.length === 0) return
+    setIsDeleting(true)
+    try {
+      const failures: Array<{ id: string; name: string; error: string }> = []
+      for (const p of list) {
+        try {
+          await onDeleteProduct(p, { countryCodes })
+        } catch (e) {
+          failures.push({ id: p.id, name: p.name, error: e instanceof Error ? e.message : String(e) })
+        }
+      }
+      setDeleteDialogOpen(false)
+      setProductToDelete(null)
+      setProductsToDelete(null)
+      setMergeSelection(new Set())
+      if (failures.length) {
+        alert(
+          `Algunos productos no se pudieron eliminar de los países seleccionados:\n` +
             failures.map((f) => `- ${f.name}: ${f.error}`).join("\n")
         )
       }
@@ -335,7 +361,7 @@ export function ProductTable({
                     <div className="flex gap-2 flex-wrap">
                       {product.category && (
                         <Badge
-                          className={`${categoryColors[product.category] || categoryColors["Otros"]} border shadow-sm`}
+                          className={`${PRODUCT_CATEGORY_COLORS[product.category] || PRODUCT_CATEGORY_COLORS["Otros"]} border shadow-sm`}
                         >
                           {product.category}
                         </Badge>
@@ -419,8 +445,11 @@ export function ProductTable({
             product={productToDelete}
             products={productsToDelete}
             selectedCountry={selectedCountry}
+            allowedCountries={allowedCountries}
+            canDeleteGlobally={canDeleteGlobally}
             onDeleteFromCountry={handleDeleteFromCountry}
             onDeleteFromAll={handleDeleteFromAll}
+            onDeleteFromCountries={handleDeleteFromCountries}
             isDeleting={isDeleting}
           />,
           document.body

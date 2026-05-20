@@ -12,6 +12,7 @@ import { formatCurrency, formatPercentage, cn, productNameSortKey, displayProduc
 import type { ProductWithOverrides, ProductCountryOverride } from "@/lib/supabase-mcp"
 import { updateProductCountryOverride, getProductsWithOverrides, CHANNELS, updateProductMeta } from "@/lib/supabase-mcp"
 import { Info, AlertTriangle, GitCompare, ChevronDown, Search } from "lucide-react"
+import { PRODUCT_CATEGORIES, PRODUCT_CATEGORY_COLORS, isPredefinedCategory } from "@/lib/product-categories"
 
 interface ProductDetailViewProps {
   product: ProductWithOverrides
@@ -29,18 +30,6 @@ const countries = [
   { code: "UY", name: "Uruguay" },
   { code: "VE", name: "Venezuela" },
 ]
-
-const categoryColors: Record<string, string> = {
-  "Ginecología": "bg-pink-300/20 text-pink-200 border-pink-300/30",
-  "Oncología": "bg-rose-300/20 text-rose-200 border-rose-300/30",
-  "Urología": "bg-sky-300/20 text-sky-200 border-sky-300/30",
-  "Endocrinología": "bg-violet-300/20 text-violet-200 border-violet-300/30",
-  "Prenatales": "bg-teal-300/20 text-teal-200 border-teal-300/30",
-  "Anualidades": "bg-amber-300/20 text-amber-200 border-amber-300/30",
-  "Carrier": "bg-indigo-300/20 text-indigo-200 border-indigo-300/30",
-  "Nutrición": "bg-lime-300/20 text-lime-200 border-lime-300/30",
-  "Otros": "bg-slate-300/20 text-slate-200 border-slate-300/30",
-}
 
 const tipoColors: Record<string, string> = {
   "Sangre": "bg-red-300/20 text-red-200 border-red-300/30",
@@ -93,12 +82,17 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
     ? countries.filter((c) => allowedCountries.includes(c.code))
     : countries
 
-  const CATEGORY_OPTIONS = ["Ginecología", "Oncología", "Endocrinología", "Urología", "Prenatales", "Anualidades", "Otros"]
+  const CATEGORY_OPTIONS = [...PRODUCT_CATEGORIES]
   const TIPO_OPTIONS = ["Sangre", "Corte de Tejido", "Punción", "Biopsia endometrial", "Hisopado bucal", "Sangre y corte tejido", "Orina"]
 
   const [metaCategory, setMetaCategory] = useState<string>(product.category ?? "")
   const [metaTipo, setMetaTipo] = useState<string>(product.tipo ?? "")
   const [isSavingMeta, setIsSavingMeta] = useState(false)
+
+  /** Categoría que se muestra y se guardará: selección del dropdown o la guardada en BD. */
+  const displayedCategory =
+    metaCategory.trim() || product.category?.trim() || ""
+  const isCustomCategory = !!displayedCategory && !isPredefinedCategory(displayedCategory)
 
   useEffect(() => {
     setMetaCategory(product.category ?? "")
@@ -975,7 +969,7 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
             <div className="flex gap-2 flex-wrap">
               {product.category && (
                 <Badge
-                  className={`${categoryColors[product.category] || categoryColors["Otros"]} border shadow-sm`}
+                  className={`${PRODUCT_CATEGORY_COLORS[product.category] || PRODUCT_CATEGORY_COLORS["Otros"]} border shadow-sm`}
                 >
                   {product.category}
                 </Badge>
@@ -1001,7 +995,7 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
               <div className="flex gap-2 flex-wrap">
                 {product.category && (
                   <Badge
-                    className={`${categoryColors[product.category] || categoryColors["Otros"]} border shadow-sm`}
+                    className={`${PRODUCT_CATEGORY_COLORS[product.category] || PRODUCT_CATEGORY_COLORS["Otros"]} border shadow-sm`}
                   >
                     {product.category}
                   </Badge>
@@ -1319,22 +1313,44 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
             <label className="text-xs font-semibold text-white/70 uppercase tracking-wide">Categoría</label>
                   <div className="mt-2">
                     {canEdit ? (
-                      <Select
-                        value={metaCategory}
-                        onChange={(e) => setMetaCategory(e.target.value)}
-                        className="bg-white/10 border-white/20 text-white"
-                      >
-                        <option value="">Seleccionar categoría</option>
-                        {CATEGORY_OPTIONS.map((c) => (
-                          <option key={c} value={c} className="bg-blue-900 text-white">
-                            {c}
-                          </option>
-                        ))}
-                      </Select>
+                      <>
+                        <Select
+                          value={isPredefinedCategory(metaCategory) ? metaCategory : ""}
+                          onChange={(e) => setMetaCategory(e.target.value)}
+                          className="bg-white/10 border-white/20 text-white"
+                        >
+                          <option value="">Seleccionar categoría</option>
+                          {CATEGORY_OPTIONS.map((c) => (
+                            <option key={c} value={c} className="bg-blue-900 text-white">
+                              {c}
+                            </option>
+                          ))}
+                        </Select>
+                        {displayedCategory ? (
+                          <p className="mt-2 text-sm text-white/80">
+                            <span className="text-white/50">Categoría actual: </span>
+                            <Badge
+                              className={cn(
+                                "ml-1 align-middle border shadow-sm",
+                                PRODUCT_CATEGORY_COLORS[displayedCategory] || PRODUCT_CATEGORY_COLORS["Otros"]
+                              )}
+                            >
+                              {displayedCategory}
+                            </Badge>
+                            {isCustomCategory ? (
+                              <span className="block mt-1 text-xs text-white/50">
+                                No está en la lista; elegí una categoría predeterminada para cambiarla.
+                              </span>
+                            ) : null}
+                          </p>
+                        ) : (
+                          <p className="mt-2 text-sm text-white/50">Sin categoría asignada</p>
+                        )}
+                      </>
                     ) : (
                       product.category && (
                         <Badge
-                          className={`${categoryColors[product.category] || categoryColors["Otros"]} border shadow-sm`}
+                          className={`${PRODUCT_CATEGORY_COLORS[product.category] || PRODUCT_CATEGORY_COLORS["Otros"]} border shadow-sm`}
                         >
                           {product.category}
                         </Badge>
@@ -1374,14 +1390,15 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
                   <div className="pt-2">
                     <Button
                       onClick={async () => {
-                        if (!metaCategory.trim() || !metaTipo.trim()) {
+                        const categoryToSave = displayedCategory
+                        if (!categoryToSave || !metaTipo.trim()) {
                           alert("Completá categoría y tipo de muestra antes de guardar.")
                           return
                         }
                         setIsSavingMeta(true)
                         try {
                           await updateProductMeta(product.id, {
-                            category: metaCategory.trim(),
+                            category: categoryToSave,
                             tipo: metaTipo.trim(),
                           })
                           router.refresh()

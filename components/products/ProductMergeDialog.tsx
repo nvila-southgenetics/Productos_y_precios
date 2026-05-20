@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import type { ProductWithOverrides } from "@/lib/supabase-mcp"
 import { displayProductName, cn } from "@/lib/utils"
+import { PRODUCT_CATEGORY_COLORS } from "@/lib/product-categories"
 
 interface ProductMergeDialogProps {
   open: boolean
@@ -24,18 +25,6 @@ interface ProductMergeDialogProps {
       costBaseProductId?: string
     }
   ) => void
-}
-
-const categoryColors: Record<string, string> = {
-  "Ginecología": "bg-pink-300/20 text-pink-200 border-pink-300/30",
-  "Oncología": "bg-rose-300/20 text-rose-200 border-rose-300/30",
-  "Urología": "bg-sky-300/20 text-sky-200 border-sky-300/30",
-  "Endocrinología": "bg-violet-300/20 text-violet-200 border-violet-300/30",
-  "Prenatales": "bg-teal-300/20 text-teal-200 border-teal-300/30",
-  "Anualidades": "bg-amber-300/20 text-amber-200 border-amber-300/30",
-  "Carrier": "bg-indigo-300/20 text-indigo-200 border-indigo-300/30",
-  "Nutrición": "bg-lime-300/20 text-lime-200 border-lime-300/30",
-  "Otros": "bg-slate-300/20 text-slate-200 border-slate-300/30",
 }
 
 const tipoColors: Record<string, string> = {
@@ -136,7 +125,7 @@ export function ProductMergeDialog({
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-medium">{displayProductName(p.name)}</span>
                               {p.category && (
-                                <Badge className={`${categoryColors[p.category] || categoryColors["Otros"]} border shadow-sm`}>
+                                <Badge className={`${PRODUCT_CATEGORY_COLORS[p.category] || PRODUCT_CATEGORY_COLORS["Otros"]} border shadow-sm`}>
                                   {p.category}
                                 </Badge>
                               )}
@@ -258,7 +247,7 @@ export function ProductMergeDialog({
                           />
                           {p.category ? (
                             <Badge
-                              className={`${categoryColors[p.category] || categoryColors["Otros"]} border shadow-sm`}
+                              className={`${PRODUCT_CATEGORY_COLORS[p.category] || PRODUCT_CATEGORY_COLORS["Otros"]} border shadow-sm`}
                             >
                               {p.category}
                             </Badge>
@@ -457,7 +446,7 @@ export function ProductMergeDialog({
                 <div className="flex flex-wrap gap-2">
                   {preview.category && (
                     <Badge
-                      className={`${categoryColors[preview.category] || categoryColors["Otros"]} border shadow-sm`}
+                      className={`${PRODUCT_CATEGORY_COLORS[preview.category] || PRODUCT_CATEGORY_COLORS["Otros"]} border shadow-sm`}
                     >
                       {preview.category}
                     </Badge>

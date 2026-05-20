@@ -3,56 +3,49 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { ChevronDown, Search } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
-import { cn, displayProductName } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 
-interface ProductMultiSearchFilterProps {
-  products: string[]
-  selectedProducts: string[]
-  onSelectedProductsChange: (products: string[]) => void
-  /** Optional map: product name -> alias for display/search */
-  aliasesByName?: Record<string, string>
+interface MedicoMultiSearchFilterProps {
+  medicos: string[]
+  selectedMedicos: string[]
+  onSelectedMedicosChange: (medicos: string[]) => void
   disabled?: boolean
   allLabel?: string
 }
 
-export function ProductMultiSearchFilter({
-  products,
-  selectedProducts,
-  onSelectedProductsChange,
-  aliasesByName,
+export function MedicoMultiSearchFilter({
+  medicos,
+  selectedMedicos,
+  onSelectedMedicosChange,
   disabled = false,
-  allLabel = "Todos los productos",
-}: ProductMultiSearchFilterProps) {
+  allLabel = "Todos los médicos",
+}: MedicoMultiSearchFilterProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
   const ref = useRef<HTMLDivElement>(null)
-  const safeProducts = useMemo(
-    () => products.filter((p): p is string => typeof p === "string" && p.trim().length > 0),
-    [products]
+
+  const safeMedicos = useMemo(
+    () => medicos.filter((m): m is string => typeof m === "string" && m.trim().length > 0),
+    [medicos]
   )
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return safeProducts
-    return safeProducts.filter((p) => {
-      const alias = aliasesByName?.[p]
-      return p.toLowerCase().includes(q) || (alias ? alias.toLowerCase().includes(q) : false)
-    })
-  }, [safeProducts, query, aliasesByName])
+    if (!q) return safeMedicos
+    return safeMedicos.filter((m) => m.toLowerCase().includes(q))
+  }, [safeMedicos, query])
 
-  const selectedSet = useMemo(() => new Set(selectedProducts), [selectedProducts])
+  const selectedSet = useMemo(() => new Set(selectedMedicos), [selectedMedicos])
 
-  const isAllSelected = selectedProducts.length > 0 && selectedProducts.length === safeProducts.length
+  const isAllSelected =
+    selectedMedicos.length > 0 && selectedMedicos.length === safeMedicos.length
 
   const displayValue = useMemo(() => {
-    if (selectedProducts.length === 0) return allLabel
-    if (selectedProducts.length === safeProducts.length) return allLabel
-    if (selectedProducts.length === 1) {
-      const n = selectedProducts[0]
-      return aliasesByName?.[n] || displayProductName(n)
-    }
-    return `${selectedProducts.length} productos`
-  }, [allLabel, selectedProducts, safeProducts.length, aliasesByName])
+    if (selectedMedicos.length === 0) return allLabel
+    if (selectedMedicos.length === safeMedicos.length) return allLabel
+    if (selectedMedicos.length === 1) return selectedMedicos[0]
+    return `${selectedMedicos.length} médicos`
+  }, [allLabel, selectedMedicos, safeMedicos.length])
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -64,37 +57,36 @@ export function ProductMultiSearchFilter({
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  const toggleProduct = (product: string) => {
-    if (selectedSet.has(product)) {
-      onSelectedProductsChange(selectedProducts.filter((p) => p !== product))
+  const toggleMedico = (medico: string) => {
+    if (selectedSet.has(medico)) {
+      onSelectedMedicosChange(selectedMedicos.filter((m) => m !== medico))
     } else {
-      onSelectedProductsChange([...selectedProducts, product])
+      onSelectedMedicosChange([...selectedMedicos, medico])
     }
   }
 
-  const selectOnlyProduct = (product: string) => {
-    onSelectedProductsChange([product])
+  const selectOnlyMedico = (medico: string) => {
+    onSelectedMedicosChange([medico])
   }
 
-  const selectAll = () => onSelectedProductsChange([...safeProducts])
-  const deselectAll = () => onSelectedProductsChange([])
+  const selectAll = () => onSelectedMedicosChange([...safeMedicos])
+  const deselectAll = () => onSelectedMedicosChange([])
 
   const toggleSelectAllFiltered = () => {
     if (filtered.length === 0) return
-    const filteredAllAreSelected = filtered.every((p) => selectedSet.has(p))
+    const filteredAllAreSelected = filtered.every((m) => selectedSet.has(m))
     if (filteredAllAreSelected) {
-      const next = selectedProducts.filter((p) => !filtered.includes(p))
-      onSelectedProductsChange(next)
+      onSelectedMedicosChange(selectedMedicos.filter((m) => !filtered.includes(m)))
     } else {
-      const merged = new Set(selectedProducts)
-      filtered.forEach((p) => merged.add(p))
-      onSelectedProductsChange(Array.from(merged))
+      const merged = new Set(selectedMedicos)
+      filtered.forEach((m) => merged.add(m))
+      onSelectedMedicosChange(Array.from(merged))
     }
   }
 
   return (
     <div className="flex flex-col gap-2">
-      <label className="text-sm font-medium text-white/90">Producto</label>
+      <label className="text-sm font-medium text-white/90">Médico</label>
       <div className="relative w-full" ref={ref}>
         <button
           type="button"
@@ -109,7 +101,9 @@ export function ProductMultiSearchFilter({
           disabled={disabled}
         >
           <span className="truncate">{displayValue}</span>
-          <ChevronDown className={cn("h-4 w-4 opacity-70 shrink-0 transition-transform", open && "rotate-180")} />
+          <ChevronDown
+            className={cn("h-4 w-4 opacity-70 shrink-0 transition-transform", open && "rotate-180")}
+          />
         </button>
         {open && (
           <div className="absolute left-0 right-0 top-full z-[100] mt-1 w-full rounded-md border border-white/20 bg-blue-950/95 backdrop-blur-sm py-2 shadow-xl max-h-72 overflow-hidden flex flex-col">
@@ -122,7 +116,7 @@ export function ProductMultiSearchFilter({
                 >
                   {isAllSelected ? "Deseleccionar todo" : "Seleccionar todo"}
                 </button>
-                {selectedProducts.length > 0 && (
+                {selectedMedicos.length > 0 && (
                   <button
                     type="button"
                     onClick={deselectAll}
@@ -149,41 +143,44 @@ export function ProductMultiSearchFilter({
                   onClick={toggleSelectAllFiltered}
                   className="text-xs text-white/70 hover:text-white transition-colors text-left"
                 >
-                  {filtered.every((p) => selectedSet.has(p)) ? "Deseleccionar resultados" : "Seleccionar resultados"}
+                  {filtered.every((m) => selectedSet.has(m))
+                    ? "Deseleccionar resultados"
+                    : "Seleccionar resultados"}
                 </button>
               )}
             </div>
             <div className="overflow-y-auto max-h-56">
-              {filtered.map((product) => {
-                const checked = selectedSet.has(product)
-                const alias = aliasesByName?.[product]
+              {filtered.map((medico) => {
+                const checked = selectedSet.has(medico)
                 return (
                   <div
-                    key={product}
+                    key={medico}
                     className="flex w-full items-center gap-2 px-3 py-2 text-sm text-left text-white/90"
                   >
                     <span className="shrink-0 flex items-center rounded p-0.5 hover:bg-white/10 focus-within:bg-white/10">
-                      <Checkbox checked={checked} onChange={() => toggleProduct(product)} />
+                      <Checkbox checked={checked} onChange={() => toggleMedico(medico)} />
                     </span>
                     <span
                       role="button"
                       tabIndex={0}
                       className="min-w-0 flex-1 cursor-pointer rounded px-1 py-0.5 outline-none transition-colors hover:bg-white/10 focus-visible:bg-white/10"
-                      onClick={() => selectOnlyProduct(product)}
+                      onClick={() => selectOnlyMedico(medico)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault()
-                          selectOnlyProduct(product)
+                          selectOnlyMedico(medico)
                         }
                       }}
                     >
-                      {alias || displayProductName(product)}
+                      {medico}
                     </span>
                   </div>
                 )
               })}
               {filtered.length === 0 && (
-                <div className="px-3 py-2 text-sm text-white/60 text-center">No se encontraron productos</div>
+                <div className="px-3 py-2 text-sm text-white/60 text-center">
+                  No se encontraron médicos
+                </div>
               )}
             </div>
           </div>
@@ -192,4 +189,3 @@ export function ProductMultiSearchFilter({
     </div>
   )
 }
-

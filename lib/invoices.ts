@@ -26,8 +26,9 @@ export interface InvoiceMetrics {
   paid: number
   notPaid: number
   inPayment: number
-  totalAmount: number
-  paidAmount: number
+  billedAmount: number
+  collectedAmount: number
+  inProcessAmount: number
 }
 
 export interface InvoiceMonthlyPoint {
@@ -37,9 +38,57 @@ export interface InvoiceMonthlyPoint {
   inPayment: number
 }
 
+export interface InvoiceCountryMonthAmounts {
+  months: string[]
+  rows: Array<{
+    country: string
+    values: Record<string, number>
+    total: number
+  }>
+  totalsByMonth: Record<string, number>
+  grandTotal: number
+}
+
+export interface InvoiceCountryMonthPercentages {
+  months: string[]
+  rows: Array<{
+    country: string
+    percentageValues: Record<string, number>
+    collectedAmountValues: Record<string, number>
+  }>
+}
+
 export interface InvoicePageResult {
   rows: InvoiceRow[]
   total: number
+}
+
+function normalizeCountryFromCompany(companyName: string | null): string {
+  const raw = (companyName ?? "").trim()
+  if (!raw) return "Sin país"
+
+  const normalized = raw.toLowerCase()
+  if (normalized.includes("uruguay")) return "Uruguay"
+  if (normalized.includes("chile")) return "Chile"
+  if (normalized.includes("méxico") || normalized.includes("mexico")) return "México"
+  if (normalized.includes("colombia")) return "Colombia"
+  if (normalized.includes("argentina")) return "Argentina"
+  if (normalized.includes("venezuela")) return "Venezuela"
+  return "Sin país"
+}
+
+function monthKeyFromDate(dateValue: string | null): string | null {
+  const date = parseInvoiceDate(dateValue)
+  if (!date || Number.isNaN(date.getTime())) return null
+  return format(date, "yyyy-MM")
+}
+
+function parseInvoiceDate(dateValue: string | null): Date | null {
+  if (!dateValue) return null
+  const parts = dateValue.split("-").map((part) => Number(part))
+  if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) return null
+  const [year, month, day] = parts
+  return new Date(year, month - 1, day)
 }
 
 async function fetchAllInvoices<T>(selectClause: string): Promise<T[]> {
@@ -66,54 +115,44 @@ async function fetchAllInvoices<T>(selectClause: string): Promise<T[]> {
 }
 
 export async function getInvoiceMetrics(): Promise<InvoiceMetrics> {
-  const [totalQ, paidQ, notPaidQ, inPaymentQ, amountRows] = await Promise.all([
-    supabase.from("invoices").select("id", { count: "exact", head: true }),
-    supabase.from("invoices").select("id", { count: "exact", head: true }).eq("payment_state", "paid"),
-    supabase.from("invoices").select("id", { count: "exact", head: true }).eq("payment_state", "not_paid"),
-    supabase.from("invoices").select("id", { count: "exact", head: true }).eq("payment_state", "in_payment"),
-    fetchAllInvoices<Record<string, unknown>>("*"),
-  ])
-
-  if (totalQ.error) throw totalQ.error
-  if (paidQ.error) throw paidQ.error
-  if (notPaidQ.error) throw notPaidQ.error
-  if (inPaymentQ.error) throw inPaymentQ.error
-
-  const amountCandidates = [
-    "amount_total",
-    "amount_total_signed",
-    "price_total",
-    "invoice_total",
-    "total",
-    "amount",
-  ]
-
-  const amountField = amountCandidates.find((field) =>
-    amountRows.some((row) => row[field] !== null && row[field] !== undefined)
+  const data = await fetchAllInvoices<{ payment_state: string | null; total_Amount: number | null }>(
+    "payment_state, total_Amount"
   )
 
-  let totalAmount = 0
-  let paidAmount = 0
-  if (amountField) {
-    for (const row of amountRows) {
-      const value = row[amountField]
-      const numericValue = typeof value === "number" ? value : Number(value)
-      if (Number.isFinite(numericValue)) {
-        totalAmount += numericValue
-        if (row.payment_state === "paid") {
-          paidAmount += numericValue
-        }
-      }
+  let total = 0
+  let paid = 0
+  let notPaid = 0
+  let inPayment = 0
+  let billedAmount = 0
+  let collectedAmount = 0
+  let inProcessAmount = 0
+
+  for (const row of data) {
+    total += 1
+    const amount = row.total_Amount ?? 0
+    billedAmount += amount
+
+    if (row.payment_state === "paid") {
+      paid += 1
+      collectedAmount += amount
+    }
+    if (row.payment_state === "not_paid") {
+      notPaid += 1
+    }
+    if (row.payment_state === "in_payment") {
+      inPayment += 1
+      inProcessAmount += amount
     }
   }
 
   return {
-    total: totalQ.count ?? 0,
-    paid: paidQ.count ?? 0,
-    notPaid: notPaidQ.count ?? 0,
-    inPayment: inPaymentQ.count ?? 0,
-    totalAmount,
-    paidAmount,
+    total,
+    paid,
+    notPaid,
+    inPayment,
+    billedAmount,
+    collectedAmount,
+    inProcessAmount,
   }
 }
 
@@ -136,7 +175,7 @@ export async function getMonthlyInvoicesSummary(): Promise<InvoiceMonthlyPoint[]
   const monthly = new Map<string, InvoiceMonthlyPoint>()
 
   for (const row of data) {
-    const date = row.invoice_date ? new Date(row.invoice_date) : null
+    const date = parseInvoiceDate(row.invoice_date)
     if (!date || Number.isNaN(date.getTime())) continue
     const monthKey = format(date, "yyyy-MM")
     const monthLabel = format(date, "MMM yyyy")
@@ -154,6 +193,104 @@ export async function getMonthlyInvoicesSummary(): Promise<InvoiceMonthlyPoint[]
   return [...monthly.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map((entry) => entry[1])
+}
+
+export async function getCountryMonthAmounts(): Promise<InvoiceCountryMonthAmounts> {
+  const data = await fetchAllInvoices<{
+    invoice_date: string | null
+    company_name: string | null
+    total_Amount: number | null
+  }>("invoice_date, company_name, total_Amount")
+
+  const monthSet = new Set<string>()
+  const matrix = new Map<string, Map<string, number>>()
+
+  for (const row of data) {
+    const monthKey = monthKeyFromDate(row.invoice_date)
+    if (!monthKey) continue
+
+    const country = normalizeCountryFromCompany(row.company_name)
+    const amount = row.total_Amount ?? 0
+
+    monthSet.add(monthKey)
+    if (!matrix.has(country)) matrix.set(country, new Map<string, number>())
+    const monthMap = matrix.get(country)!
+    monthMap.set(monthKey, (monthMap.get(monthKey) ?? 0) + amount)
+  }
+
+  const months = [...monthSet].sort((a, b) => a.localeCompare(b))
+  const totalsByMonth: Record<string, number> = {}
+  for (const month of months) totalsByMonth[month] = 0
+
+  const rows = [...matrix.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([country, monthMap]) => {
+      const values: Record<string, number> = {}
+      let total = 0
+      for (const month of months) {
+        const value = monthMap.get(month) ?? 0
+        values[month] = value
+        totalsByMonth[month] += value
+        total += value
+      }
+      return { country, values, total }
+    })
+
+  const grandTotal = Object.values(totalsByMonth).reduce((acc, value) => acc + value, 0)
+
+  return {
+    months,
+    rows,
+    totalsByMonth,
+    grandTotal,
+  }
+}
+
+export async function getCountryMonthCollectionPercentages(): Promise<InvoiceCountryMonthPercentages> {
+  const data = await fetchAllInvoices<{
+    invoice_date: string | null
+    company_name: string | null
+    payment_state: string | null
+    total_Amount: number | null
+  }>("invoice_date, company_name, payment_state, total_Amount")
+
+  const monthSet = new Set<string>()
+  const billed = new Map<string, Map<string, number>>()
+  const collected = new Map<string, Map<string, number>>()
+
+  for (const row of data) {
+    const monthKey = monthKeyFromDate(row.invoice_date)
+    if (!monthKey) continue
+
+    const country = normalizeCountryFromCompany(row.company_name)
+    const amount = row.total_Amount ?? 0
+
+    monthSet.add(monthKey)
+    if (!billed.has(country)) billed.set(country, new Map<string, number>())
+    if (!collected.has(country)) collected.set(country, new Map<string, number>())
+
+    billed.get(country)!.set(monthKey, (billed.get(country)!.get(monthKey) ?? 0) + amount)
+    if (row.payment_state === "paid" || row.payment_state === "in_payment") {
+      collected.get(country)!.set(monthKey, (collected.get(country)!.get(monthKey) ?? 0) + amount)
+    }
+  }
+
+  const months = [...monthSet].sort((a, b) => a.localeCompare(b))
+  const countries = Array.from(new Set([...billed.keys(), ...collected.keys()])).sort((a, b) => a.localeCompare(b))
+
+  const rows = countries.map((country) => {
+    const percentageValues: Record<string, number> = {}
+    const collectedAmountValues: Record<string, number> = {}
+    for (const month of months) {
+      const billedAmount = billed.get(country)?.get(month) ?? 0
+      const collectedAmount = collected.get(country)?.get(month) ?? 0
+      percentageValues[month] = billedAmount > 0 ? (collectedAmount / billedAmount) * 100 : 0
+      collectedAmountValues[month] = collectedAmount
+    }
+    return { country, percentageValues, collectedAmountValues }
+  })
+
+  return { months, rows }
 }
 
 export async function getInvoicesPage(params: {

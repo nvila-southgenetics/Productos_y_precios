@@ -4,8 +4,9 @@ import { useEffect, useState, useCallback, useMemo, type ReactNode } from "react
 import { supabase } from "@/lib/supabase"
 import { ChevronDown, ChevronRight, Plus, Table2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { displayProductName, displayProductLabelFromName, formatNumber } from "@/lib/utils"
+import { capitalizeFirstLetter, displayProductName, displayProductLabelFromName, formatNumber } from "@/lib/utils"
 import { useProductCreateDialog } from "@/components/products/ProductCreateDialogProvider"
+import { PRODUCT_CATEGORIES_SORTED } from "@/lib/product-categories"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -13,6 +14,13 @@ interface PLTableProps {
   modelo: "budget" | "real"
   year: number
   countries: string[]
+  /**
+   * Filtro explícito de compañías (como en Real Import).
+   * - `null`: no filtrar por compañía (todas)
+   * - `string[]`: filtrar exactamente por esas compañías
+   * - `undefined`: usar el mapeo legacy `countries -> compañías`
+   */
+  salesCompanies?: string[] | null
   categories: string[]
   /** Array vacío = todos. */
   products: string[]
@@ -86,7 +94,8 @@ const COUNTRY_TO_COMPANIES: Record<string, string[]> = {
 const MONTH_KEYS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"] as const
 const MONTH_LABELS = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
 const SHORT_LABELS = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"]
-const KNOWN_PL_CATEGORIES = ["Anualidades", "Endocrinología", "Ginecología", "Oncología", "Otros", "Prenatales", "Urología"] as const
+
+const KNOWN_PL_CATEGORIES = PRODUCT_CATEGORIES_SORTED
 
 const SGA_FIELDS: { key: keyof SGAData; label: string }[] = [
   { key: "salaries_wages", label: "Salaries & Wages" },
@@ -159,12 +168,36 @@ function normalizeProductKey(name: string): string {
     .replace(/[^a-z0-9]/g, "")
 }
 
+// Normalización más tolerante para emparejar variantes típicas en budget/odoo,
+// ej: "v2.0" vs "2.0" (MyProstateScore v2.0 vs MyProstateScore2.0).
+function normalizeProductKeyLoose(name: string): string {
+  return normalizeProductKey(name).replace(/v(?=\d)/g, "")
+}
+
+// Normalización "de matching" para Budget/Forecast:
+// - Reduce diferencias frecuentes entre fuentes (inglés/español, acentos, corchetes, etc.)
+// - No intenta ser fuzzy (sin levenshtein), pero cubre variantes comunes.
+function normalizeBudgetMatchKey(name: string): string {
+  const raw = String(name || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\[.*?\]/g, " ")
+
+  // Equivalencias comunes que rompen matching exacto entre fuentes
+  const canon = raw.replace(/\b(professional|profesional)\b/g, "prof")
+
+  return canon.replace(/[^a-z0-9]/g, "")
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function PLTable({
   modelo,
   year,
   countries,
+  salesCompanies,
   categories,
   products,
   channels,
@@ -211,12 +244,21 @@ export function PLTable({
   const allKnownCategoriesSelected = KNOWN_PL_CATEGORIES.every((c) => categoriesSet.has(c))
   const shouldFilterCategories = categories.length > 0 && !allKnownCategoriesSelected
 
+  const resolveSalesCompanies = useCallback((): string[] | null => {
+    if (salesCompanies !== undefined) return salesCompanies
+    // Legacy: derivar compañías desde países.
+    const companies = countries.flatMap((c) => COUNTRY_TO_COMPANIES[c] || [])
+    return companies.length ? companies : null
+  }, [salesCompanies, countries])
+
   // Dropdowns independientes por fila de totales.
   // Al expandir una fila, se muestra el desglose correspondiente (y dependencias),
   // pero al expandir otra no se cierra esta.
   const [expandedSalesRevenue, setExpandedSalesRevenue] = useState(false)
-  const [expandedGrossProfit, setExpandedGrossProfit] = useState(false)
+  /** Desglose Product Cost … Sales Commission bajo "Total Cost of Sales" (sección independiente de Gross Profit). */
+  const [expandedCostOfSalesBreakdown, setExpandedCostOfSalesBreakdown] = useState(false)
   const [expandedSGA, setExpandedSGA] = useState(false)
+  /** IIBB / income tax bajo Net Income (mismo patrón que SG&A + desglose). */
   const [expandedNetIncome, setExpandedNetIncome] = useState(false)
 
   // SG&A / impuestos se pueden usar tanto en Budget como en Real,
@@ -286,9 +328,17 @@ export function PLTable({
     for (const name of Object.keys(productCategories)) {
       const nk = normalizeProductKey(name)
       if (nk) m.set(nk, name)
+      const nkl = normalizeProductKeyLoose(name)
+      if (nkl) m.set(nkl, name)
+      const nkm = normalizeBudgetMatchKey(name)
+      if (nkm) m.set(nkm, name)
       const alias = productAliases[name]
       const ak = normalizeProductKey(alias || "")
       if (ak) m.set(ak, name)
+      const akl = normalizeProductKeyLoose(alias || "")
+      if (akl) m.set(akl, name)
+      const akm = normalizeBudgetMatchKey(alias || "")
+      if (akm) m.set(akm, name)
     }
     return m
   }, [productCategories, productAliases])
@@ -296,7 +346,22 @@ export function PLTable({
   const resolveToCatalogName = useCallback((raw: string) => {
     const trimmed = String(raw || "").trim()
     if (!trimmed) return ""
-    return catalogKeyToName.get(normalizeProductKey(trimmed)) || trimmed
+    const k1 = normalizeProductKey(trimmed)
+    if (k1) {
+      const hit = catalogKeyToName.get(k1)
+      if (hit) return hit
+    }
+    const k2 = normalizeProductKeyLoose(trimmed)
+    if (k2) {
+      const hit = catalogKeyToName.get(k2)
+      if (hit) return hit
+    }
+    const k3 = normalizeBudgetMatchKey(trimmed)
+    if (k3) {
+      const hit = catalogKeyToName.get(k3)
+      if (hit) return hit
+    }
+    return trimmed
   }, [catalogKeyToName])
 
   const calcMonthModelAt = (monthIdx0: number): MonthModel => {
@@ -373,7 +438,9 @@ export function PLTable({
     if (channels.length) sgaQuery = sgaQuery.in("channel", channels)
 
     if (products.length === 1 && channels.length === 1) {
-      sgaQuery = sgaQuery.eq("product_name", product).eq("channel", channels[0])
+      const canonical = resolveToCatalogName(product)
+      const candidates = Array.from(new Set([product, canonical].filter(Boolean)))
+      sgaQuery = sgaQuery.in("product_name", candidates).eq("channel", channels[0])
     } else {
       sgaQuery = sgaQuery.neq("product_name", "").neq("channel", "")
     }
@@ -391,11 +458,15 @@ export function PLTable({
       )
     }
 
-    const selectedProducts = products.length > 0 ? new Set(products) : null
+    // En UI podemos mostrar alias (p.ej. "Unity") aunque en pl_sga esté guardado el nombre canónico
+    // (p.ej. "Unity Básico"). Comparamos siempre por nombre canónico.
+    const selectedProducts =
+      products.length > 0 ? new Set(products.map((p) => resolveToCatalogName(p)).filter(Boolean)) : null
     for (const row of data || []) {
       const rowProduct = String((row as any).product_name || "")
       if (!rowProduct) continue
-      if (selectedProducts && !selectedProducts.has(rowProduct)) continue
+      const rowCanonical = resolveToCatalogName(rowProduct)
+      if (selectedProducts && !selectedProducts.has(rowCanonical)) continue
       if (allowedProductsByCategory && !allowedProductsByCategory.has(rowProduct)) continue
       const idx = Number((row as any).month) - 1
       if (idx < 0 || idx >= 12) continue
@@ -437,6 +508,8 @@ export function PLTable({
         const prodId = ((row as any).product_id as string | null) || ""
         const name = (row as any).product_name as string
         const rowChannel = ((row as any).channel as string) || ""
+        const nameNorm = normalizeProductKeyLoose(name)
+        const nameMatch = normalizeBudgetMatchKey(name)
 
         const idChannelKey = prodId ? `${prodId}|${rowChannel}` : ""
         const idPacienteKey = prodId ? `${prodId}|Paciente` : ""
@@ -444,6 +517,12 @@ export function PLTable({
         const nameChannelKey = `${name}|${rowChannel}`
         const namePacienteKey = `${name}|Paciente`
         const nameBaseKey = `${name}|`
+        const normChannelKey = nameNorm ? `${nameNorm}|${rowChannel}` : ""
+        const normPacienteKey = nameNorm ? `${nameNorm}|Paciente` : ""
+        const normBaseKey = nameNorm ? `${nameNorm}|` : ""
+        const matchChannelKey = nameMatch ? `${nameMatch}|${rowChannel}` : ""
+        const matchPacienteKey = nameMatch ? `${nameMatch}|Paciente` : ""
+        const matchBaseKey = nameMatch ? `${nameMatch}|` : ""
 
         const ov =
           (idChannelKey && ovs[idChannelKey]) ||
@@ -452,6 +531,12 @@ export function PLTable({
           ovs[nameChannelKey] ||
           ovs[namePacienteKey] ||
           ovs[nameBaseKey] ||
+          (normChannelKey && ovs[normChannelKey]) ||
+          (normPacienteKey && ovs[normPacienteKey]) ||
+          (normBaseKey && ovs[normBaseKey]) ||
+          (matchChannelKey && ovs[matchChannelKey]) ||
+          (matchPacienteKey && ovs[matchPacienteKey]) ||
+          (matchBaseKey && ovs[matchBaseKey]) ||
           emptyOverride()
 
         const units = Number((row as any)[MONTH_KEYS[mIdx] as any] || 0)
@@ -613,24 +698,39 @@ export function PLTable({
             aliases[name] = alias || ""
             const nameKey = normalizeProductKey(name)
             if (nameKey) saleKeyToCatalogName.set(nameKey, name)
+            const nameKeyLoose = normalizeProductKeyLoose(name)
+            if (nameKeyLoose) saleKeyToCatalogName.set(nameKeyLoose, name)
+            const nameKeyMatch = normalizeBudgetMatchKey(name)
+            if (nameKeyMatch) saleKeyToCatalogName.set(nameKeyMatch, name)
+
             const aliasKey = normalizeProductKey(alias)
             if (aliasKey) saleKeyToCatalogName.set(aliasKey, name)
+            const aliasKeyLoose = normalizeProductKeyLoose(alias)
+            if (aliasKeyLoose) saleKeyToCatalogName.set(aliasKeyLoose, name)
+            const aliasKeyMatch = normalizeBudgetMatchKey(alias)
+            if (aliasKeyMatch) saleKeyToCatalogName.set(aliasKeyMatch, name)
           }
 
-          const companies = countries.flatMap((c) => COUNTRY_TO_COMPANIES[c] || [])
-          if (companies.length) {
-            const { data } = await supabase
-              .from("ventas_mensuales_view")
-              .select("producto, mes, cantidad_ventas, monto_total, compañia")
-              .eq("año", forYear)
-              .in("compañia", companies)
+          const companies = resolveSalesCompanies()
+          let qSales = supabase
+            .from("ventas_mensuales_view")
+            .select("producto, mes, cantidad_ventas, monto_total, compañia")
+            .eq("año", forYear)
+          if (companies && companies.length) qSales = qSales.in("compañia", companies)
+
+          {
+            const { data } = await qSales
 
             const categorySet = shouldFilterCategories ? categoriesSet : null
             const selectedProductKeys = new Set((products || []).map((p) => normalizeProductKey(p)))
             for (const row of (data || []) as any[]) {
               const rawName = row.producto as string
               if (!rawName) continue
-              const resolvedName = saleKeyToCatalogName.get(normalizeProductKey(rawName)) || rawName
+              const resolvedName =
+                saleKeyToCatalogName.get(normalizeProductKey(rawName)) ||
+                saleKeyToCatalogName.get(normalizeProductKeyLoose(rawName)) ||
+                saleKeyToCatalogName.get(normalizeBudgetMatchKey(rawName)) ||
+                rawName
               if (selectedProductKeys.size > 0 && !selectedProductKeys.has(normalizeProductKey(resolvedName))) continue
               if (categorySet) {
                 const knownCategory = cats[resolvedName]
@@ -744,24 +844,38 @@ export function PLTable({
           aliases[name] = alias || ""
           const nameKey = normalizeProductKey(name)
           if (nameKey) saleKeyToCatalogName.set(nameKey, name)
+          const nameKeyLoose = normalizeProductKeyLoose(name)
+          if (nameKeyLoose) saleKeyToCatalogName.set(nameKeyLoose, name)
+          const nameKeyMatch = normalizeBudgetMatchKey(name)
+          if (nameKeyMatch) saleKeyToCatalogName.set(nameKeyMatch, name)
           const aliasKey = normalizeProductKey(alias)
           if (aliasKey) saleKeyToCatalogName.set(aliasKey, name)
+          const aliasKeyLoose = normalizeProductKeyLoose(alias)
+          if (aliasKeyLoose) saleKeyToCatalogName.set(aliasKeyLoose, name)
+          const aliasKeyMatch = normalizeBudgetMatchKey(alias)
+          if (aliasKeyMatch) saleKeyToCatalogName.set(aliasKeyMatch, name)
         }
 
-        const companies = countries.flatMap((c) => COUNTRY_TO_COMPANIES[c] || [])
-        if (companies.length) {
-          const { data } = await supabase
-            .from("ventas_mensuales_view")
-            .select("producto, mes, cantidad_ventas, monto_total, compañia")
-            .eq("año", forYear)
-            .in("compañia", companies)
+        const companies = resolveSalesCompanies()
+        let qSales = supabase
+          .from("ventas_mensuales_view")
+          .select("producto, mes, cantidad_ventas, monto_total, compañia")
+          .eq("año", forYear)
+        if (companies && companies.length) qSales = qSales.in("compañia", companies)
+
+        {
+          const { data } = await qSales
 
           const categorySet = shouldFilterCategories ? categoriesSet : null
           const selectedProductKeys = new Set((products || []).map((p) => normalizeProductKey(p)))
           for (const row of (data || []) as any[]) {
             const rawName = row.producto as string
             if (!rawName) continue
-            const resolvedName = saleKeyToCatalogName.get(normalizeProductKey(rawName)) || rawName
+            const resolvedName =
+              saleKeyToCatalogName.get(normalizeProductKey(rawName)) ||
+              saleKeyToCatalogName.get(normalizeProductKeyLoose(rawName)) ||
+              saleKeyToCatalogName.get(normalizeBudgetMatchKey(rawName)) ||
+              rawName
             if (selectedProductKeys.size > 0 && !selectedProductKeys.has(normalizeProductKey(resolvedName))) continue
             if (categorySet) {
               const knownCategory = cats[resolvedName]
@@ -878,8 +992,38 @@ export function PLTable({
       aliases[name] = alias || ""
       const nameKey = normalizeProductKey(name)
       if (nameKey) saleKeyToCatalogName.set(nameKey, name)
+      const nameKeyLoose = normalizeProductKeyLoose(name)
+      if (nameKeyLoose) saleKeyToCatalogName.set(nameKeyLoose, name)
+      const nameKeyMatch = normalizeBudgetMatchKey(name)
+      if (nameKeyMatch) saleKeyToCatalogName.set(nameKeyMatch, name)
+
       const aliasKey = normalizeProductKey(alias)
       if (aliasKey) saleKeyToCatalogName.set(aliasKey, name)
+      const aliasKeyLoose = normalizeProductKeyLoose(alias)
+      if (aliasKeyLoose) saleKeyToCatalogName.set(aliasKeyLoose, name)
+      const aliasKeyMatch = normalizeBudgetMatchKey(alias)
+      if (aliasKeyMatch) saleKeyToCatalogName.set(aliasKeyMatch, name)
+    }
+
+    const resolveCatalogNameFromSaleText = (rawName: string): string => {
+      const trimmed = String(rawName || "").trim()
+      if (!trimmed) return ""
+      const k1 = normalizeProductKey(trimmed)
+      if (k1) {
+        const hit = saleKeyToCatalogName.get(k1)
+        if (hit) return hit
+      }
+      const k2 = normalizeProductKeyLoose(trimmed)
+      if (k2) {
+        const hit = saleKeyToCatalogName.get(k2)
+        if (hit) return hit
+      }
+      const k3 = normalizeBudgetMatchKey(trimmed)
+      if (k3) {
+        const hit = saleKeyToCatalogName.get(k3)
+        if (hit) return hit
+      }
+      return trimmed
     }
 
     if (modelo === "budget") {
@@ -909,7 +1053,7 @@ export function PLTable({
 
       for (const row of data as Record<string, unknown>[]) {
         const rawName = row.product_name as string
-        const resolvedName = saleKeyToCatalogName.get(normalizeProductKey(rawName)) || rawName
+        const resolvedName = resolveCatalogNameFromSaleText(rawName)
         if (allowedProds && !allowedProds.has(resolvedName)) continue
         // Normalizar product_name al nombre canónico del catálogo para que:
         // - no aparezca el "+" si el budget usa alias
@@ -923,14 +1067,14 @@ export function PLTable({
     } else {
       // Modo REAL: no usamos budgetRows
       setBudgetRows([])
-      const companies = countries.flatMap((c) => COUNTRY_TO_COMPANIES[c] || [])
-      if (!companies.length) { setQuantities({}); setOdooAmounts({}); setProductCategories(cats); return }
-
-      const { data } = await supabase
+      const companies = resolveSalesCompanies()
+      let qSales = supabase
         .from("ventas_mensuales_view")
         .select("producto, mes, cantidad_ventas, monto_total, compañia")
         .eq("año", year)
-        .in("compañia", companies)
+      if (companies && companies.length) qSales = qSales.in("compañia", companies)
+
+      const { data } = await qSales
 
       if (!data) { setProductCategories(cats); setProductAliases(aliases); return }
 
@@ -943,7 +1087,7 @@ export function PLTable({
       for (const row of data as { producto: string; mes: number; cantidad_ventas: number | string | null; monto_total?: number | string | null; compañia: string | null }[]) {
         const rawName = row.producto
         if (!rawName) continue
-        const resolvedName = saleKeyToCatalogName.get(normalizeProductKey(rawName)) || rawName
+        const resolvedName = resolveCatalogNameFromSaleText(rawName)
         if (selectedProductKeys.size > 0 && !selectedProductKeys.has(normalizeProductKey(resolvedName))) continue
 
         if (categorySet) {
@@ -1022,22 +1166,45 @@ export function PLTable({
       if (products.length > 0 && !products.includes(name)) continue
 
       const o = row.overrides || {}
-      const key = `${prodId}|${row.channel || ""}`
-      const prev = ovs[key] || emptyOverride()
+      const ch = row.channel || ""
+      const idKey = `${prodId}|${ch}`
+      const nameKey = `${name}|${ch}`
+      const normName = normalizeProductKeyLoose(name)
+      const normKey = normName ? `${normName}|${ch}` : ""
+      const matchName = normalizeBudgetMatchKey(name)
+      const matchKey = matchName ? `${matchName}|${ch}` : ""
 
-      ovs[key] = {
-        grossSalesUSD: prev.grossSalesUSD + (o.grossSalesUSD || 0),
-        commercialDiscountUSD: prev.commercialDiscountUSD + (o.commercialDiscountUSD || 0),
-        productCostUSD: prev.productCostUSD + (o.productCostUSD || 0),
-        kitCostUSD: prev.kitCostUSD + (o.kitCostUSD || 0),
-        paymentFeeUSD: prev.paymentFeeUSD + (o.paymentFeeUSD || 0),
-        bloodDrawSampleUSD: prev.bloodDrawSampleUSD + (o.bloodDrawSampleUSD || 0),
-        sanitaryPermitsUSD: prev.sanitaryPermitsUSD + (o.sanitaryPermitsUSD || 0),
-        externalCourierUSD: prev.externalCourierUSD + (o.externalCourierUSD || 0),
-        internalCourierUSD: prev.internalCourierUSD + (o.internalCourierUSD || 0),
-        physiciansFeesUSD: prev.physiciansFeesUSD + (o.physiciansFeesUSD || 0),
-        salesCommissionUSD: prev.salesCommissionUSD + (o.salesCommissionUSD || 0),
+      const addToKey = (key: string) => {
+        const prev = ovs[key] || emptyOverride()
+        ovs[key] = {
+          grossSalesUSD: prev.grossSalesUSD + (o.grossSalesUSD || 0),
+          commercialDiscountUSD: prev.commercialDiscountUSD + (o.commercialDiscountUSD || 0),
+          productCostUSD: prev.productCostUSD + (o.productCostUSD || 0),
+          kitCostUSD: prev.kitCostUSD + (o.kitCostUSD || 0),
+          paymentFeeUSD: prev.paymentFeeUSD + (o.paymentFeeUSD || 0),
+          bloodDrawSampleUSD: prev.bloodDrawSampleUSD + (o.bloodDrawSampleUSD || 0),
+          sanitaryPermitsUSD: prev.sanitaryPermitsUSD + (o.sanitaryPermitsUSD || 0),
+          externalCourierUSD: prev.externalCourierUSD + (o.externalCourierUSD || 0),
+          internalCourierUSD: prev.internalCourierUSD + (o.internalCourierUSD || 0),
+          physiciansFeesUSD: prev.physiciansFeesUSD + (o.physiciansFeesUSD || 0),
+          salesCommissionUSD: prev.salesCommissionUSD + (o.salesCommissionUSD || 0),
+        }
       }
+
+      // Soportar budget rows con product_id NULL:
+      // - claves por id|canal (principal)
+      // - claves por name|canal (fallback)
+      // - claves por name normalizado|canal (fallback tolerante)
+      // - claves por matchKey|canal (fallback para variantes frecuentes)
+      // - y claves base sin canal (fallback)
+      addToKey(idKey)
+      addToKey(nameKey)
+      if (normKey) addToKey(normKey)
+      if (matchKey) addToKey(matchKey)
+      addToKey(`${prodId}|`)
+      addToKey(`${name}|`)
+      if (normName) addToKey(`${normName}|`)
+      if (matchName) addToKey(`${matchName}|`)
     }
 
     setBudgetOverrides(ovs)
@@ -1158,7 +1325,9 @@ export function PLTable({
 
     if (products.length === 1 && channels.length === 1) {
       // Specific product+channel → load that specific row
-      sgaQuery = sgaQuery.eq("product_name", product).eq("channel", channels[0])
+      const canonical = resolveToCatalogName(product)
+      const candidates = Array.from(new Set([product, canonical].filter(Boolean)))
+      sgaQuery = sgaQuery.in("product_name", candidates).eq("channel", channels[0])
     } else {
       // Aggregate all product/channel rows (exclude the tax-only country-level row)
       sgaQuery = sgaQuery.neq("product_name", "").neq("channel", "")
@@ -1178,12 +1347,15 @@ export function PLTable({
       )
     }
 
-    const selectedProducts = products.length > 0 ? new Set(products) : null
+    // Ver comentario en fetchSGAFor: el filtro por producto debe matchear por nombre canónico
+    const selectedProducts =
+      products.length > 0 ? new Set(products.map((p) => resolveToCatalogName(p)).filter(Boolean)) : null
     const usedRows: any[] = []
     for (const row of sgaData || []) {
       const rowProduct = String(row.product_name || "")
       if (!rowProduct) continue
-      if (selectedProducts && !selectedProducts.has(rowProduct)) continue
+      const rowCanonical = resolveToCatalogName(rowProduct)
+      if (selectedProducts && !selectedProducts.has(rowCanonical)) continue
       if (allowedProductsByCategory && !allowedProductsByCategory.has(rowProduct)) continue
 
       const idx = row.month - 1
@@ -1335,13 +1507,88 @@ export function PLTable({
 
   const detailData = (() => {
     if (combineEnabled) {
-      return buildCombinedDetail()
+      // En modo combinar, el detalle solo soporta Gross Sale para meses "real" (odooAmounts) por ahora.
+      const built = buildCombinedDetail()
+      return { ...built, grossSale: built.odoo }
     }
     // No combinar: usar los estados actuales.
     // En real, Gross Sales viene de Odoo (odooAmounts). En budget/test no tenemos Odoo.
+    const grossSale: Record<string, number[]> = {}
+    const ensureArr = (m: Record<string, number[]>, key: string) => {
+      if (!m[key]) m[key] = Array(12).fill(0)
+      return m[key]
+    }
+
+    if (modelo === "real") {
+      // Real: usar directamente montos importados de Odoo por producto y mes
+      for (const [rawName, arr] of Object.entries(odooAmounts)) {
+        const name = resolveToCatalogName(rawName)
+        const outArr = ensureArr(grossSale, name)
+        for (let i = 0; i < 12; i++) outArr[i] += (arr[i] || 0)
+      }
+    } else if (modelo === "budget" && !testMode) {
+      // Budget: calcular gross sale desde budgetRows + override por unidad (por canal cuando corresponda)
+      const pickBudgetOv = (row: any): OverrideData => {
+        const prodId = String(row?.product_id || "")
+        const name = resolveToCatalogName(String(row?.product_name || ""))
+        const rowChannel = String(row?.channel || "")
+        const nameNorm = normalizeProductKeyLoose(name)
+        const nameMatch = normalizeBudgetMatchKey(name)
+        const idChannelKey = prodId ? `${prodId}|${rowChannel}` : ""
+        const idPacienteKey = prodId ? `${prodId}|Paciente` : ""
+        const idBaseKey = prodId ? `${prodId}|` : ""
+        const nameChannelKey = `${name}|${rowChannel}`
+        const namePacienteKey = `${name}|Paciente`
+        const nameBaseKey = `${name}|`
+        const normChannelKey = nameNorm ? `${nameNorm}|${rowChannel}` : ""
+        const normPacienteKey = nameNorm ? `${nameNorm}|Paciente` : ""
+        const normBaseKey = nameNorm ? `${nameNorm}|` : ""
+        const matchChannelKey = nameMatch ? `${nameMatch}|${rowChannel}` : ""
+        const matchPacienteKey = nameMatch ? `${nameMatch}|Paciente` : ""
+        const matchBaseKey = nameMatch ? `${nameMatch}|` : ""
+        return (
+          (idChannelKey && budgetOverrides[idChannelKey]) ||
+          (idPacienteKey && budgetOverrides[idPacienteKey]) ||
+          (idBaseKey && budgetOverrides[idBaseKey]) ||
+          budgetOverrides[nameChannelKey] ||
+          budgetOverrides[namePacienteKey] ||
+          budgetOverrides[nameBaseKey] ||
+          (normChannelKey && budgetOverrides[normChannelKey]) ||
+          (normPacienteKey && budgetOverrides[normPacienteKey]) ||
+          (normBaseKey && budgetOverrides[normBaseKey]) ||
+          (matchChannelKey && budgetOverrides[matchChannelKey]) ||
+          (matchPacienteKey && budgetOverrides[matchPacienteKey]) ||
+          (matchBaseKey && budgetOverrides[matchBaseKey]) ||
+          emptyOverride()
+        )
+      }
+
+      for (const row of (budgetRows || []) as any[]) {
+        const name = resolveToCatalogName(String(row?.product_name || ""))
+        if (!name) continue
+        const ov = pickBudgetOv(row)
+        const outArr = ensureArr(grossSale, name)
+        for (let i = 0; i < 12; i++) {
+          const units = Number(row[MONTH_KEYS[i] as any] || 0)
+          if (units === 0) continue
+          outArr[i] += (ov.grossSalesUSD || 0) * units
+        }
+      }
+    }
+
+    // Modo híbrido forecast Q1: para Q1, usar montos reales (Odoo) por producto si están disponibles.
+    if (hybridForecastQ1Enabled && hybridRealSnapshot?.odooAmounts) {
+      for (const [rawName, arr] of Object.entries(hybridRealSnapshot.odooAmounts)) {
+        const name = resolveToCatalogName(rawName)
+        const outArr = ensureArr(grossSale, name)
+        for (let i = 0; i <= 2; i++) outArr[i] = (arr[i] || 0)
+      }
+    }
+
     return {
       qty: activeQuantities,
       odoo: modelo === "real" ? odooAmounts : {},
+      grossSale,
     }
   })()
 
@@ -1365,13 +1612,15 @@ export function PLTable({
       : [baseMonthModel]
     for (const m of models) {
       const snap = combineEnabled ? combinedSnapshots[m] : (hybridForecastQ1Enabled && m === "real_2026" ? hybridRealSnapshot : null)
-      if ((combineEnabled || hybridForecastQ1Enabled) && m === "real_2026" && !snap) continue
+      // Combinar: en el primer render los snapshots pueden no estar aún (loading aún false un tick).
+      if (combineEnabled && !snap) continue
+      if (hybridForecastQ1Enabled && m === "real_2026" && !snap) continue
 
       if (m.startsWith("budget:")) {
-        const rows = combineEnabled ? (snap!.budgetRows || []) : (budgetRows || [])
-        const ovs = combineEnabled ? (snap!.budgetOverrides || {}) : (budgetOverrides || {})
-        const sgaArr = combineEnabled ? snap!.sga : sga
-        const taxArr = combineEnabled ? snap!.tax : taxRates
+        const rows = combineEnabled ? (snap?.budgetRows || []) : (budgetRows || [])
+        const ovs = combineEnabled ? (snap?.budgetOverrides || {}) : (budgetOverrides || {})
+        const sgaArr = combineEnabled ? (snap?.sga || Array.from({ length: 12 }, emptySGA)) : sga
+        const taxArr = combineEnabled ? (snap?.tax || Array.from({ length: 12 }, emptyTax)) : taxRates
 
         const grossSales = computeMonthlyBudgetField(rows, ovs, "grossSalesUSD")
         const commercialDiscount = computeMonthlyBudgetField(rows, ovs, "commercialDiscountUSD")
@@ -1414,11 +1663,11 @@ export function PLTable({
           ),
         }
       } else {
-        const qty = (combineEnabled || hybridForecastQ1Enabled) ? (snap!.quantities || {}) : quantities
-        const amts = (combineEnabled || hybridForecastQ1Enabled) ? (snap!.odooAmounts || {}) : odooAmounts
-        const ovs = (combineEnabled || hybridForecastQ1Enabled) ? (snap!.overrides || {}) : overrides
-        const sgaArr = (combineEnabled || hybridForecastQ1Enabled) ? snap!.sga : sga
-        const taxArr = (combineEnabled || hybridForecastQ1Enabled) ? snap!.tax : taxRates
+        const qty = (combineEnabled || hybridForecastQ1Enabled) ? (snap?.quantities || {}) : quantities
+        const amts = (combineEnabled || hybridForecastQ1Enabled) ? (snap?.odooAmounts || {}) : odooAmounts
+        const ovs = (combineEnabled || hybridForecastQ1Enabled) ? (snap?.overrides || {}) : overrides
+        const sgaArr = (combineEnabled || hybridForecastQ1Enabled) ? (snap?.sga || Array.from({ length: 12 }, emptySGA)) : sga
+        const taxArr = (combineEnabled || hybridForecastQ1Enabled) ? (snap?.tax || Array.from({ length: 12 }, emptyTax)) : taxRates
 
         const grossSales = computeMonthlyRealGrossSalesFromOdoo(amts)
         const commercialDiscount = computeMonthlyRealField(qty, ovs, "commercialDiscountUSD")
@@ -1464,6 +1713,16 @@ export function PLTable({
     }
 
     return out as Record<string, (ReturnType<typeof computeNetIncomeChain> & any)>
+  }
+
+  // Importante: no calcular líneas ni helpers de tabla hasta tener datos en modo combinar
+  // (si no, el primer render después de togglear puede crashear con snapshots vacíos).
+  if (loading || (combineEnabled && !combineReady)) {
+    return (
+      <div className="flex items-center justify-center py-20 text-white/60 text-sm">
+        {combineError ? `Error en combinar: ${combineError}` : "Cargando datos..."}
+      </div>
+    )
   }
 
   const modelLines = computeAllModelLines()
@@ -1548,7 +1807,8 @@ export function PLTable({
     const items: { channel: string; product: string; amount: number }[] = []
     for (const r of rows as any[]) {
       const channel = String(r?.channel || "(sin canal)")
-      const product = String(r?.product_name || "(sin producto)")
+      const rawProduct = String(r?.product_name || "(sin producto)")
+      const product = productAliases?.[rawProduct] || rawProduct
       let amount = 0
       if (field === "TOTAL") {
         for (const f of SGA_FIELDS) amount += Number(r?.[f.key] || 0)
@@ -1653,17 +1913,26 @@ export function PLTable({
   // ── Render helpers ────────────────────────────────────────────────────────
 
   const cellCls = "text-right px-2 py-1.5 text-xs whitespace-nowrap tabular-nums"
-  const stickyLabel = (bold = false, section = false, prominent = false, forceGray = false) =>
+  /** `calculatedHighlight`: filas de resultado (GP / Net Income) vs encabezados de sección (SG&A, etc.). */
+  const stickyLabel = (
+    bold = false,
+    section = false,
+    prominent = false,
+    forceGray = false,
+    calculatedHighlight = false
+  ) =>
     `sticky left-0 px-3 ${
       prominent ? "py-2.5 text-sm" : "py-1.5 text-xs"
     } whitespace-nowrap z-10 min-w-[220px] ${
-      section
-        ? "bg-slate-600/95 font-semibold text-white/60 uppercase tracking-wider"
-        : forceGray
-          ? "bg-slate-700/40 border-y border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] font-extrabold tracking-wide text-white"
-          : bold
-            ? `bg-slate-700/95 ${prominent ? "font-extrabold tracking-wide text-white" : "font-bold text-white"}`
-            : "bg-slate-800/95 text-white/80"
+      calculatedHighlight
+        ? "bg-indigo-950/70 border-y border-cyan-500/35 shadow-[inset_0_1px_0_rgba(34,211,238,0.08)] font-extrabold tracking-wide text-cyan-50"
+        : section
+          ? "bg-slate-600/95 font-semibold text-white/60 uppercase tracking-wider"
+          : forceGray
+            ? "bg-slate-700/40 border-y border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] font-extrabold tracking-wide text-white"
+            : bold
+              ? `bg-slate-700/95 ${prominent ? "font-extrabold tracking-wide text-white" : "font-bold text-white"}`
+              : "bg-slate-800/95 text-white/80"
     }`
 
   // Render a standard P&L row
@@ -1678,6 +1947,7 @@ export function PLTable({
     colorClass,
     prominent = false,
     forceGray = false,
+    calculatedHighlight = false,
     cellTitle,
     formatValue,
   }: {
@@ -1692,12 +1962,16 @@ export function PLTable({
     prominent?: boolean
     // Forzar color gris/neutral en totales clave.
     forceGray?: boolean
+    /** Resaltado suave (indigo/cyan) para totales calculados: Gross Profit, Net Income. */
+    calculatedHighlight?: boolean
     cellTitle?: (monthIdx: number) => string | undefined
     formatValue?: (val: number) => string
   }) => {
     const ytdVal = periodSum(values)
     const totalVal = sum(values)
-    const rowCls = forceGray
+    const rowCls = calculatedHighlight
+      ? "bg-indigo-950/45 border-y border-cyan-500/25 shadow-[inset_0_1px_0_rgba(34,211,238,0.06)]"
+      : forceGray
       ? "bg-slate-700/40 border-y border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
       : section
       ? "bg-slate-600/30 border-t border-white/20"
@@ -1706,7 +1980,9 @@ export function PLTable({
       : bold
       ? "bg-slate-700/40 border-t border-white/10"
       : "hover:bg-white/5"
-    const numColor = colorClass
+    const numColor = calculatedHighlight
+      ? "text-cyan-100"
+      : colorClass
       ? colorClass
       : negative
       ? "text-rose-300"
@@ -1721,7 +1997,7 @@ export function PLTable({
 
     return (
       <tr className={`${rowCls} transition-colors`}>
-        <td className={stickyLabel(bold, section, prominent, forceGray)}>
+        <td className={stickyLabel(bold, section, prominent, forceGray, calculatedHighlight)}>
           <span className={`${labelSizeCls} ${labelWeightCls}`}>
             {indent ? (
               <span className="ml-4">{labelNode ?? label}</span>
@@ -1874,22 +2150,10 @@ export function PLTable({
   // Booleans del desglose según filas expandidas (independientes).
   const zero12 = Array.from({ length: 12 }, () => 0)
 
-  const showGrossSalesAndDiscount =
-    expandedSalesRevenue || expandedGrossProfit || expandedNetIncome
-  const showCostOfSales = expandedGrossProfit || expandedNetIncome
+  const showGrossSalesAndDiscount = expandedSalesRevenue
   // En modo combinar, deshabilitamos desglose editable por campo (SGA/tasas) porque el modelo puede cambiar por mes.
-  const showSGAFields = !combineEnabled && financialEnabled && (expandedSGA || expandedNetIncome)
+  const showSGAFields = !combineEnabled && financialEnabled && expandedSGA
   const showTaxRows = !combineEnabled && financialEnabled && expandedNetIncome
-
-  // ── Loading ───────────────────────────────────────────────────────────────
-
-  if (loading || (combineEnabled && !combineReady)) {
-    return (
-      <div className="flex items-center justify-center py-20 text-white/60 text-sm">
-        {combineError ? `Error en combinar: ${combineError}` : "Cargando datos..."}
-      </div>
-    )
-  }
 
   const netColor = sum(netIncome) >= 0 ? "text-emerald-300" : "text-red-400"
 
@@ -1942,9 +2206,15 @@ export function PLTable({
                         className="h-7 w-[86px] rounded-md border border-white/20 bg-white/10 px-2 text-[11px] text-white"
                         title="Modelo del mes"
                       >
-                        <option value={`budget:${budgetName}`} className="bg-blue-900 text-white">Budget</option>
-                        <option value="real_2026" className="bg-blue-900 text-white">Real 2026</option>
-                        <option value="real_2025" className="bg-blue-900 text-white">Real 2025</option>
+                        <option value={`budget:${budgetName}`} className="bg-blue-900 text-white">
+                          {capitalizeFirstLetter(budgetName)}
+                        </option>
+                        <option value="real_2026" className="bg-blue-900 text-white">
+                          {capitalizeFirstLetter("Real 2026")}
+                        </option>
+                        <option value="real_2025" className="bg-blue-900 text-white">
+                          {capitalizeFirstLetter("Real 2025")}
+                        </option>
                       </select>
                     )}
                   </div>
@@ -2025,8 +2295,8 @@ export function PLTable({
                 colorClass="text-white"
               />
 
-              {/* ─ Cost of Sales (sin título) ─────────────────────────── */}
-              {showCostOfSales && (
+              {/* ─ Total Cost of Sales (sección propia; no depende de Gross Profit) ─ */}
+              {expandedCostOfSalesBreakdown && (
                 <>
                   <Row label="Product Cost" values={productCost} negative indent />
                   <Row label="Kit Cost" values={kitCost} negative indent />
@@ -2037,37 +2307,42 @@ export function PLTable({
                   <Row label="Internal Courier" values={intCourier} negative indent />
                   <Row label="Physicians Fees" values={physiciansFees} negative indent />
                   <Row label="Sales Commission" values={salesCommission} negative indent />
-                  <Row label="Total Cost of Sales" values={totalCOS} bold negative />
                 </>
               )}
-
-              {/* ─ Gross Profit (gris/neutral) ─────────────────────────── */}
               <Row
-                label="Gross Profit"
+                label="Total Cost of Sales"
                 labelNode={
                   <span className="inline-flex items-center gap-2">
-                    <span>Gross Profit</span>
+                    <span>Total Cost of Sales</span>
                     <button
                       type="button"
-                      onClick={() => {
-                        setExpandedGrossProfit((v) => !v)
-                      }}
+                      onClick={() => setExpandedCostOfSalesBreakdown((v) => !v)}
                       className="p-0.5 text-white/70 hover:text-white"
-                      aria-label="Alternar desglose Gross Profit"
+                      aria-label="Alternar desglose Total Cost of Sales"
                     >
                       <ChevronDown
                         className={`h-4 w-4 transition-transform ${
-                          expandedGrossProfit ? "rotate-0" : "-rotate-90"
+                          expandedCostOfSalesBreakdown ? "rotate-0" : "-rotate-90"
                         }`}
                       />
                     </button>
                   </span>
                 }
-                values={grossProfit}
+                values={totalCOS}
                 bold
                 prominent
                 forceGray
+                negative
                 colorClass="text-white"
+              />
+
+              {/* ─ Gross Profit = Sales Revenue − Total Cost of Sales (sin desglose anidado) ─ */}
+              <Row
+                label="Gross Profit"
+                values={grossProfit}
+                bold
+                prominent
+                calculatedHighlight
               />
 
               {/* ─ SG&A (sin título) ──────────────────────────────────── */}
@@ -2109,7 +2384,7 @@ export function PLTable({
                 formatValue={(v) => fmtSga(v)}
               />
 
-              {/* ─ Taxes (sin título) ─────────────────────────────────── */}
+              {/* ─ Net Income: desglose IIBB / income tax arriba del total (mismo patrón que SG&A) ─ */}
               {showTaxRows && (
                 <>
                   <TaxConfigRow field="iibb_pct" label="IIBB — tasa (% sobre revenue)" />
@@ -2118,35 +2393,41 @@ export function PLTable({
                   <Row label="Income tax (% sobre ganancia)" values={incomeTax} negative indent />
                 </>
               )}
-
-              {/* ─ Net Income (gris/neutral) ──────────────────────────── */}
               <Row
                 label="Net Income"
                 labelNode={
-                  <span className="inline-flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={!financialEnabled || combineEnabled}
+                    aria-expanded={
+                      financialEnabled && !combineEnabled ? expandedNetIncome : undefined
+                    }
+                    aria-label="Alternar desglose Net Income (IIBB e income tax)"
+                    className={`inline-flex max-w-full items-center gap-2 rounded px-0.5 py-0.5 text-left font-inherit -m-0.5 ${
+                      financialEnabled && !combineEnabled
+                        ? "text-inherit hover:bg-white/10 cursor-pointer"
+                        : "cursor-not-allowed opacity-60"
+                    }`}
+                    onClick={() => {
+                      if (!financialEnabled || combineEnabled) return
+                      setExpandedNetIncome((v) => !v)
+                    }}
+                  >
                     <span>Net Income</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!financialEnabled) return
-                        setExpandedNetIncome((v) => !v)
-                      }}
-                      className={`p-0.5 ${financialEnabled ? "text-white/70 hover:text-white" : "text-white/20 cursor-not-allowed"}`}
-                      aria-label="Alternar desglose Net Income"
-                    >
-                      <ChevronDown
-                        className={`h-4 w-4 transition-transform ${
-                          financialEnabled && expandedNetIncome ? "rotate-0" : "-rotate-90"
-                        }`}
-                      />
-                    </button>
-                  </span>
+                    <ChevronDown
+                      className={`h-4 w-4 shrink-0 transition-transform ${
+                        financialEnabled && !combineEnabled && expandedNetIncome
+                          ? "rotate-0"
+                          : "-rotate-90"
+                      }`}
+                      aria-hidden
+                    />
+                  </button>
                 }
                 values={netIncome}
                 bold
                 prominent
-                forceGray
-                colorClass="text-white"
+                calculatedHighlight
               />
             </tbody>
           </table>
@@ -2203,7 +2484,7 @@ export function PLTable({
             {testMode && (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-emerald-300/80">
-                  Edita unidades de prueba por producto y mes
+                  Modo Modelar: editá unidades por producto y mes
                 </span>
               </div>
             )}
@@ -2272,7 +2553,7 @@ export function PLTable({
                       const cat = productCategories[name] || ""
                       const isKnownProduct = Object.prototype.hasOwnProperty.call(productCategories, name)
                       const rowTotal = monthIndices.reduce((s, i) => s + (qtArr[i] || 0), 0)
-                      const totalGS = monthIndices.reduce((s, i) => s + ((detailData.odoo[name]?.[i] || 0) as number), 0)
+                      const totalGS = monthIndices.reduce((s, i) => s + ((detailData.grossSale?.[name]?.[i] || 0) as number), 0)
                       return (
                       <tr key={name} className="hover:bg-white/5 transition-colors">
                           <td className="sticky left-0 bg-slate-800/95 px-3 py-2 text-xs text-white/90 whitespace-nowrap z-10">
@@ -2424,7 +2705,7 @@ export function PLTable({
                       <td className="px-2 py-2 text-right text-xs font-bold text-blue-300 tabular-nums">
                         {(() => {
                           const total = Object.entries(detailData.qty).reduce((s, [name]) => {
-                            const amt = detailData.odoo[name]
+                            const amt = detailData.grossSale?.[name]
                             if (!amt) return s
                             return s + monthIndices.reduce((a, i) => a + (amt[i] || 0), 0)
                           }, 0)

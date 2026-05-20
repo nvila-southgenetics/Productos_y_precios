@@ -8,6 +8,8 @@ interface ProductSearchFilterProps {
   products: string[]
   selectedProduct: string
   onProductChange: (product: string) => void
+  /** Optional map: product name -> alias for display/search */
+  aliasesByName?: Record<string, string>
   disabled?: boolean
   /** Valor que representa \"todos\" en el estado externo (por defecto \"Todos\") */
   allValue?: string
@@ -19,6 +21,7 @@ export function ProductSearchFilter({
   products,
   selectedProduct,
   onProductChange,
+  aliasesByName,
   disabled = false,
   allValue = "Todos",
   allLabel = "Todos",
@@ -28,9 +31,11 @@ export function ProductSearchFilter({
   const ref = useRef<HTMLDivElement>(null)
 
   const filtered = query.trim()
-    ? products.filter((p) =>
-        p.toLowerCase().includes(query.toLowerCase())
-      )
+    ? products.filter((p) => {
+        const q = query.toLowerCase()
+        const alias = aliasesByName?.[p]
+        return p.toLowerCase().includes(q) || (alias ? alias.toLowerCase().includes(q) : false)
+      })
     : products
 
   useEffect(() => {
@@ -44,7 +49,12 @@ export function ProductSearchFilter({
   }, [])
 
   const isAllSelected = selectedProduct === allValue
-  const displayValue = isAllSelected ? allLabel : selectedProduct ? displayProductName(selectedProduct) : allLabel
+  const displayValue =
+    isAllSelected
+      ? allLabel
+      : selectedProduct
+        ? (aliasesByName?.[selectedProduct] || displayProductName(selectedProduct))
+        : allLabel
 
   return (
     <div className="flex flex-col gap-2">
@@ -113,7 +123,7 @@ export function ProductSearchFilter({
                       : "text-white/90 hover:bg-white/10"
                   )}
                 >
-                  {displayProductName(product)}
+                  {aliasesByName?.[product] || displayProductName(product)}
                 </button>
               ))}
               {filtered.length === 0 && (

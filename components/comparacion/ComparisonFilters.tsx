@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { cn } from '@/lib/utils';
+import { capitalizeFirstLetter, cn } from '@/lib/utils';
 import { ProductMultiSearchFilter } from '@/components/dashboard/ProductMultiSearchFilter';
 import { MonthRangeFilter } from "@/components/filters/MonthRangeFilter"
 import { MultiCheckboxDropdown, type MultiSelectOption } from "@/components/filters/MultiCheckboxDropdown"
@@ -116,7 +116,7 @@ export function ComparisonFilters({
         >
           {budgetNames.map((n) => (
             <option key={n} value={n} className="bg-blue-900 text-white">
-              {n}
+              {capitalizeFirstLetter(n)}
             </option>
           ))}
         </select>

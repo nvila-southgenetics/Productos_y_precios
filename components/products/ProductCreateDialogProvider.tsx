@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select } from "@/components/ui/select"
 import { createProduct, type ProductWithOverrides } from "@/lib/supabase-mcp"
+import { PRODUCT_CATEGORIES } from "@/lib/product-categories"
 
 type CreateProductCallback = (product: ProductWithOverrides) => void | Promise<void>
 type CloseCallback = () => void
@@ -158,7 +159,7 @@ export function ProductCreateDialogProvider({ children }: { children: React.Reac
                 <option value="" className="bg-blue-900 text-white">
                   Seleccionar categoría
                 </option>
-                {["Ginecología", "Oncología", "Endocrinología", "Urología", "Prenatales", "Anualidades", "Otros"].map((c) => (
+                {PRODUCT_CATEGORIES.map((c) => (
                   <option key={c} value={c} className="bg-blue-900 text-white">
                     {c}
                   </option>

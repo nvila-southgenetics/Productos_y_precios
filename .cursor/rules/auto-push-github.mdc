@@ -1,0 +1,17 @@
+---
+description: Tras cambios de código, commitear y pushear a GitHub (seguro)
+alwaysApply: true
+---
+
+# Push automático a GitHub
+
+Solicitado por el usuario para el flujo diario: cuando completes **cambios sustanciales** en el repo (implementación, fixes, refactors pedidos), terminá el turno con:
+
+1. `git status` — no incluyas nunca `.env`, `.env.local`, secretos ni archivos que solo sean locales/personales.
+2. `git add` solo lo que corresponda al cambio (evitá `git add` de credenciales).
+3. `git commit` con mensaje claro en inglés o español (título + cuerpo opcional).
+4. `git push` a la rama actual (habitualmente `main`).
+
+Si no hay nada que commitear o el working tree está limpio, no hagas commit vacío.
+
+Si el push falla (conflictos remotos), avisá al usuario y resolvé con `git pull --rebase` (o merge) antes de volver a pushear.

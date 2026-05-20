@@ -32,12 +32,13 @@ export function Header() {
 
   const navItems = [
     { href: "/dashboard", label: "Dashboard" },
-    { href: "/invoices", label: "Cobranza" },
     { href: "/productos", label: "Productos" },
     { href: "/pl-import", label: "Real Import" },
     { href: "/budget", label: "Budget" },
     { href: "/comparacion", label: "Comparación" },
+    { href: "/medicos", label: "Médicos" },
     { href: "/pl", label: "P&L" },
+    { href: "/invoices", label: "Cobranza" },
     ...(isAdmin ? [{ href: "/admin", label: "Admin" }] : []),
   ]
 

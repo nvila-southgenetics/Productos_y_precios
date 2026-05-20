@@ -1,58 +1,60 @@
-import { NextResponse } from 'next/server'
-import { mcp_supabase_del_work_execute_sql } from '@/types/mcp'
+import { NextResponse, type NextRequest } from "next/server"
+import { createClient } from "@/lib/supabase/server"
 
-const PROJECT_ID = 'cdrmxjcdgxjyakrcpxnp'
+// This route depends on request/cookies and must never be prerendered.
+export const dynamic = "force-dynamic"
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const countryCode = searchParams.get('country') || null
+    const countryCode = request.nextUrl.searchParams.get("country")
 
-    let query = `
-      SELECT 
-        p.id,
-        p.name,
-        p.alias,
-        p.description,
-        p.category,
-        p.tipo,
-        p.created_at,
-        p.user_id,
-        COALESCE(
-          json_agg(
-            json_build_object(
-              'id', pco.id,
-              'product_id', pco.product_id,
-              'country_code', pco.country_code,
-              'overrides', pco.overrides,
-              'created_at', pco.created_at,
-              'updated_at', pco.updated_at
-            )
-          ) FILTER (WHERE pco.id IS NOT NULL),
-          '[]'::json
-        ) as country_overrides
-      FROM products p
-      LEFT JOIN product_country_overrides pco ON p.id = pco.product_id
-      ${countryCode ? `WHERE pco.country_code = '${countryCode}'` : ''}
-      GROUP BY p.id, p.name, p.alias, p.description, p.category, p.tipo, p.created_at, p.user_id
-      ORDER BY p.created_at DESC
-    `
+    const supabase = await createClient()
 
-    // Nota: En producción, esto debería usar el cliente de Supabase normal
-    // El MCP solo está disponible en el contexto del asistente
-    // Por ahora, retornamos un error indicando que se debe usar el cliente de Supabase
-    return NextResponse.json(
-      { error: 'Use Supabase client directly in production' },
-      { status: 501 }
-    )
+    // Products
+    const { data: products, error: productsError } = await supabase
+      .from("products")
+      .select("*")
+      .order("created_at", { ascending: false })
+
+    if (productsError) {
+      console.error("Error fetching products:", productsError)
+      return NextResponse.json({ error: "Failed to fetch products" }, { status: 500 })
+    }
+
+    const productIds = (products || []).map((p: any) => p.id).filter(Boolean)
+
+    // Overrides (optional filter by country)
+    let overridesQuery = supabase
+      .from("product_country_overrides")
+      .select("*")
+      .in("product_id", productIds.length ? productIds : ["00000000-0000-0000-0000-000000000000"])
+    if (countryCode) overridesQuery = overridesQuery.eq("country_code", countryCode)
+
+    const { data: overrides, error: overridesError } = await overridesQuery
+    if (overridesError) {
+      console.error("Error fetching product overrides:", overridesError)
+      return NextResponse.json({ error: "Failed to fetch product overrides" }, { status: 500 })
+    }
+
+    const byProductId = new Map<string, any[]>()
+    for (const o of overrides || []) {
+      const pid = (o as any).product_id as string
+      if (!pid) continue
+      if (!byProductId.has(pid)) byProductId.set(pid, [])
+      byProductId.get(pid)!.push(o)
+    }
+
+    const out = (products || []).map((p: any) => ({
+      ...p,
+      country_overrides: byProductId.get(p.id) || [],
+    }))
+
+    return NextResponse.json(out)
   } catch (error) {
-    console.error('Error fetching products:', error)
+    console.error("Error fetching products:", error)
     return NextResponse.json(
-      { error: 'Failed to fetch products' },
+      { error: "Failed to fetch products" },
       { status: 500 }
     )
   }
 }
-
-
-

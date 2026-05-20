@@ -6,23 +6,12 @@ import { Badge } from "@/components/ui/badge"
 import { displayProductLabel, formatCurrency, formatNumber } from "@/lib/utils"
 import { CompanyBreakdown } from "./CompanyBreakdown"
 import type { MonthlySalesWithProduct } from "@/lib/supabase-mcp"
+import { PRODUCT_CATEGORY_COLORS } from "@/lib/product-categories"
 
 interface ProductSalesTableProps {
   sales: MonthlySalesWithProduct[]
   isAllCompanies?: boolean
   isTotal?: boolean
-}
-
-const categoryColors: Record<string, string> = {
-  "Ginecología": "bg-pink-300/20 text-pink-200 border-pink-300/30",
-  "Oncología": "bg-rose-300/20 text-rose-200 border-rose-300/30",
-  "Urología": "bg-sky-300/20 text-sky-200 border-sky-300/30",
-  "Endocrinología": "bg-violet-300/20 text-violet-200 border-violet-300/30",
-  "Prenatales": "bg-teal-300/20 text-teal-200 border-teal-300/30",
-  "Anualidades": "bg-amber-300/20 text-amber-200 border-amber-300/30",
-  "Carrier": "bg-indigo-300/20 text-indigo-200 border-indigo-300/30",
-  "Nutrición": "bg-lime-300/20 text-lime-200 border-lime-300/30",
-  "Otros": "bg-slate-300/20 text-slate-200 border-slate-300/30",
 }
 
 const tipoColors: Record<string, string> = {
@@ -99,8 +88,10 @@ export function ProductSalesTable({ sales, isAllCompanies = false, isTotal = fal
             const grossProfit = calculateGrossProfit(sale.overrides, sale.cantidad_ventas)
             const totalAmount = sale.monto_total || 0
 
-            const hasNoGrossSale = grossSale === 0
-            const hasNoGrossProfit = grossProfit === 0
+            // Si cantidad=0 (por ejemplo, ventas y devoluciones netean a 0), grossSale/grossProfit pueden ser 0 sin que falten precios.
+            // El warning solo aplica cuando hay cantidad != 0 pero el cálculo igual queda en 0 (probable falta de overrides/precios).
+            const shouldWarnGrossSale = sale.cantidad_ventas !== 0 && grossSale === 0
+            const shouldWarnGrossProfit = sale.cantidad_ventas !== 0 && grossProfit === 0
 
             return (
               <tr key={index} className="border-b border-white/10 bg-[#1e4d7b]/30 hover:bg-[#1e4d7b]/45 transition-colors">
@@ -119,7 +110,7 @@ export function ProductSalesTable({ sales, isAllCompanies = false, isTotal = fal
                     <div className="flex gap-1 flex-wrap">
                       {sale.category && (
                         <Badge
-                          className={`${categoryColors[sale.category] || categoryColors["Otros"]} border px-1.5 py-0.5 text-xs`}
+                          className={`${PRODUCT_CATEGORY_COLORS[sale.category] || PRODUCT_CATEGORY_COLORS["Otros"]} border px-1.5 py-0.5 text-xs`}
                         >
                           {sale.category}
                         </Badge>
@@ -146,10 +137,10 @@ export function ProductSalesTable({ sales, isAllCompanies = false, isTotal = fal
                 </td>
                 <td className="px-3 py-2 text-right">
                   <div className="flex items-center justify-end gap-1">
-                    <span className={hasNoGrossSale ? "text-white/50 text-sm" : "text-sky-300 font-medium text-sm"}>
+                    <span className={shouldWarnGrossSale ? "text-white/50 text-sm" : "text-sky-300 font-medium text-sm"}>
                       {formatCurrency(grossSale)}
                     </span>
-                    {hasNoGrossSale && (
+                    {shouldWarnGrossSale && (
                       <span title="Este producto no tiene precios configurados para este país">
                         <AlertTriangle className="h-3 w-3 text-yellow-300" />
                       </span>
@@ -158,10 +149,10 @@ export function ProductSalesTable({ sales, isAllCompanies = false, isTotal = fal
                 </td>
                 <td className="px-3 py-2 text-right">
                   <div className="flex items-center justify-end gap-1">
-                    <span className={hasNoGrossProfit ? "text-white/50 text-sm" : "text-orange-300 font-medium text-sm"}>
+                    <span className={shouldWarnGrossProfit ? "text-white/50 text-sm" : "text-orange-300 font-medium text-sm"}>
                       {formatCurrency(grossProfit)}
                     </span>
-                    {hasNoGrossProfit && (
+                    {shouldWarnGrossProfit && (
                       <span title="Este producto no tiene precios configurados para este país">
                         <AlertTriangle className="h-3 w-3 text-yellow-300" />
                       </span>
