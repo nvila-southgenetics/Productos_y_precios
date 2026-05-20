@@ -1,12 +1,13 @@
 "use client"
 
-import { useState, useEffect, useMemo, Suspense } from "react"
+import { useState, useEffect, useMemo, useCallback, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ProductTable, type ProductDeleteScope } from "@/components/products/ProductTable"
 import { ProductFilters } from "@/components/products/ProductFilters"
 import { ProductMergeDialog } from "@/components/products/ProductMergeDialog"
+import { CountryPills } from "@/components/products/CountryPills"
 import { MultiCheckboxDropdown } from "@/components/filters/MultiCheckboxDropdown"
 import {
   getCompanies,
@@ -25,6 +26,7 @@ import {
   PRODUCT_CATEGORIES_SORTED,
   productMatchesCategoryFilter,
 } from "@/lib/product-categories"
+import { filterProductsWithCountryActivity } from "@/lib/product-country-activity"
 
 const VALID_COUNTRIES = new Set(["UY", "AR", "MX", "CL", "VE", "CO"])
 
@@ -153,68 +155,73 @@ function ProductosContent() {
     return Array.from(tps).sort()
   }, [products])
 
-  // Cargar productos
-  useEffect(() => {
-    async function loadProducts() {
-      setIsLoading(true)
-      setError(null)
-      try {
-        const dataAll = await getProductsWithOverrides()
-        const data =
-          selectedCountriesFromCompanies.length === 0
-            ? dataAll
-            : dataAll.filter((p) =>
-                (p.country_overrides || []).length === 0 ||
-                (p.country_overrides || []).some((o) => selectedCountriesFromCompanies.includes(o.country_code))
-              )
-        // Ordenar productos alfabéticamente por nombre
-        const sortedData = data.sort((a, b) => productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), 'es', { sensitivity: 'base' }))
-        setProducts(sortedData)
-        if (sortedData.length === 0) {
-          setError("No se encontraron productos. Verifica la conexión con la base de datos.")
-          setSalesCountByProductId({})
-          setBudgetUnitsByProductId({})
-        } else {
-          const productNames = sortedData.map((p) => p.name)
-          const nameToId = new Map(sortedData.map((p) => [p.name, p.id]))
-          const MONTH_KEYS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"] as const
+  const reloadProducts = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const dataAll = await getProductsWithOverrides()
+      const productIds = dataAll.map((p) => p.id)
+      const MONTH_KEYS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"] as const
 
-          const counts = await getTotalSalesByProductIds(sortedData.map((p) => p.id), selectedCountry)
-          setSalesCountByProductId(counts)
+      const counts = await getTotalSalesByProductIds(productIds, selectedCountry)
+      setSalesCountByProductId(counts)
 
-          const { data: budgetData, error: budgetError } = await supabase
-            .from("budget")
-            .select(["product_id", "product_name", ...MONTH_KEYS].join(","))
-            .eq("year", 2026)
-            .eq("budget_name", "budget")
-            .eq("country_code", selectedCountry)
-            .in("product_name", productNames)
+      const nameToId = new Map(dataAll.map((p) => [p.name, p.id]))
+      const budgetUnitsById: Record<string, number> = {}
+      for (const p of dataAll) budgetUnitsById[p.id] = 0
 
-          const budgetUnitsById: Record<string, number> = {}
-          for (const p of sortedData) budgetUnitsById[p.id] = 0
+      const productNames = dataAll.map((p) => p.name)
+      if (productNames.length > 0) {
+        const { data: budgetData, error: budgetError } = await supabase
+          .from("budget")
+          .select(["product_id", "product_name", ...MONTH_KEYS].join(","))
+          .eq("year", 2026)
+          .eq("budget_name", "budget")
+          .eq("country_code", selectedCountry)
+          .in("product_name", productNames)
 
-          if (!budgetError && Array.isArray(budgetData)) {
-            for (const r of budgetData as any[]) {
-              const id = r.product_id || nameToId.get(r.product_name)
-              if (!id) continue
-              const units = MONTH_KEYS.reduce((sum, k) => sum + Number(r[k] ?? 0), 0)
-              budgetUnitsById[id] = (budgetUnitsById[id] ?? 0) + units
-            }
-          } else if (budgetError) {
-            console.error("Error fetching budget units:", budgetError)
+        if (!budgetError && Array.isArray(budgetData)) {
+          for (const r of budgetData as { product_id?: string; product_name?: string; [k: string]: unknown }[]) {
+            const id = r.product_id || nameToId.get(String(r.product_name ?? ""))
+            if (!id) continue
+            const units = MONTH_KEYS.reduce((sum, k) => sum + Number(r[k] ?? 0), 0)
+            budgetUnitsById[id] = (budgetUnitsById[id] ?? 0) + units
           }
-
-          setBudgetUnitsByProductId(budgetUnitsById)
+        } else if (budgetError) {
+          console.error("Error fetching budget units:", budgetError)
         }
-      } catch (error) {
-        console.error("Error loading products:", error)
-        setError(error instanceof Error ? error.message : "Error al cargar los productos")
-      } finally {
-        setIsLoading(false)
       }
+
+      setBudgetUnitsByProductId(budgetUnitsById)
+
+      const withCountryActivity = filterProductsWithCountryActivity(
+        dataAll,
+        selectedCountry,
+        counts,
+        budgetUnitsById
+      )
+      const sortedData = withCountryActivity.sort((a, b) =>
+        productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), "es", { sensitivity: "base" })
+      )
+      setProducts(sortedData)
+      if (sortedData.length === 0) {
+        setError(
+          dataAll.length === 0
+            ? "No se encontraron productos. Verifica la conexión con la base de datos."
+            : `No hay productos con ventas, budget o precios cargados para ${selectedCountry}.`
+        )
+      }
+    } catch (error) {
+      console.error("Error loading products:", error)
+      setError(error instanceof Error ? error.message : "Error al cargar los productos")
+    } finally {
+      setIsLoading(false)
     }
-    loadProducts()
-  }, [selectedCountry, selectedCountriesFromCompanies])
+  }, [selectedCountry])
+
+  useEffect(() => {
+    reloadProducts()
+  }, [reloadProducts])
 
   // Filtrar y ordenar productos
   useEffect(() => {
@@ -286,17 +293,7 @@ function ProductosContent() {
         }
       }
       
-      // Recargar productos después de eliminar
-      const dataAll = await getProductsWithOverrides()
-      const data =
-        selectedCountriesFromCompanies.length === 0
-          ? dataAll
-          : dataAll.filter((p) =>
-              (p.country_overrides || []).length === 0 ||
-              (p.country_overrides || []).some((o) => selectedCountriesFromCompanies.includes(o.country_code))
-            )
-      const sortedData = data.sort((a, b) => productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), 'es', { sensitivity: 'base' }))
-      setProducts(sortedData)
+      await reloadProducts()
     } catch (error) {
       console.error("Error deleting product:", error)
       alert(`Error al eliminar el producto: ${error instanceof Error ? error.message : 'Error desconocido'}`)
@@ -307,16 +304,7 @@ function ProductosContent() {
   const handleReviewToggle = async (productId: string, countryCode: string, checked: boolean) => {
     // Recargar productos después de actualizar el estado de revisión
     try {
-      const dataAll = await getProductsWithOverrides()
-      const data =
-        selectedCountriesFromCompanies.length === 0
-          ? dataAll
-          : dataAll.filter((p) =>
-              (p.country_overrides || []).length === 0 ||
-              (p.country_overrides || []).some((o) => selectedCountriesFromCompanies.includes(o.country_code))
-            )
-      const sortedData = data.sort((a, b) => productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), 'es', { sensitivity: 'base' }))
-      setProducts(sortedData)
+      await reloadProducts()
     } catch (error) {
       console.error("Error reloading products after review toggle:", error)
     }
@@ -385,12 +373,7 @@ function ProductosContent() {
         alert(resumenLineas.join("\n"))
       }
 
-      // Recargar lista de productos
-      const data = await getProductsWithOverrides(selectedCountry)
-      const sortedData = data.sort((a, b) =>
-        productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), "es", { sensitivity: "base" })
-      )
-      setProducts(sortedData)
+      await reloadProducts()
 
       // Navegar al nuevo producto fusionado
       if (newProductId) {
@@ -424,7 +407,7 @@ function ProductosContent() {
               Productos
             </h1>
             <p className="text-white/80 mt-1">
-              Gestiona tus productos y configura precios por compañía (mercado)
+              Solo se listan productos con ventas, budget o precios cargados en el país seleccionado
             </p>
           </div>
           <Button
@@ -434,6 +417,16 @@ function ProductosContent() {
             <Plus className="h-4 w-4 mr-2" />
             Nuevo Producto
           </Button>
+        </div>
+
+        {/* País activo (ventas, budget, precios) */}
+        <div className="mb-6 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4 shadow-sm">
+          <label className="text-sm font-semibold mb-3 block text-white/90">País</label>
+          <CountryPills
+            selectedCountry={selectedCountry}
+            onCountryChange={setSelectedCountry}
+            allowedCountries={allowedCountries.length ? allowedCountries : undefined}
+          />
         </div>
 
         {/* Mercado = compañía / país en BD */}

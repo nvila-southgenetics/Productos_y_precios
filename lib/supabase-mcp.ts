@@ -623,8 +623,8 @@ export async function createProduct(input: {
   }
 
   const ensureOverridesForAllCountries = async (productId: string) => {
-    // La UI muestra productos en cada país solo si existen overrides para ese país.
-    // Creamos overrides “vacíos” (pero existentes) para asegurar visibilidad.
+    // La lista de productos filtra por actividad en el país (ventas, budget, precios).
+    // Creamos overrides vacíos por país para poder cargar precios desde el detalle.
     const { data: existingRows, error: ensureError } = await supabase
       .from("product_country_overrides")
       .select("country_code")
