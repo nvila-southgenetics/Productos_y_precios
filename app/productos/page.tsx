@@ -78,6 +78,13 @@ function ProductosContent() {
     return activeCountryCodes[0] ?? "AR"
   }, [activeCountryCodes])
 
+  const allCompaniesSelected = useMemo(() => {
+    if (!companies.length || !selectedCompanies.length) return false
+    if (selectedCompanies.length !== companies.length) return false
+    const set = new Set(selectedCompanies)
+    return companies.every((c) => set.has(c))
+  }, [companies, selectedCompanies])
+
   const marketLabel = useMemo(() => {
     if (!selectedCompanies.length) return ""
     if (selectedCompanies.length === 1) {
@@ -264,13 +271,15 @@ function ProductosContent() {
       }
       setBudgetUnitsByProductId(displayBudget)
 
-      const withActivity = filterProductsWithCountriesActivity(
-        dataAll,
-        activeCountryCodes,
-        salesByCountry,
-        budgetByCountry
-      )
-      const sortedData = withActivity.sort((a, b) =>
+      const list = allCompaniesSelected
+        ? dataAll
+        : filterProductsWithCountriesActivity(
+            dataAll,
+            activeCountryCodes,
+            salesByCountry,
+            budgetByCountry
+          )
+      const sortedData = list.sort((a, b) =>
         productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), "es", { sensitivity: "base" })
       )
       setProducts(sortedData)
@@ -287,7 +296,7 @@ function ProductosContent() {
     } finally {
       setIsLoading(false)
     }
-  }, [activeCountryCodes, selectedCompanies, marketLabel])
+  }, [activeCountryCodes, selectedCompanies, marketLabel, allCompaniesSelected, companies.length])
 
   useEffect(() => {
     reloadProducts()
@@ -461,7 +470,7 @@ function ProductosContent() {
           <div>
             <h1 className="text-3xl font-bold text-white mb-2">Productos</h1>
             <p className="text-white/80 mt-1">
-              Elegí la compañía (mercado). Cada compañía equivale a un país — ej. SouthGenetics LLC Argentina = Argentina.
+              Con todas las compañías se listan todos los productos. Al filtrar por una o varias, solo los que tienen ventas, budget o precios en ese mercado.
               {marketLabel ? (
                 <span className="block text-white/60 text-sm mt-1">
                   Mostrando: <span className="text-white/90 font-medium">{marketLabel}</span>
