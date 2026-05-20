@@ -4,9 +4,9 @@ La tabla `pl_company_monthly_product_cost` guarda el **Product Cost contable** m
 
 ## Filtro en n8n (Odoo por `account_id`)
 
-El HTTP Request agrupa por `date:month`, `company_id` y `account_id`. **No** subas todo `expense_direct_cost` a Product Cost: excluir cuentas tipo Kit, Courier, Commission, etc.
+El HTTP Request agrupa por `date:month`, `company_id` y `account_id`. El nodo 1 solo normaliza datos; el filtro (qué cuenta es Product Cost, LLC, etc.) lo definís vos en n8n.
 
-Ver nodos Code listos en [`n8n-odoo-company-costs-code.md`](./n8n-odoo-company-costs-code.md).
+Ver [`n8n-odoo-company-costs-code.md`](./n8n-odoo-company-costs-code.md).
 
 ## Upsert (n8n / REST Supabase)
 
