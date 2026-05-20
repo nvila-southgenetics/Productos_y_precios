@@ -11,10 +11,12 @@ import {
   DIFFERENCIA_COSTOS_PRODUCT_NAME,
   ensureDiferenciaInDataset,
   fetchCompanyMonthlyProductCost,
+  hasCompanyProductCostForFilter,
   reconcileMonthlyProductCost,
   shouldReconcileProductCost,
   sumRealProductCostByMonth,
 } from "@/lib/pl-cost-reconciliation"
+import { PlHoverTooltip } from "@/components/pl/PlHoverTooltip"
 import {
   createPlTooltipBuilders,
   type PlMonthSnapshot,
@@ -255,8 +257,6 @@ export function PLTable({
   >([])
 
   const product = products.length === 1 ? products[0] : "all"
-  const reconcileProductCostEnabled =
-    modelo === "real" && !combineEnabled && !testMode && shouldReconcileProductCost(products)
   const { openCreateProductDialog } = useProductCreateDialog()
   const categoriesSet = new Set(categories)
   const allKnownCategoriesSelected = KNOWN_PL_CATEGORIES.every((c) => categoriesSet.has(c))
@@ -268,6 +268,17 @@ export function PLTable({
     const companies = countries.flatMap((c) => COUNTRY_TO_COMPANIES[c] || [])
     return companies.length ? companies : null
   }, [salesCompanies, countries])
+
+  const hasContableProductCost = hasCompanyProductCostForFilter(
+    companyMonthlyProductCost,
+    year,
+    resolveSalesCompanies()
+  )
+  const reconcileProductCostEnabled =
+    modelo === "real" &&
+    !combineEnabled &&
+    !testMode &&
+    (shouldReconcileProductCost(products) || hasContableProductCost)
 
   // Dropdowns independientes por fila de totales.
   // Al expandir una fila, se muestra el desglose correspondiente (y dependencias),
@@ -2248,24 +2259,15 @@ export function PLTable({
           const tip = cellTitle ? cellTitle(i) : undefined
           return (
             <td key={i} className={`${cellCls} ${cellSizeCls} ${numColor} ${bold || prominent ? "font-semibold" : ""}`}>
-              <span title={tip} className={tip ? "cursor-help border-b border-dotted border-white/25" : undefined}>
-                {fmtCell(v)}
-              </span>
+              <PlHoverTooltip content={tip}>{fmtCell(v)}</PlHoverTooltip>
             </td>
           )
         })}
-        <td
-          className={`${cellCls} ${cellSizeCls} ${numColor} ${bold || prominent ? "font-semibold" : ""} border-l border-white/10`}
-          title={cellPeriodTitle}
-        >
-          <span className={cellPeriodTitle ? "cursor-help border-b border-dotted border-white/25" : undefined}>
-            {fmtCell(ytdVal)}
-          </span>
+        <td className={`${cellCls} ${cellSizeCls} ${numColor} ${bold || prominent ? "font-semibold" : ""} border-l border-white/10`}>
+          <PlHoverTooltip content={cellPeriodTitle}>{fmtCell(ytdVal)}</PlHoverTooltip>
         </td>
-        <td className={`${cellCls} ${cellSizeCls} ${numColor} ${bold || prominent ? "font-semibold" : ""}`} title={cellPeriodTitle}>
-          <span className={cellPeriodTitle ? "cursor-help border-b border-dotted border-white/25" : undefined}>
-            {fmtCell(totalVal)}
-          </span>
+        <td className={`${cellCls} ${cellSizeCls} ${numColor} ${bold || prominent ? "font-semibold" : ""}`}>
+          <PlHoverTooltip content={cellPeriodTitle}>{fmtCell(totalVal)}</PlHoverTooltip>
         </td>
       </tr>
     )
@@ -2308,37 +2310,30 @@ export function PLTable({
                   autoFocus
                 />
               ) : (
-                <span
-                  title={buildSgaTooltip(mIdx, field)}
-                  className={buildSgaTooltip(mIdx, field) ? "cursor-help border-b border-dotted border-white/25" : undefined}
-                >
-                  {fmtSga(v)}
-                </span>
+                <PlHoverTooltip content={buildSgaTooltip(mIdx, field)}>{fmtSga(v)}</PlHoverTooltip>
               )}
             </td>
           )
         })}
         <td
           className={`${cellCls} ${sgaDisplay(ytdVal) > 0 ? "text-emerald-300/90" : sgaDisplay(ytdVal) < 0 ? "text-rose-300" : "text-white/25"} border-l border-white/10`}
-          title={
-            monthIndices.length
-              ? `PERIODO: ${fmtSga(ytdVal)}\nPase el mouse en cada mes para desglose pl_sga.`
-              : undefined
-          }
         >
-          <span
-            className={
-              monthIndices.length ? "cursor-help border-b border-dotted border-white/25" : undefined
+          <PlHoverTooltip
+            content={
+              monthIndices.length
+                ? `PERIODO: ${fmtSga(ytdVal)}\nPase el mouse en cada mes para desglose pl_sga.`
+                : undefined
             }
           >
             {fmtSga(ytdVal)}
-          </span>
+          </PlHoverTooltip>
         </td>
         <td
           className={`${cellCls} ${sgaDisplay(totalVal) > 0 ? "text-emerald-300/90" : sgaDisplay(totalVal) < 0 ? "text-rose-300" : "text-white/25"}`}
-          title="Total anual. Desglose mensual al pasar el mouse en cada mes."
         >
-          <span className="cursor-help border-b border-dotted border-white/25">{fmtSga(totalVal)}</span>
+          <PlHoverTooltip content="Total anual. Desglose mensual al pasar el mouse en cada mes.">
+            {fmtSga(totalVal)}
+          </PlHoverTooltip>
         </td>
       </tr>
     )
@@ -2372,12 +2367,7 @@ export function PLTable({
                 autoFocus
               />
             ) : (
-              <span
-                title={tooltipFor(field)(mIdx)}
-                className={tooltipFor(field)(mIdx) ? "cursor-help border-b border-dotted border-white/25" : undefined}
-              >
-                {`${v}%`}
-              </span>
+              <PlHoverTooltip content={tooltipFor(field)(mIdx)}>{`${v}%`}</PlHoverTooltip>
             )}
           </td>
         )
@@ -2458,6 +2448,7 @@ export function PLTable({
             {reconcileProductCostEnabled && productCostReconciliation.hasRealData && (
               <span className="text-xs text-sky-300/90">
                 · Product Cost: cifra contable por compañía (ajuste en {DIFFERENCIA_COSTOS_PRODUCT_NAME})
+                {products.length > 0 ? " — con filtro de productos, el total sigue siendo el contable" : ""}
               </span>
             )}
             <span className="text-xs text-white/35">
@@ -2528,9 +2519,9 @@ export function PLTable({
                         v > 0 ? "text-blue-200" : v < 0 ? "text-rose-300" : "text-white/25"
                       }`}
                     >
-                      <span title={tip} className={tip ? "cursor-help border-b border-dotted border-white/25" : undefined}>
+                      <PlHoverTooltip content={tip}>
                         {v !== 0 ? formatNumber(v, "es-AR") : "-"}
-                      </span>
+                      </PlHoverTooltip>
                     </td>
                   )
                 })}
@@ -2538,21 +2529,19 @@ export function PLTable({
                   className={`${cellCls} font-bold border-l border-white/10 ${
                     periodSum(totalUnits) > 0 ? "text-blue-200" : periodSum(totalUnits) < 0 ? "text-rose-300" : "text-white/25"
                   }`}
-                  title={periodTooltipFor("units")}
                 >
-                  <span className={periodTooltipFor("units") ? "cursor-help border-b border-dotted border-white/25" : undefined}>
+                  <PlHoverTooltip content={periodTooltipFor("units")}>
                     {periodSum(totalUnits) !== 0 ? formatNumber(periodSum(totalUnits), "es-AR") : "-"}
-                  </span>
+                  </PlHoverTooltip>
                 </td>
                 <td
                   className={`${cellCls} font-bold ${
                     sum(totalUnits) > 0 ? "text-blue-200" : sum(totalUnits) < 0 ? "text-rose-300" : "text-white/25"
                   }`}
-                  title={periodTooltipFor("units")}
                 >
-                  <span className={periodTooltipFor("units") ? "cursor-help border-b border-dotted border-white/25" : undefined}>
+                  <PlHoverTooltip content={periodTooltipFor("units")}>
                     {sum(totalUnits) !== 0 ? formatNumber(sum(totalUnits), "es-AR") : "-"}
-                  </span>
+                  </PlHoverTooltip>
                 </td>
               </tr>
 

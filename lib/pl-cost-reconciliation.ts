@@ -24,9 +24,24 @@ export type MonthlyProductCostRow = {
   product_cost_usd: number
 }
 
-/** Vista “todos los productos”: sin filtro explícito de productos en P&L. */
+/** Sin filtro de productos = todos los productos visibles en P&L. */
 export function shouldReconcileProductCost(productsFilter: string[]): boolean {
   return productsFilter.length === 0
+}
+
+/** Hay filas contables cargadas para el año/compañías del filtro actual. */
+export function hasCompanyProductCostForFilter(
+  rows: MonthlyProductCostRow[],
+  year: number,
+  companies: string[] | null
+): boolean {
+  const companySet =
+    companies && companies.length > 0 ? new Set(companies.map((c) => c.trim())) : null
+  return rows.some((r) => {
+    if (r.year !== year) return false
+    if (companySet && !companySet.has(String(r.company || "").trim())) return false
+    return Number(r.product_cost_usd || 0) !== 0
+  })
 }
 
 /** Suma Product Cost mensual desde filas por compañía (mes 1–12 → índice 0–11). */
@@ -83,7 +98,7 @@ export function reconcileMonthlyProductCost(
   const computed = computeMonthlyProductCostExcludingDiferencia(quantities, overrides, diferenciaName)
   const hasRealData = enabled && realByMonth.some((v) => v !== 0)
 
-  if (!enabled || !hasRealData) {
+  if (!enabled) {
     const fallback = Array.from({ length: 12 }, (_, m) => {
       const fromProducts = Object.entries(quantities).reduce((sum, [name, qtArr]) => {
         const ov = overrides[name]
@@ -98,10 +113,25 @@ export function reconcileMonthlyProductCost(
     }
   }
 
-  const diferenciaMonthly = Array.from({ length: 12 }, (_, m) => realByMonth[m] - computed[m])
-  const productCostMonthly = Array.from({ length: 12 }, (_, m) => computed[m] + diferenciaMonthly[m])
+  const diferenciaMonthly = Array.from({ length: 12 }, (_, m) => {
+    const real = Number(realByMonth[m] || 0)
+    if (real === 0) return 0
+    return real - computed[m]
+  })
 
-  return { productCostMonthly, diferenciaMonthly, hasRealData: true }
+  const productCostMonthly = Array.from({ length: 12 }, (_, m) => {
+    const real = Number(realByMonth[m] || 0)
+    if (real === 0) {
+      return Object.entries(quantities).reduce((sum, [name, qtArr]) => {
+        if (name === diferenciaName) return sum
+        const ov = overrides[name]
+        return sum + (ov?.productCostUSD ?? 0) * (qtArr[m] || 0)
+      }, 0)
+    }
+    return real
+  })
+
+  return { productCostMonthly, diferenciaMonthly, hasRealData }
 }
 
 /** Asegura que Diferencia aparezca en cantidades/overrides (unidades 0 si no hay ventas). */
