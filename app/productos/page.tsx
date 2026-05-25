@@ -1,12 +1,13 @@
 "use client"
 
-import { useState, useEffect, useMemo, Suspense } from "react"
+import { useState, useEffect, useMemo, useCallback, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ProductTable, type ProductDeleteScope } from "@/components/products/ProductTable"
 import { ProductFilters } from "@/components/products/ProductFilters"
 import { ProductMergeDialog } from "@/components/products/ProductMergeDialog"
+import { ProductosTableSkeleton } from "@/components/products/ProductosTableSkeleton"
 import { MultiCheckboxDropdown } from "@/components/filters/MultiCheckboxDropdown"
 import {
   getCompanies,
@@ -21,8 +22,23 @@ import { supabase } from "@/lib/supabase"
 import { productNameSortKey } from "@/lib/utils"
 import { useProductCreateDialog } from "@/components/products/ProductCreateDialogProvider"
 import { COUNTRY_CODES_LIST, filterCompaniesByCountries, getCountryForCompany } from "@/lib/auth-constants"
+import {
+  PRODUCT_CATEGORIES_SORTED,
+  productMatchesCategoryFilter,
+} from "@/lib/product-categories"
+import { filterProductsWithCountriesActivity } from "@/lib/product-country-activity"
+import { saveProductosListReturn } from "@/lib/productos-list-return"
 
 const VALID_COUNTRIES = new Set(["UY", "AR", "MX", "CL", "VE", "CO"])
+
+const COUNTRY_NAMES: Record<string, string> = {
+  AR: "Argentina",
+  CL: "Chile",
+  CO: "Colombia",
+  MX: "México",
+  UY: "Uruguay",
+  VE: "Venezuela",
+}
 
 function ProductosContent() {
   const searchParams = useSearchParams()
@@ -33,8 +49,6 @@ function ProductosContent() {
   const { openCreateProductDialog } = useProductCreateDialog()
   const [products, setProducts] = useState<ProductWithOverrides[]>([])
   const [filteredProducts, setFilteredProducts] = useState<ProductWithOverrides[]>([])
-  // País por defecto: Argentina
-  const [selectedCountry, setSelectedCountry] = useState("AR")
   const [companies, setCompanies] = useState<string[]>([])
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState("")
@@ -50,15 +64,48 @@ function ProductosContent() {
   const [productsToMerge, setProductsToMerge] = useState<ProductWithOverrides[]>([])
   const [isMerging, setIsMerging] = useState(false)
 
+  const activeCountryCodes = useMemo(() => {
+    const out = new Set<string>()
+    for (const c of selectedCompanies) {
+      const cc = getCountryForCompany(c)
+      if (cc) out.add(cc)
+    }
+    return Array.from(out)
+  }, [selectedCompanies])
+
+  /** País efectivo para detalle, revisado y eliminar (derivado de compañías). */
+  const selectedCountry = useMemo(() => {
+    if (activeCountryCodes.length === 1) return activeCountryCodes[0]
+    if (activeCountryCodes.includes("AR")) return "AR"
+    return activeCountryCodes[0] ?? "AR"
+  }, [activeCountryCodes])
+
+  /** Catálogo completo: todas las compañías tildadas (una por una o todas). */
+  const allCompaniesSelected = useMemo(() => {
+    if (!companies.length || !selectedCompanies.length) return false
+    const set = new Set(selectedCompanies)
+    return companies.length === selectedCompanies.length && companies.every((c) => set.has(c))
+  }, [companies, selectedCompanies])
+
+  const marketLabel = useMemo(() => {
+    if (!selectedCompanies.length) return ""
+    if (selectedCompanies.length === 1) {
+      const cc = getCountryForCompany(selectedCompanies[0])
+      return cc ? COUNTRY_NAMES[cc] ?? cc : selectedCompanies[0]
+    }
+    if (activeCountryCodes.length === 1) {
+      return COUNTRY_NAMES[activeCountryCodes[0]] ?? activeCountryCodes[0]
+    }
+    return `${activeCountryCodes.map((c) => COUNTRY_NAMES[c] ?? c).join(", ")}`
+  }, [selectedCompanies, activeCountryCodes])
+
   // Restaurar filtros desde la URL
   useEffect(() => {
-    const country = searchParams.get("country")
     const q = searchParams.get("q")
     const category = searchParams.get("category")
     const tipo = searchParams.get("tipo")
     const review = searchParams.get("review")
     const sort = searchParams.get("sort")
-    if (country && VALID_COUNTRIES.has(country)) setSelectedCountry(country)
     if (q !== null) setSearchQuery(q)
     if (category !== null) setSelectedCategory(category)
     if (tipo !== null) setSelectedTipo(tipo)
@@ -69,19 +116,6 @@ function ProductosContent() {
       setSortBy(sort)
     }
   }, [searchParams])
-
-  // Ajustar país seleccionado a los permitidos cuando carguen los permisos
-  useEffect(() => {
-    if (!allowedCountries.length) return
-    setSelectedCountry((prev) => {
-      // Si ya hay un país seleccionado y está permitido, respetarlo
-      if (allowedCountries.includes(prev)) return prev
-      // Si el usuario tiene Argentina entre sus países, usarla como default
-      if (allowedCountries.includes("AR")) return "AR"
-      // Si no, usar el primero permitido
-      return allowedCountries[0]
-    })
-  }, [allowedCountries])
 
   // Cargar compañías (mismo origen que P&L/Real Import)
   useEffect(() => {
@@ -98,55 +132,78 @@ function ProductosContent() {
     if (allowedCountries.length) loadCompanies()
   }, [allowedCountries])
 
-  const selectedCountriesFromCompanies = useMemo(() => {
-    const out = new Set<string>()
-    for (const c of selectedCompanies) {
-      const cc = getCountryForCompany(c)
-      if (cc) out.add(cc)
-    }
-    return Array.from(out)
-  }, [selectedCompanies])
+  const [filtersReady, setFiltersReady] = useState(false)
 
-  // Default: si no hay selección, seleccionamos "todas"
+  // Restaurar compañías desde URL (también al volver atrás desde detalle)
   useEffect(() => {
     if (!companies.length) return
-    if (selectedCompanies.length) return
-    setSelectedCompanies(companies)
-  }, [companies, selectedCompanies.length])
 
-  // Mantener selectedCountry (país activo) consistente con selección de compañías
-  useEffect(() => {
-    if (!selectedCountriesFromCompanies.length) return
-    if (selectedCountriesFromCompanies.includes(selectedCountry)) return
-    setSelectedCountry(selectedCountriesFromCompanies[0])
-  }, [selectedCountriesFromCompanies, selectedCountry])
+    const companiesParam = searchParams.get("companies")
+    if (companiesParam) {
+      const picked = companiesParam
+        .split(",")
+        .map((s) => s.trim())
+        .filter((c) => companies.includes(c))
+      if (picked.length) {
+        setSelectedCompanies(picked)
+        setFiltersReady(true)
+        return
+      }
+    }
+    const legacyCountry = searchParams.get("country")
+    if (legacyCountry && VALID_COUNTRIES.has(legacyCountry)) {
+      const matching = companies.filter((c) => getCountryForCompany(c) === legacyCountry)
+      if (matching.length) {
+        setSelectedCompanies(matching)
+        setFiltersReady(true)
+        return
+      }
+    }
+    if (!companiesParam && !legacyCountry) {
+      setSelectedCompanies(companies)
+    }
+    setFiltersReady(true)
+  }, [searchParams, companies])
 
-  // Mantener la URL en sync con los filtros para que al volver atrás se conserven
-  useEffect(() => {
+  const listReturnUrl = useMemo(() => {
     const params = new URLSearchParams()
-    // No añadimos el país a la URL cuando es el default (AR) para mantener URLs limpias
-    if (selectedCountry && selectedCountry !== "AR") params.set("country", selectedCountry)
+    if (
+      selectedCompanies.length > 0 &&
+      companies.length > 0 &&
+      selectedCompanies.length < companies.length
+    ) {
+      params.set("companies", selectedCompanies.join(","))
+    }
     if (searchQuery) params.set("q", searchQuery)
     if (selectedCategory) params.set("category", selectedCategory)
     if (selectedTipo) params.set("tipo", selectedTipo)
     if (reviewFilter !== "all") params.set("review", reviewFilter)
     if (sortBy !== "name") params.set("sort", sortBy)
     const query = params.toString()
-    const url = query ? `/productos?${query}` : "/productos"
-    const current = typeof window !== "undefined" ? window.location.pathname + (window.location.search || "") : ""
-    if (current !== url) {
-      router.replace(url, { scroll: false })
-    }
-  }, [selectedCountry, searchQuery, selectedCategory, selectedTipo, reviewFilter, sortBy, router])
+    return query ? `/productos?${query}` : "/productos"
+  }, [
+    selectedCompanies,
+    companies.length,
+    searchQuery,
+    selectedCategory,
+    selectedTipo,
+    reviewFilter,
+    sortBy,
+  ])
 
-  // Obtener categorías y tipos únicos
-  const categories = useMemo(() => {
-    const cats = new Set<string>()
-    products.forEach((p) => {
-      if (p.category) cats.add(p.category)
-    })
-    return Array.from(cats).sort()
-  }, [products])
+  // Mantener la URL en sync (solo después de hidratar desde URL, para no borrar ?companies= al volver)
+  useEffect(() => {
+    if (!filtersReady || !companies.length) return
+
+    const current =
+      typeof window !== "undefined" ? window.location.pathname + (window.location.search || "") : ""
+    if (current !== listReturnUrl) {
+      router.replace(listReturnUrl, { scroll: false })
+    }
+    saveProductosListReturn(listReturnUrl)
+  }, [filtersReady, companies.length, listReturnUrl, router])
+
+  const categories = PRODUCT_CATEGORIES_SORTED
 
   const tipos = useMemo(() => {
     const tps = new Set<string>()
@@ -156,68 +213,119 @@ function ProductosContent() {
     return Array.from(tps).sort()
   }, [products])
 
-  // Cargar productos
-  useEffect(() => {
-    async function loadProducts() {
-      setIsLoading(true)
-      setError(null)
-      try {
-        const dataAll = await getProductsWithOverrides()
-        const data =
-          selectedCountriesFromCompanies.length === 0
-            ? dataAll
-            : dataAll.filter((p) =>
-                (p.country_overrides || []).length === 0 ||
-                (p.country_overrides || []).some((o) => selectedCountriesFromCompanies.includes(o.country_code))
-              )
-        // Ordenar productos alfabéticamente por nombre
-        const sortedData = data.sort((a, b) => productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), 'es', { sensitivity: 'base' }))
-        setProducts(sortedData)
-        if (sortedData.length === 0) {
-          setError("No se encontraron productos. Verifica la conexión con la base de datos.")
-          setSalesCountByProductId({})
-          setBudgetUnitsByProductId({})
-        } else {
-          const productNames = sortedData.map((p) => p.name)
-          const nameToId = new Map(sortedData.map((p) => [p.name, p.id]))
-          const MONTH_KEYS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"] as const
+  const reloadProducts = useCallback(async () => {
+    if (!filtersReady) return
 
-          const counts = await getTotalSalesByProductIds(sortedData.map((p) => p.id), selectedCountry)
-          setSalesCountByProductId(counts)
-
-          const { data: budgetData, error: budgetError } = await supabase
-            .from("budget")
-            .select(["product_id", "product_name", ...MONTH_KEYS].join(","))
-            .eq("year", 2026)
-            .eq("budget_name", "budget")
-            .eq("country_code", selectedCountry)
-            .in("product_name", productNames)
-
-          const budgetUnitsById: Record<string, number> = {}
-          for (const p of sortedData) budgetUnitsById[p.id] = 0
-
-          if (!budgetError && Array.isArray(budgetData)) {
-            for (const r of budgetData as any[]) {
-              const id = r.product_id || nameToId.get(r.product_name)
-              if (!id) continue
-              const units = MONTH_KEYS.reduce((sum, k) => sum + Number(r[k] ?? 0), 0)
-              budgetUnitsById[id] = (budgetUnitsById[id] ?? 0) + units
-            }
-          } else if (budgetError) {
-            console.error("Error fetching budget units:", budgetError)
-          }
-
-          setBudgetUnitsByProductId(budgetUnitsById)
-        }
-      } catch (error) {
-        console.error("Error loading products:", error)
-        setError(error instanceof Error ? error.message : "Error al cargar los productos")
-      } finally {
-        setIsLoading(false)
-      }
+    if (!activeCountryCodes.length || !selectedCompanies.length) {
+      setProducts([])
+      setSalesCountByProductId({})
+      setBudgetUnitsByProductId({})
+      setIsLoading(false)
+      return
     }
-    loadProducts()
-  }, [selectedCountry, selectedCountriesFromCompanies])
+
+    setIsLoading(true)
+    setError(null)
+    try {
+      const dataAll = await getProductsWithOverrides()
+      const productIds = dataAll.map((p) => p.id)
+      const MONTH_KEYS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"] as const
+
+      const salesByCountry: Record<string, Record<string, number>> = {}
+      for (const cc of activeCountryCodes) {
+        const companiesForCountry = selectedCompanies.filter((c) => getCountryForCompany(c) === cc)
+        salesByCountry[cc] = await getTotalSalesByProductIds(productIds, {
+          companies: companiesForCountry,
+        })
+      }
+
+      const displaySales: Record<string, number> = {}
+      for (const id of productIds) {
+        displaySales[id] = activeCountryCodes.reduce(
+          (sum, cc) => sum + (salesByCountry[cc]?.[id] ?? 0),
+          0
+        )
+      }
+      setSalesCountByProductId(displaySales)
+
+      const nameToId = new Map(dataAll.map((p) => [p.name, p.id]))
+      const budgetByCountry: Record<string, Record<string, number>> = {}
+      for (const cc of activeCountryCodes) {
+        budgetByCountry[cc] = {}
+        for (const id of productIds) budgetByCountry[cc][id] = 0
+      }
+
+      const productNames = dataAll.map((p) => p.name)
+      if (productNames.length > 0) {
+        const { data: budgetData, error: budgetError } = await supabase
+          .from("budget")
+          .select(["product_id", "product_name", "country_code", ...MONTH_KEYS].join(","))
+          .eq("year", 2026)
+          .eq("budget_name", "budget")
+          .in("country_code", activeCountryCodes)
+          .in("product_name", productNames)
+
+        if (!budgetError && Array.isArray(budgetData)) {
+          for (const r of budgetData as {
+            product_id?: string
+            product_name?: string
+            country_code?: string
+            [k: string]: unknown
+          }[]) {
+            const cc = r.country_code
+            if (!cc || !budgetByCountry[cc]) continue
+            const id = r.product_id || nameToId.get(String(r.product_name ?? ""))
+            if (!id) continue
+            const units = MONTH_KEYS.reduce((sum, k) => sum + Number(r[k] ?? 0), 0)
+            budgetByCountry[cc][id] = (budgetByCountry[cc][id] ?? 0) + units
+          }
+        } else if (budgetError) {
+          console.error("Error fetching budget units:", budgetError)
+        }
+      }
+
+      const displayBudget: Record<string, number> = {}
+      for (const id of productIds) {
+        displayBudget[id] = activeCountryCodes.reduce(
+          (sum, cc) => sum + (budgetByCountry[cc]?.[id] ?? 0),
+          0
+        )
+      }
+      setBudgetUnitsByProductId(displayBudget)
+
+      const list = allCompaniesSelected
+        ? dataAll
+        : filterProductsWithCountriesActivity(
+            dataAll,
+            activeCountryCodes,
+            salesByCountry,
+            budgetByCountry
+          )
+      const sortedData = list.sort((a, b) =>
+        productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), "es", { sensitivity: "base" })
+      )
+      setProducts(sortedData)
+      if (sortedData.length === 0) {
+        setError(
+          dataAll.length === 0
+            ? "No se encontraron productos. Verifica la conexión con la base de datos."
+            : `No hay productos con ventas, budget o precios cargados para ${marketLabel || "el mercado seleccionado"}.`
+        )
+      }
+    } catch (error) {
+      console.error("Error loading products:", error)
+      setError(error instanceof Error ? error.message : "Error al cargar los productos")
+    } finally {
+      setIsLoading(false)
+    }
+  }, [activeCountryCodes, selectedCompanies, marketLabel, allCompaniesSelected, companies.length, filtersReady])
+
+  useEffect(() => {
+    if (!filtersReady) return
+    reloadProducts()
+  }, [reloadProducts, filtersReady])
+
+  const showTableLoading = !filtersReady || isLoading || companies.length === 0
 
   // Filtrar y ordenar productos
   useEffect(() => {
@@ -234,14 +342,15 @@ function ProductosContent() {
     }
 
     if (selectedCategory) {
-      filtered = filtered.filter((p) => p.category === selectedCategory)
+      filtered = filtered.filter((p) =>
+        productMatchesCategoryFilter(p.category, new Set([selectedCategory]))
+      )
     }
 
     if (selectedTipo) {
       filtered = filtered.filter((p) => p.tipo === selectedTipo)
     }
 
-    // Filtro por revisado
     if (reviewFilter !== "all") {
       filtered = filtered.filter((p) => {
         const override = p.country_overrides?.find((o) => o.country_code === selectedCountry)
@@ -250,7 +359,6 @@ function ProductosContent() {
       })
     }
 
-    // Ordenamiento
     if (sortBy === "sales_desc") {
       filtered.sort((a, b) => {
         const sa = salesCountByProductId[a.id] ?? 0
@@ -267,14 +375,6 @@ function ProductosContent() {
     setFilteredProducts(filtered)
   }, [products, searchQuery, selectedCategory, selectedTipo, reviewFilter, sortBy, selectedCountry, salesCountByProductId])
 
-  const handleViewProduct = (product: ProductWithOverrides) => {
-    // La navegación se maneja en ProductTable
-  }
-
-  const handleEditProduct = (product: ProductWithOverrides) => {
-    // La navegación se maneja en ProductTable
-  }
-
   const handleDeleteProduct = async (product: ProductWithOverrides, scope: ProductDeleteScope) => {
     try {
       if (scope === "all-countries") {
@@ -286,38 +386,18 @@ function ProductosContent() {
           await deleteProductFromCountry(product.id, countryCode)
         }
       }
-      
-      // Recargar productos después de eliminar
-      const dataAll = await getProductsWithOverrides()
-      const data =
-        selectedCountriesFromCompanies.length === 0
-          ? dataAll
-          : dataAll.filter((p) =>
-              (p.country_overrides || []).length === 0 ||
-              (p.country_overrides || []).some((o) => selectedCountriesFromCompanies.includes(o.country_code))
-            )
-      const sortedData = data.sort((a, b) => productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), 'es', { sensitivity: 'base' }))
-      setProducts(sortedData)
+
+      await reloadProducts()
     } catch (error) {
       console.error("Error deleting product:", error)
-      alert(`Error al eliminar el producto: ${error instanceof Error ? error.message : 'Error desconocido'}`)
+      alert(`Error al eliminar el producto: ${error instanceof Error ? error.message : "Error desconocido"}`)
       throw error
     }
   }
 
-  const handleReviewToggle = async (productId: string, countryCode: string, checked: boolean) => {
-    // Recargar productos después de actualizar el estado de revisión
+  const handleReviewToggle = async (_productId: string, _countryCode: string, _checked: boolean) => {
     try {
-      const dataAll = await getProductsWithOverrides()
-      const data =
-        selectedCountriesFromCompanies.length === 0
-          ? dataAll
-          : dataAll.filter((p) =>
-              (p.country_overrides || []).length === 0 ||
-              (p.country_overrides || []).some((o) => selectedCountriesFromCompanies.includes(o.country_code))
-            )
-      const sortedData = data.sort((a, b) => productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), 'es', { sensitivity: 'base' }))
-      setProducts(sortedData)
+      await reloadProducts()
     } catch (error) {
       console.error("Error reloading products after review toggle:", error)
     }
@@ -369,7 +449,6 @@ function ProductosContent() {
       const result = await response.json()
       const { newProductId, mergedProduct, stats } = result
 
-      // Mostrar un pequeño resumen antes de navegar
       const resumenLineas: string[] = []
       if (mergedProduct?.name) {
         resumenLineas.push(`Nuevo producto: ${mergedProduct.name}`)
@@ -386,16 +465,12 @@ function ProductosContent() {
         alert(resumenLineas.join("\n"))
       }
 
-      // Recargar lista de productos
-      const data = await getProductsWithOverrides(selectedCountry)
-      const sortedData = data.sort((a, b) =>
-        productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), "es", { sensitivity: "base" })
-      )
-      setProducts(sortedData)
+      await reloadProducts()
 
-      // Navegar al nuevo producto fusionado
       if (newProductId) {
-        router.push(`/productos/${newProductId}?country=${selectedCountry}`)
+        router.push(
+          `/productos/${newProductId}?country=${selectedCountry}&returnTo=${encodeURIComponent(listReturnUrl)}`
+        )
       }
     } catch (error) {
       console.error("Error al fusionar productos:", error)
@@ -410,7 +485,9 @@ function ProductosContent() {
     openCreateProductDialog({
       defaultName: "",
       onCreated: async (product) => {
-        router.push(`/productos/${product.id}?country=${selectedCountry}`)
+        router.push(
+          `/productos/${product.id}?country=${selectedCountry}&returnTo=${encodeURIComponent(listReturnUrl)}`
+        )
       },
     })
   }
@@ -418,14 +495,17 @@ function ProductosContent() {
   return (
     <div className="min-h-screen bg-gradient-to-r from-blue-900 via-blue-950 to-slate-900">
       <div className="container mx-auto py-8 px-4 max-w-7xl">
-        {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-2">
-              Productos
-            </h1>
+            <h1 className="text-3xl font-bold text-white mb-2">Productos</h1>
             <p className="text-white/80 mt-1">
-              Gestiona tus productos y configura precios por compañía (mercado)
+              Tildá cada compañía que quieras ver. Con todas tildadas se listan todos los productos; con una o varias, solo los activos en ese mercado.
+              {marketLabel ? (
+                <span className="block text-white/60 text-sm mt-1">
+                  Mostrando: <span className="text-white/90 font-medium">{marketLabel}</span>
+                  {selectedCompanies.length === 1 ? ` · ${selectedCompanies[0]}` : null}
+                </span>
+              ) : null}
             </p>
           </div>
           <Button
@@ -437,13 +517,13 @@ function ProductosContent() {
           </Button>
         </div>
 
-        {/* Mercado = compañía / país en BD */}
         <div className="mb-6 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4 shadow-sm">
-          <label className="text-sm font-semibold mb-3 block text-white/90">Vista por compañía</label>
+          <label className="text-sm font-semibold mb-3 block text-white/90">Compañía</label>
           <MultiCheckboxDropdown
             label="Compañía"
             hideLabel
             allLabel="Todas las compañías"
+            pendingLabel="Cargando compañías…"
             options={companies.map((c) => ({ value: c, label: c }))}
             selectedValues={selectedCompanies.length ? selectedCompanies : companies}
             onSelectedValuesChange={setSelectedCompanies}
@@ -451,7 +531,6 @@ function ProductosContent() {
           />
         </div>
 
-        {/* Filtros */}
         <div className="mb-6 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4 shadow-sm">
           <ProductFilters
             searchQuery={searchQuery}
@@ -469,22 +548,23 @@ function ProductosContent() {
           />
         </div>
 
-        {/* Tabla de Productos */}
-        {isLoading ? (
-          <div className="text-center py-12 text-white/80">Cargando productos...</div>
+        {showTableLoading ? (
+          <ProductosTableSkeleton showReviewColumn={canEdit} />
         ) : error ? (
           <div className="rounded-lg border border-red-400/30 bg-red-500/10 backdrop-blur-sm p-4">
             <p className="text-red-200 font-medium">Error al cargar productos</p>
             <p className="text-red-300 text-sm mt-1">{error}</p>
           </div>
         ) : (
+          <div className="transition-opacity duration-300 ease-out">
           <ProductTable
             products={filteredProducts}
             selectedCountry={selectedCountry}
+            listReturnUrl={listReturnUrl}
             salesCountByProductId={salesCountByProductId}
             budgetUnitsByProductId={budgetUnitsByProductId}
-            onViewProduct={handleViewProduct}
-            onEditProduct={handleEditProduct}
+            onViewProduct={() => {}}
+            onEditProduct={() => {}}
             onDeleteProduct={handleDeleteProduct}
             onReviewToggle={handleReviewToggle}
             canEdit={canEdit}
@@ -492,6 +572,7 @@ function ProductosContent() {
             canDeleteGlobally={canDeleteGlobally}
             onRequestMerge={handleRequestMerge}
           />
+          </div>
         )}
 
         <ProductMergeDialog
@@ -507,13 +588,20 @@ function ProductosContent() {
 
 export default function ProductosPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-r from-blue-900 via-blue-950 to-slate-900 flex items-center justify-center">
-        <p className="text-white/80">Cargando...</p>
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gradient-to-r from-blue-900 via-blue-950 to-slate-900">
+          <div className="container mx-auto py-8 px-4 max-w-7xl">
+            <div className="h-9 w-48 rounded-md bg-white/10 animate-pulse mb-6" />
+            <div className="mb-6 rounded-lg bg-white/10 border border-white/20 p-4">
+              <div className="h-10 w-full max-w-[520px] rounded-md bg-white/10 animate-pulse" />
+            </div>
+            <ProductosTableSkeleton />
+          </div>
+        </div>
+      }
+    >
       <ProductosContent />
     </Suspense>
   )
 }
-

@@ -4,6 +4,7 @@
  */
 
 import { supabase } from './supabase'
+import { productMatchesCategoryFilter } from './product-categories'
 
 export interface Product {
   id: string
@@ -494,8 +495,8 @@ export async function getMedicoInstitucionSales(
 
     const product = resolveProductForSale(products, test, ventasTestToProductId)
     if (categoryFilter) {
-      const cat = product?.category?.trim() || 'Otros'
-      if (!categoryFilter.has(cat)) continue
+      if (!product) continue
+      if (!productMatchesCategoryFilter(product.category, categoryFilter)) continue
     }
     const product_id = product?.id ?? row.id_producto ?? null
     const productKey = product_id ?? test
@@ -622,8 +623,8 @@ export async function createProduct(input: {
   }
 
   const ensureOverridesForAllCountries = async (productId: string) => {
-    // La UI muestra productos en cada país solo si existen overrides para ese país.
-    // Creamos overrides “vacíos” (pero existentes) para asegurar visibilidad.
+    // La lista de productos filtra por actividad en el país (ventas, budget, precios).
+    // Creamos overrides vacíos por país para poder cargar precios desde el detalle.
     const { data: existingRows, error: ensureError } = await supabase
       .from("product_country_overrides")
       .select("country_code")
@@ -868,11 +869,26 @@ export const COMPANY_TO_COUNTRY: Record<string, 'UY' | 'AR' | 'MX' | 'CL' | 'VE'
  * Si se pasa countryCode, solo cuenta ventas de compañías que pertenecen a ese país.
  * Devuelve un mapa product_id -> cantidad total de ventas.
  */
+export type SalesCountFilter =
+  | string
+  | {
+      countryCode?: string
+      /** Si se pasa, solo cuenta ventas de esas compañías (ej. SouthGenetics LLC Argentina). */
+      companies?: string[]
+    }
+
 export async function getTotalSalesByProductIds(
   productIds: string[],
-  countryCode?: string
+  filter?: SalesCountFilter
 ): Promise<Record<string, number>> {
   if (productIds.length === 0) return {}
+
+  const opts =
+    typeof filter === "string" ? { countryCode: filter } : filter ?? {}
+  const companySet =
+    opts.companies?.length && opts.companies.length > 0
+      ? new Set(opts.companies.map((c) => c.trim()))
+      : null
 
   const { data, error } = await supabase
     .from('ventas')
@@ -889,9 +905,12 @@ export async function getTotalSalesByProductIds(
 
   ;(data || []).forEach((row: { id_producto: string | null; company: string | null }) => {
     if (!row.id_producto) return
-    if (countryCode) {
-      const companyCountry = row.company ? COMPANY_TO_COUNTRY[row.company.trim()] : undefined
-      if (companyCountry !== countryCode) return
+    const company = row.company?.trim() ?? ""
+    if (companySet) {
+      if (!companySet.has(company)) return
+    } else if (opts.countryCode) {
+      const companyCountry = company ? COMPANY_TO_COUNTRY[company] : undefined
+      if (companyCountry !== opts.countryCode) return
     }
     counts[row.id_producto] = (counts[row.id_producto] ?? 0) + 1
   })

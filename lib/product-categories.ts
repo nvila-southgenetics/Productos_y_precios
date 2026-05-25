@@ -47,9 +47,27 @@ export const PRODUCT_CATEGORY_COLORS_LIGHT: Record<string, string> = {
   "Otros": "bg-slate-200 text-slate-800 border-slate-300",
 }
 
+/** Productos sin categoría en BD se agrupan solo bajo "Otros" al filtrar. */
+export const UNCATEGORIZED_CATEGORY_BUCKET = "Otros"
+
 export function isPredefinedCategory(category: string | null | undefined): boolean {
   if (!category?.trim()) return false
   return (PRODUCT_CATEGORIES as readonly string[]).includes(category.trim())
+}
+
+/**
+ * Indica si un producto del catálogo pasa el filtro de categorías seleccionado.
+ * Sin categoría (null/vacío) solo coincide si el filtro incluye "Otros".
+ */
+export function productMatchesCategoryFilter(
+  category: string | null | undefined,
+  allowedCategories: ReadonlySet<string> | Set<string>
+): boolean {
+  const cat = category?.trim() ?? ""
+  if (!cat) {
+    return allowedCategories.has(UNCATEGORIZED_CATEGORY_BUCKET)
+  }
+  return allowedCategories.has(cat)
 }
 
 export function getCategoryColor(category: string | null | undefined, variant: "dark" | "light" = "dark"): string {

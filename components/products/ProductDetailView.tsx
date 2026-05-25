@@ -10,7 +10,14 @@ import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { formatCurrency, formatPercentage, cn, productNameSortKey, displayProductName, formatUSDNumber } from "@/lib/utils"
 import type { ProductWithOverrides, ProductCountryOverride } from "@/lib/supabase-mcp"
-import { updateProductCountryOverride, getProductsWithOverrides, CHANNELS, updateProductMeta } from "@/lib/supabase-mcp"
+import {
+  updateProductCountryOverride,
+  getProductsWithOverrides,
+  getTotalSalesByProductIds,
+  CHANNELS,
+  updateProductMeta,
+} from "@/lib/supabase-mcp"
+import { filterProductsWithCountryActivity } from "@/lib/product-country-activity"
 import { Info, AlertTriangle, GitCompare, ChevronDown, Search } from "lucide-react"
 import { PRODUCT_CATEGORIES, PRODUCT_CATEGORY_COLORS, isPredefinedCategory } from "@/lib/product-categories"
 
@@ -148,18 +155,29 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Cargar lista de productos cuando se entra en modo comparación
+  // Cargar lista de productos cuando se entra en modo comparación (mismo criterio que el listado)
   useEffect(() => {
     if (isComparing) {
       loadProducts()
     }
-  }, [isComparing])
+  }, [isComparing, selectedCountry])
 
   const loadProducts = async () => {
     setIsLoadingProducts(true)
     try {
       const products = await getProductsWithOverrides()
-      setAllProducts(products.map(p => ({ id: p.id, name: p.name })).sort((a, b) => productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), 'es', { sensitivity: 'base' })))
+      const sales = await getTotalSalesByProductIds(
+        products.map((p) => p.id),
+        selectedCountry
+      )
+      const active = filterProductsWithCountryActivity(products, selectedCountry, sales, {})
+      setAllProducts(
+        active
+          .map((p) => ({ id: p.id, name: p.name }))
+          .sort((a, b) =>
+            productNameSortKey(a.name).localeCompare(productNameSortKey(b.name), "es", { sensitivity: "base" })
+          )
+      )
     } catch (error) {
       console.error("Error loading products:", error)
     } finally {

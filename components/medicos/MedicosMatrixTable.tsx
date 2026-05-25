@@ -14,8 +14,23 @@ interface MedicosMatrixTableProps {
   isLoading?: boolean
 }
 
-type RowSortMode = "institution" | "doctor"
+type RowSortMode =
+  | "institution_sales"
+  | "institution_name"
+  | "doctor_sales"
+  | "doctor_name"
 type ColumnSortMode = "sales_desc" | "name"
+
+const localeEs = "es" as const
+
+function compareInstitutionOrder(
+  a: { key: string; label: string },
+  b: { key: string; label: string }
+): number {
+  if (a.key === SIN_INSTITUCION_KEY) return -1
+  if (b.key === SIN_INSTITUCION_KEY) return 1
+  return a.label.localeCompare(b.label, localeEs)
+}
 
 type ProductCol = {
   productKey: string
@@ -107,7 +122,7 @@ function formatCell(value: number): string {
 }
 
 export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps) {
-  const [rowSortMode, setRowSortMode] = useState<RowSortMode>("institution")
+  const [rowSortMode, setRowSortMode] = useState<RowSortMode>("institution_sales")
   const [columnSortMode, setColumnSortMode] = useState<ColumnSortMode>("sales_desc")
   const [expandedInstitutions, setExpandedInstitutions] = useState<Set<string>>(new Set())
 
@@ -154,7 +169,12 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
       instLabels.set(row.institucionKey, row.institucionLabel)
     }
 
-    if (rowSortMode === "doctor") {
+    const sortByDoctorSales = rowSortMode === "doctor_sales"
+    const sortByDoctorName = rowSortMode === "doctor_name"
+    const sortByInstSales = rowSortMode === "institution_sales"
+    const sortByInstName = rowSortMode === "institution_name"
+
+    if (sortByDoctorSales || sortByDoctorName) {
       const allMedicos = new Set<string>()
       for (const row of rows) allMedicos.add(row.medico)
       return [...allMedicos]
@@ -168,15 +188,19 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
           sortTotal: rowTotal(countMap, productKeys, medico, null),
         }))
         .sort((a, b) => {
-          if (b.sortTotal !== a.sortTotal) return b.sortTotal - a.sortTotal
-          return a.label.localeCompare(b.label, "es")
+          if (sortByDoctorSales && b.sortTotal !== a.sortTotal) {
+            return b.sortTotal - a.sortTotal
+          }
+          return a.label.localeCompare(b.label, localeEs)
         })
         .map(({ sortTotal: _s, ...r }) => r)
     }
 
     const namedInstKeys = [...instLabels.keys()]
       .filter((k) => k !== SIN_INSTITUCION_KEY)
-      .sort((a, b) => (instLabels.get(a) ?? a).localeCompare(instLabels.get(b) ?? b, "es"))
+      .sort((a, b) =>
+        (instLabels.get(a) ?? a).localeCompare(instLabels.get(b) ?? b, localeEs)
+      )
 
     const institutionKeys = instLabels.has(SIN_INSTITUCION_KEY)
       ? [SIN_INSTITUCION_KEY, ...namedInstKeys]
@@ -190,8 +214,11 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
         instTotal: rowTotal(countMap, productKeys, null, key),
       }))
       .sort((a, b) => {
-        if (b.instTotal !== a.instTotal) return b.instTotal - a.instTotal
-        return a.label.localeCompare(b.label, "es")
+        if (sortByInstSales) {
+          if (b.instTotal !== a.instTotal) return b.instTotal - a.instTotal
+          return compareInstitutionOrder(a, b)
+        }
+        return compareInstitutionOrder(a, b)
       })
 
     const out: DisplayRow[] = []
@@ -203,8 +230,8 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
           total: rowTotal(countMap, productKeys, medico, inst.key),
         }))
         .sort((a, b) => {
-          if (b.total !== a.total) return b.total - a.total
-          return a.medico.localeCompare(b.medico, "es")
+          if (sortByInstSales && b.total !== a.total) return b.total - a.total
+          return a.medico.localeCompare(b.medico, localeEs)
         })
 
       out.push({
@@ -273,13 +300,19 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
           <Select
             value={rowSortMode}
             onChange={(e) => setRowSortMode(e.target.value as RowSortMode)}
-            className={cn(selectClass, "min-w-[220px]")}
+            className={cn(selectClass, "min-w-[280px]")}
           >
-            <option value="institution" className="bg-blue-900 text-white">
-              Por institución (más ventas) → médico
+            <option value="institution_sales" className="bg-blue-900 text-white">
+              Institución (más ventas) → médico (más ventas)
             </option>
-            <option value="doctor" className="bg-blue-900 text-white">
-              Por médico (más ventas, sin institución)
+            <option value="institution_name" className="bg-blue-900 text-white">
+              Institución (A-Z) → médico (A-Z)
+            </option>
+            <option value="doctor_sales" className="bg-blue-900 text-white">
+              Médico (más ventas, sin institución)
+            </option>
+            <option value="doctor_name" className="bg-blue-900 text-white">
+              Médico (A-Z, sin institución)
             </option>
           </Select>
         </div>
@@ -288,17 +321,17 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
           <Select
             value={columnSortMode}
             onChange={(e) => setColumnSortMode(e.target.value as ColumnSortMode)}
-            className={cn(selectClass, "min-w-[200px]")}
+            className={cn(selectClass, "min-w-[240px]")}
           >
             <option value="sales_desc" className="bg-blue-900 text-white">
-              Productos más vendidos primero
+              Productos: más vendidos primero
             </option>
             <option value="name" className="bg-blue-900 text-white">
-              Productos por nombre
+              Productos: alfabético (A-Z)
             </option>
           </Select>
         </div>
-        {rowSortMode === "institution" && (
+        {(rowSortMode === "institution_sales" || rowSortMode === "institution_name") && (
           <p className="text-xs text-white/50 pb-1">
             Clic en una fila de institución para ver el desglose por médico.
           </p>
@@ -310,7 +343,9 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
           <thead>
             <tr className="border-b border-white/20 bg-white/10">
               <th className="sticky left-0 z-20 min-w-[200px] border-r border-white/20 bg-blue-950/95 px-3 py-2 text-left font-semibold text-white">
-                {rowSortMode === "institution" ? "Institución / Médico" : "Médico"}
+                {rowSortMode === "institution_sales" || rowSortMode === "institution_name"
+                  ? "Institución / Médico"
+                  : "Médico"}
               </th>
               <th className="min-w-[72px] border-r border-white/20 bg-blue-950/95 px-2 py-2 text-center font-semibold text-white">
                 Total

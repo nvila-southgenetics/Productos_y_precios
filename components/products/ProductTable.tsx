@@ -21,6 +21,8 @@ export type ProductDeleteScope =
 interface ProductTableProps {
   products: ProductWithOverrides[]
   selectedCountry: string
+  /** URL del listado con filtros actuales (para volver desde detalle). */
+  listReturnUrl?: string
   salesCountByProductId?: Record<string, number>
   budgetUnitsByProductId?: Record<string, number>
   onViewProduct: (product: ProductWithOverrides) => void
@@ -45,9 +47,19 @@ const tipoColors: Record<string, string> = {
   "Orina": "bg-cyan-300/20 text-cyan-200 border-cyan-300/30",
 }
 
+function productDetailHref(productId: string, selectedCountry: string, listReturnUrl?: string) {
+  const params = new URLSearchParams()
+  params.set("country", selectedCountry)
+  if (listReturnUrl) {
+    params.set("returnTo", listReturnUrl)
+  }
+  return `/productos/${productId}?${params.toString()}`
+}
+
 export function ProductTable({
   products,
   selectedCountry,
+  listReturnUrl = "/productos",
   salesCountByProductId = {},
   budgetUnitsByProductId = {},
   onViewProduct,
@@ -81,18 +93,17 @@ export function ProductTable({
   }, [products, selectedCountry])
 
   const handleProductClick = (product: ProductWithOverrides) => {
-    // Pasar el país actual como query param para que el detalle se abra en ese país
-    router.push(`/productos/${product.id}?country=${selectedCountry}`)
+    router.push(productDetailHref(product.id, selectedCountry, listReturnUrl))
   }
 
   const handleViewClick = (e: React.MouseEvent, product: ProductWithOverrides) => {
     e.stopPropagation()
-    router.push(`/productos/${product.id}?country=${selectedCountry}`)
+    router.push(productDetailHref(product.id, selectedCountry, listReturnUrl))
   }
 
   const handleEditClick = (e: React.MouseEvent, product: ProductWithOverrides) => {
     e.stopPropagation()
-    router.push(`/productos/${product.id}?country=${selectedCountry}`)
+    router.push(productDetailHref(product.id, selectedCountry, listReturnUrl))
   }
 
   const handleDeleteClick = (e: React.MouseEvent, product: ProductWithOverrides) => {
