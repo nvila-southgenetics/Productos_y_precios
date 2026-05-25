@@ -1,7 +1,8 @@
 "use client"
 
+import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
-import { BarChart3 } from "lucide-react"
+import { BarChart3, Wallet } from "lucide-react"
 import {
   Bar,
   CartesianGrid,
@@ -181,6 +182,26 @@ export default function InvoicesPage() {
               <p className="text-sm text-white/80 mt-1">Análisis de estado de pago y detalle por cliente</p>
             </div>
           </div>
+        </div>
+
+        <div className="mb-4 flex flex-wrap gap-2">
+          <Button
+            variant="default"
+            className="text-sm bg-white text-slate-900 hover:bg-slate-100"
+            disabled
+          >
+            <BarChart3 className="h-4 w-4 mr-1.5" />
+            Facturas
+          </Button>
+          <Link href="/invoices/payments">
+            <Button
+              variant="outline"
+              className="text-sm bg-transparent text-white border-white/40 hover:bg-white/10"
+            >
+              <Wallet className="h-4 w-4 mr-1.5" />
+              Pagos
+            </Button>
+          </Link>
         </div>
 
         {error && (
