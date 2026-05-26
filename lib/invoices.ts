@@ -1,4 +1,11 @@
 import { format } from "date-fns"
+import {
+  appendYearTotalsToAmountMatrix,
+  buildColumnsWithYearTotals,
+  yearCollectionPercentage,
+  yearTotalKey,
+  YEAR_TOTAL_YEARS,
+} from "@/lib/country-month-matrix"
 import { supabase } from "@/lib/supabase"
 
 export type InvoicePaymentState =
@@ -40,6 +47,7 @@ export interface InvoiceMonthlyPoint {
 
 export interface InvoiceCountryMonthAmounts {
   months: string[]
+  columns: string[]
   rows: Array<{
     country: string
     values: Record<string, number>
@@ -51,6 +59,7 @@ export interface InvoiceCountryMonthAmounts {
 
 export interface InvoiceCountryMonthPercentages {
   months: string[]
+  columns: string[]
   rows: Array<{
     country: string
     percentageValues: Record<string, number>
@@ -238,10 +247,13 @@ export async function getCountryMonthAmounts(): Promise<InvoiceCountryMonthAmoun
 
   const grandTotal = Object.values(totalsByMonth).reduce((acc, value) => acc + value, 0)
 
+  const withYearTotals = appendYearTotalsToAmountMatrix({ months, rows, totalsByMonth })
+
   return {
     months,
-    rows,
-    totalsByMonth,
+    columns: withYearTotals.columns,
+    rows: withYearTotals.rows,
+    totalsByMonth: withYearTotals.totalsByMonth,
     grandTotal,
   }
 }
@@ -281,16 +293,33 @@ export async function getCountryMonthCollectionPercentages(): Promise<InvoiceCou
   const rows = countries.map((country) => {
     const percentageValues: Record<string, number> = {}
     const collectedAmountValues: Record<string, number> = {}
+    const billedByMonth: Record<string, number> = {}
+    const collectedByMonth: Record<string, number> = {}
+
     for (const month of months) {
       const billedAmount = billed.get(country)?.get(month) ?? 0
       const collectedAmount = collected.get(country)?.get(month) ?? 0
+      billedByMonth[month] = billedAmount
+      collectedByMonth[month] = collectedAmount
       percentageValues[month] = billedAmount > 0 ? (collectedAmount / billedAmount) * 100 : 0
       collectedAmountValues[month] = collectedAmount
     }
+
+    for (const year of YEAR_TOTAL_YEARS) {
+      const { percentage, collectedAmount } = yearCollectionPercentage(
+        billedByMonth,
+        collectedByMonth,
+        year
+      )
+      const yKey = yearTotalKey(year)
+      percentageValues[yKey] = percentage
+      collectedAmountValues[yKey] = collectedAmount
+    }
+
     return { country, percentageValues, collectedAmountValues }
   })
 
-  return { months, rows }
+  return { months, columns: buildColumnsWithYearTotals(months), rows }
 }
 
 export async function getInvoicesPage(params: {

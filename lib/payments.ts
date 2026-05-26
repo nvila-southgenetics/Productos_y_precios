@@ -1,4 +1,5 @@
 import { format } from "date-fns"
+import { appendYearTotalsToAmountMatrix } from "@/lib/country-month-matrix"
 import { supabase } from "@/lib/supabase"
 
 export interface PaymentRow {
@@ -31,6 +32,7 @@ export interface PaymentMonthlyPoint {
 
 export interface PaymentCountryMonthAmounts {
   months: string[]
+  columns: string[]
   rows: Array<{
     country: string
     values: Record<string, number>
@@ -257,10 +259,13 @@ export async function getPaymentCountryMonthAmounts(): Promise<PaymentCountryMon
 
   const grandTotal = Object.values(totalsByMonth).reduce((acc, value) => acc + value, 0)
 
+  const withYearTotals = appendYearTotalsToAmountMatrix({ months, rows, totalsByMonth })
+
   return {
     months,
-    rows,
-    totalsByMonth,
+    columns: withYearTotals.columns,
+    rows: withYearTotals.rows,
+    totalsByMonth: withYearTotals.totalsByMonth,
     grandTotal,
   }
 }

@@ -17,6 +17,11 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
+import {
+  countryMonthColumnCellClass,
+  countryMonthColumnHeaderClass,
+  formatCountryMonthColumnHeader,
+} from "@/lib/country-month-matrix"
 import { cn, formatCurrency, formatDate, formatNumber } from "@/lib/utils"
 import {
   getCountryMonthAmounts,
@@ -51,17 +56,6 @@ function paymentLabel(paymentState: string | null): string {
   return paymentState
 }
 
-function formatMonthHeader(monthKey: string): string {
-  const [yearPart, monthPart] = monthKey.split("-")
-  const month = Number(monthPart)
-  const year = Number(yearPart)
-  if (!Number.isFinite(month) || !Number.isFinite(year)) return monthKey
-  const date = new Date(year, month - 1, 1)
-  const monthLabel = date.toLocaleDateString("es-ES", { month: "short" }).replace(".", "")
-  const shortYear = String(year).slice(-2)
-  return `${monthLabel.charAt(0).toUpperCase()}${monthLabel.slice(1)}-${shortYear}`
-}
-
 function percentageDotClass(value: number): string {
   if (value >= 85) return "bg-emerald-500"
   if (value >= 70) return "bg-yellow-400"
@@ -90,12 +84,14 @@ export default function InvoicesPage() {
   const [activeView, setActiveView] = useState<"overview" | "country-amounts" | "country-percentages">("overview")
   const [countryAmounts, setCountryAmounts] = useState<InvoiceCountryMonthAmounts>({
     months: [],
+    columns: [],
     rows: [],
     totalsByMonth: {},
     grandTotal: 0,
   })
   const [countryPercentages, setCountryPercentages] = useState<InvoiceCountryMonthPercentages>({
     months: [],
+    columns: [],
     rows: [],
   })
   const [countryPercentageMode, setCountryPercentageMode] = useState<"percentage" | "amount">("percentage")
@@ -316,9 +312,15 @@ export default function InvoicesPage() {
                 <thead className="bg-slate-100">
                   <tr className="text-left text-slate-700">
                     <th className="px-3 py-2 font-semibold sticky left-0 bg-slate-100">País</th>
-                    {countryAmounts.months.map((month) => (
-                      <th key={month} className="px-3 py-2 font-semibold whitespace-nowrap">
-                        {formatMonthHeader(month)}
+                    {countryAmounts.columns.map((column) => (
+                      <th
+                        key={column}
+                        className={cn(
+                          "px-3 py-2 font-semibold whitespace-nowrap",
+                          countryMonthColumnHeaderClass(column)
+                        )}
+                      >
+                        {formatCountryMonthColumnHeader(column)}
                       </th>
                     ))}
                     <th className="px-3 py-2 font-semibold">Total</th>
@@ -328,9 +330,12 @@ export default function InvoicesPage() {
                   {countryAmounts.rows.map((row) => (
                     <tr key={row.country} className="border-t border-slate-200">
                       <td className="px-3 py-2 font-medium sticky left-0 bg-white">{row.country}</td>
-                      {countryAmounts.months.map((month) => (
-                        <td key={`${row.country}-${month}`} className="px-3 py-2 whitespace-nowrap">
-                          {formatNumber(row.values[month] ?? 0)}
+                      {countryAmounts.columns.map((column) => (
+                        <td
+                          key={`${row.country}-${column}`}
+                          className={cn("px-3 py-2 whitespace-nowrap", countryMonthColumnCellClass(column))}
+                        >
+                          {formatNumber(row.values[column] ?? 0)}
                         </td>
                       ))}
                       <td className="px-3 py-2 font-semibold whitespace-nowrap">{formatNumber(row.total)}</td>
@@ -338,9 +343,15 @@ export default function InvoicesPage() {
                   ))}
                   <tr className="border-t-2 border-slate-300 bg-slate-50">
                     <td className="px-3 py-2 font-semibold sticky left-0 bg-slate-50">Total</td>
-                    {countryAmounts.months.map((month) => (
-                      <td key={`total-${month}`} className="px-3 py-2 font-semibold whitespace-nowrap">
-                        {formatNumber(countryAmounts.totalsByMonth[month] ?? 0)}
+                    {countryAmounts.columns.map((column) => (
+                      <td
+                        key={`total-${column}`}
+                        className={cn(
+                          "px-3 py-2 font-semibold whitespace-nowrap",
+                          countryMonthColumnCellClass(column)
+                        )}
+                      >
+                        {formatNumber(countryAmounts.totalsByMonth[column] ?? 0)}
                       </td>
                     ))}
                     <td className="px-3 py-2 font-bold whitespace-nowrap">{formatNumber(countryAmounts.grandTotal)}</td>
@@ -377,9 +388,15 @@ export default function InvoicesPage() {
                 <thead className="bg-slate-100">
                   <tr className="text-left text-slate-700">
                     <th className="px-3 py-2 font-semibold sticky left-0 bg-slate-100">País</th>
-                    {countryPercentages.months.map((month) => (
-                      <th key={month} className="px-3 py-2 font-semibold whitespace-nowrap">
-                        {formatMonthHeader(month)}
+                    {countryPercentages.columns.map((column) => (
+                      <th
+                        key={column}
+                        className={cn(
+                          "px-3 py-2 font-semibold whitespace-nowrap",
+                          countryMonthColumnHeaderClass(column)
+                        )}
+                      >
+                        {formatCountryMonthColumnHeader(column)}
                       </th>
                     ))}
                   </tr>
@@ -388,11 +405,14 @@ export default function InvoicesPage() {
                   {countryPercentages.rows.map((row) => (
                     <tr key={row.country} className="border-t border-slate-200">
                       <td className="px-3 py-2 font-medium sticky left-0 bg-white">{row.country}</td>
-                      {countryPercentages.months.map((month) => {
-                        const value = row.percentageValues[month] ?? 0
-                        const amount = row.collectedAmountValues[month] ?? 0
+                      {countryPercentages.columns.map((column) => {
+                        const value = row.percentageValues[column] ?? 0
+                        const amount = row.collectedAmountValues[column] ?? 0
                         return (
-                          <td key={`${row.country}-${month}`} className="px-3 py-2 whitespace-nowrap">
+                          <td
+                            key={`${row.country}-${column}`}
+                            className={cn("px-3 py-2 whitespace-nowrap", countryMonthColumnCellClass(column))}
+                          >
                             {countryPercentageMode === "percentage" ? (
                               <span className="inline-flex items-center gap-2">
                                 <span className={cn("h-3 w-3 rounded-full", percentageDotClass(value))} />

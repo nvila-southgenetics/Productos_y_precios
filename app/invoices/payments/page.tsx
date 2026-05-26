@@ -16,6 +16,11 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
+import {
+  countryMonthColumnCellClass,
+  countryMonthColumnHeaderClass,
+  formatCountryMonthColumnHeader,
+} from "@/lib/country-month-matrix"
 import { cn, formatCurrency, formatNumber } from "@/lib/utils"
 import {
   formatPaymentPeriod,
@@ -32,17 +37,6 @@ import {
 
 const PAGE_SIZE = 15
 
-function formatMonthHeader(monthKey: string): string {
-  const [yearPart, monthPart] = monthKey.split("-")
-  const month = Number(monthPart)
-  const year = Number(yearPart)
-  if (!Number.isFinite(month) || !Number.isFinite(year)) return monthKey
-  const date = new Date(year, month - 1, 1)
-  const monthLabel = date.toLocaleDateString("es-ES", { month: "short" }).replace(".", "")
-  const shortYear = String(year).slice(-2)
-  return `${monthLabel.charAt(0).toUpperCase()}${monthLabel.slice(1)}-${shortYear}`
-}
-
 export default function PaymentsPage() {
   const [metrics, setMetrics] = useState<PaymentMetrics>({
     total: 0,
@@ -54,6 +48,7 @@ export default function PaymentsPage() {
   const [activeView, setActiveView] = useState<"overview" | "country-amounts">("overview")
   const [countryAmounts, setCountryAmounts] = useState<PaymentCountryMonthAmounts>({
     months: [],
+    columns: [],
     rows: [],
     totalsByMonth: {},
     grandTotal: 0,
@@ -246,9 +241,15 @@ export default function PaymentsPage() {
                 <thead className="bg-slate-100">
                   <tr className="text-left text-slate-700">
                     <th className="px-3 py-2 font-semibold sticky left-0 bg-slate-100">País</th>
-                    {countryAmounts.months.map((month) => (
-                      <th key={month} className="px-3 py-2 font-semibold whitespace-nowrap">
-                        {formatMonthHeader(month)}
+                    {countryAmounts.columns.map((column) => (
+                      <th
+                        key={column}
+                        className={cn(
+                          "px-3 py-2 font-semibold whitespace-nowrap",
+                          countryMonthColumnHeaderClass(column)
+                        )}
+                      >
+                        {formatCountryMonthColumnHeader(column)}
                       </th>
                     ))}
                     <th className="px-3 py-2 font-semibold">Total</th>
@@ -258,9 +259,12 @@ export default function PaymentsPage() {
                   {countryAmounts.rows.map((row) => (
                     <tr key={row.country} className="border-t border-slate-200">
                       <td className="px-3 py-2 font-medium sticky left-0 bg-white">{row.country}</td>
-                      {countryAmounts.months.map((month) => (
-                        <td key={`${row.country}-${month}`} className="px-3 py-2 whitespace-nowrap">
-                          {formatNumber(row.values[month] ?? 0)}
+                      {countryAmounts.columns.map((column) => (
+                        <td
+                          key={`${row.country}-${column}`}
+                          className={cn("px-3 py-2 whitespace-nowrap", countryMonthColumnCellClass(column))}
+                        >
+                          {formatNumber(row.values[column] ?? 0)}
                         </td>
                       ))}
                       <td className="px-3 py-2 font-semibold whitespace-nowrap">{formatNumber(row.total)}</td>
@@ -268,9 +272,15 @@ export default function PaymentsPage() {
                   ))}
                   <tr className="border-t-2 border-slate-300 bg-slate-50">
                     <td className="px-3 py-2 font-semibold sticky left-0 bg-slate-50">Total</td>
-                    {countryAmounts.months.map((month) => (
-                      <td key={`total-${month}`} className="px-3 py-2 font-semibold whitespace-nowrap">
-                        {formatNumber(countryAmounts.totalsByMonth[month] ?? 0)}
+                    {countryAmounts.columns.map((column) => (
+                      <td
+                        key={`total-${column}`}
+                        className={cn(
+                          "px-3 py-2 font-semibold whitespace-nowrap",
+                          countryMonthColumnCellClass(column)
+                        )}
+                      >
+                        {formatNumber(countryAmounts.totalsByMonth[column] ?? 0)}
                       </td>
                     ))}
                     <td className="px-3 py-2 font-bold whitespace-nowrap">
