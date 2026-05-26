@@ -63,8 +63,12 @@ export function MedicosFilters({
   const selectedCompaniesEffective = selectedCompanies.length ? selectedCompanies : companies
   const llcCountriesEffective = selectedLlcCountries.length ? selectedLlcCountries : llcCountries
   const llcIsSelected = selectedCompaniesEffective.includes(GENERAL_LLC_COMPANY)
+  const orderedCompanies = [
+    ...companies.filter((company) => company !== GENERAL_LLC_COMPANY),
+    ...companies.filter((company) => company === GENERAL_LLC_COMPANY),
+  ]
 
-  const companyOptions: MultiSelectOption[] = companies.flatMap((company) => {
+  const companyOptions: MultiSelectOption[] = orderedCompanies.flatMap((company) => {
     if (company !== GENERAL_LLC_COMPANY || !llcCountries.length) {
       return [{ value: company, label: company }]
     }
