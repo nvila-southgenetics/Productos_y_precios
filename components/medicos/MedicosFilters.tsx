@@ -5,6 +5,19 @@ import { MedicoMultiSearchFilter } from "@/components/medicos/MedicoMultiSearchF
 import { MultiCheckboxDropdown, type MultiSelectOption } from "@/components/filters/MultiCheckboxDropdown"
 import { MonthRangeFilter } from "@/components/filters/MonthRangeFilter"
 import { PRODUCT_CATEGORIES_SORTED } from "@/lib/product-categories"
+import { GENERAL_LLC_COMPANY } from "@/lib/supabase-mcp"
+
+const LLC_COUNTRY_VALUE_PREFIX = "__llc_country__:"
+
+function getLlcCountryValue(country: string): string {
+  return `${LLC_COUNTRY_VALUE_PREFIX}${country}`
+}
+
+function parseLlcCountryValue(value: string): string | null {
+  return value.startsWith(LLC_COUNTRY_VALUE_PREFIX)
+    ? value.slice(LLC_COUNTRY_VALUE_PREFIX.length)
+    : null
+}
 
 interface MedicosFiltersProps {
   companies: string[]
@@ -25,7 +38,6 @@ interface MedicosFiltersProps {
   onCategoriesChange: (categories: string[]) => void
   onMonthRangeChange: (range: { fromMonth: number; toMonth: number }) => void
   showAllCompanies?: boolean
-  showLlcCountryFilter?: boolean
 }
 
 export function MedicosFilters({
@@ -47,17 +59,121 @@ export function MedicosFilters({
   onCategoriesChange,
   onMonthRangeChange,
   showAllCompanies = true,
-  showLlcCountryFilter = false,
 }: MedicosFiltersProps) {
-  const companyOptions: MultiSelectOption[] = companies.map((c) => ({
-    value: c,
-    label: c,
-  }))
+  const selectedCompaniesEffective = selectedCompanies.length ? selectedCompanies : companies
+  const llcCountriesEffective = selectedLlcCountries.length ? selectedLlcCountries : llcCountries
+  const llcIsSelected = selectedCompaniesEffective.includes(GENERAL_LLC_COMPANY)
 
-  const llcCountryOptions: MultiSelectOption[] = llcCountries.map((country) => ({
-    value: country,
-    label: country,
-  }))
+  const companyOptions: MultiSelectOption[] = companies.flatMap((company) => {
+    if (company !== GENERAL_LLC_COMPANY || !llcCountries.length) {
+      return [{ value: company, label: company }]
+    }
+
+    return [
+      { value: company, label: company },
+      ...llcCountries.map((country) => ({
+        value: getLlcCountryValue(country),
+        label: country,
+        indentLevel: 1,
+      })),
+    ]
+  })
+
+  const selectedCompanyValues = [
+    ...selectedCompaniesEffective,
+    ...(llcIsSelected ? llcCountriesEffective.map((country) => getLlcCountryValue(country)) : []),
+  ]
+
+  function applyCompanySelection(nextCompanies: string[], nextLlcCountries: string[]) {
+    const validCompanies = nextCompanies.filter((company, index) => (
+      companies.includes(company) && nextCompanies.indexOf(company) === index
+    ))
+
+    const hasLlc = validCompanies.includes(GENERAL_LLC_COMPANY)
+    const validLlcCountries = hasLlc
+      ? nextLlcCountries.filter((country, index) => (
+          llcCountries.includes(country) && nextLlcCountries.indexOf(country) === index
+        ))
+      : []
+
+    onCompaniesChange(validCompanies.length ? validCompanies : selectedCompaniesEffective)
+    onLlcCountriesChange(
+      hasLlc
+        ? (validLlcCountries.length ? validLlcCountries : llcCountries)
+        : []
+    )
+  }
+
+  function handleCombinedCompanyChange(values: string[]) {
+    const parsedCompanies = values.filter((value) => !parseLlcCountryValue(value))
+    const parsedLlcCountries = values
+      .map((value) => parseLlcCountryValue(value))
+      .filter((value): value is string => Boolean(value))
+
+    const nextCompanies = parsedLlcCountries.length
+      ? Array.from(new Set([...parsedCompanies, GENERAL_LLC_COMPANY]))
+      : parsedCompanies
+
+    applyCompanySelection(nextCompanies, parsedLlcCountries)
+  }
+
+  function handleCompanyToggle(value: string) {
+    const llcCountry = parseLlcCountryValue(value)
+    if (llcCountry) {
+      if (!llcIsSelected) {
+        applyCompanySelection(
+          [...selectedCompaniesEffective, GENERAL_LLC_COMPANY],
+          [llcCountry]
+        )
+        return
+      }
+
+      const isSelected = llcCountriesEffective.includes(llcCountry)
+      if (isSelected) {
+        const nextLlcCountries = llcCountriesEffective.filter((country) => country !== llcCountry)
+        if (!nextLlcCountries.length) {
+          const otherCompanies = selectedCompaniesEffective.filter((company) => company !== GENERAL_LLC_COMPANY)
+          if (!otherCompanies.length) return
+          applyCompanySelection(otherCompanies, [])
+          return
+        }
+        applyCompanySelection(selectedCompaniesEffective, nextLlcCountries)
+        return
+      }
+
+      applyCompanySelection(selectedCompaniesEffective, [...llcCountriesEffective, llcCountry])
+      return
+    }
+
+    const isSelected = selectedCompaniesEffective.includes(value)
+    if (isSelected) {
+      const nextCompanies = selectedCompaniesEffective.filter((company) => company !== value)
+      if (!nextCompanies.length) return
+      applyCompanySelection(
+        nextCompanies,
+        value === GENERAL_LLC_COMPANY ? [] : llcCountriesEffective
+      )
+      return
+    }
+
+    applyCompanySelection(
+      [...selectedCompaniesEffective, value],
+      value === GENERAL_LLC_COMPANY ? llcCountries : llcCountriesEffective
+    )
+  }
+
+  function handleCompanySelectOnly(value: string) {
+    const llcCountry = parseLlcCountryValue(value)
+    if (llcCountry) {
+      applyCompanySelection([GENERAL_LLC_COMPANY], [llcCountry])
+      return
+    }
+
+    applyCompanySelection(
+      [value],
+      value === GENERAL_LLC_COMPANY ? llcCountries : []
+    )
+  }
 
   const categoryOptions: MultiSelectOption[] = PRODUCT_CATEGORIES_SORTED.map((c) => ({
     value: c,
@@ -65,28 +181,16 @@ export function MedicosFilters({
   }))
 
   return (
-    <div className="relative z-40 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+    <div className="relative z-40 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
       <MultiCheckboxDropdown
         label="Compañía"
         options={companyOptions}
-        selectedValues={
-          selectedCompanies.length ? selectedCompanies : companies.map((c) => c)
-        }
-        onSelectedValuesChange={onCompaniesChange}
+        selectedValues={selectedCompanyValues}
+        onSelectedValuesChange={handleCombinedCompanyChange}
+        onOptionToggle={handleCompanyToggle}
+        onOptionSelectOnly={handleCompanySelectOnly}
         allLabel={showAllCompanies ? "Todas las compañías" : "Todas (mis compañías)"}
       />
-
-      {showLlcCountryFilter ? (
-        <MultiCheckboxDropdown
-          label="País (LLC)"
-          options={llcCountryOptions}
-          selectedValues={
-            selectedLlcCountries.length ? selectedLlcCountries : llcCountries.map((country) => country)
-          }
-          onSelectedValuesChange={onLlcCountriesChange}
-          allLabel="Todos los países LLC"
-        />
-      ) : null}
 
       <MultiCheckboxDropdown
         label="Categoría"

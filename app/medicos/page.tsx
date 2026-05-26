@@ -97,7 +97,7 @@ export default function MedicosPage() {
   useEffect(() => {
     async function loadLlcCountries() {
       if (!companies.length || permLoading) return
-      if (!llcSelected) {
+      if (!companies.includes(GENERAL_LLC_COMPANY)) {
         setLlcCountries([])
         setSelectedLlcCountries([])
         return
@@ -108,9 +108,14 @@ export default function MedicosPage() {
           year: MEDICOS_PAGE_YEAR,
           monthFrom,
           monthTo,
-          companies: companiesForQuery,
+          companies: [GENERAL_LLC_COMPANY],
         })
-        setLlcCountries(list)
+        const sameCountries =
+          list.length === llcCountries.length &&
+          list.every((country, index) => country === llcCountries[index])
+        if (!sameCountries) {
+          setLlcCountries(list)
+        }
         setSelectedLlcCountries((prev) => {
           const prevWasAllSelected =
             llcCountries.length > 0 &&
@@ -129,7 +134,7 @@ export default function MedicosPage() {
     }
 
     loadLlcCountries()
-  }, [companies.length, companiesForQuery, llcCountries, llcSelected, monthFrom, monthTo, permLoading])
+  }, [companies, llcCountries, monthFrom, monthTo, permLoading])
 
   useEffect(() => {
     async function loadMatrix() {
@@ -203,7 +208,6 @@ export default function MedicosPage() {
             setMonthTo(toMonth)
           }}
           showAllCompanies={isAdmin}
-          showLlcCountryFilter={llcSelected && llcCountries.length > 0}
         />
 
         <MedicosMatrixTable rows={rows} isLoading={isLoading || permLoading} />

@@ -6,13 +6,15 @@ import { ChevronDown } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
 
-export type MultiSelectOption = { value: string; label: string }
+export type MultiSelectOption = { value: string; label: string; indentLevel?: number }
 
 export function MultiCheckboxDropdown({
   label,
   options,
   selectedValues,
   onSelectedValuesChange,
+  onOptionToggle,
+  onOptionSelectOnly,
   allLabel,
   hideLabel = false,
   className,
@@ -23,6 +25,8 @@ export function MultiCheckboxDropdown({
   options: MultiSelectOption[]
   selectedValues: string[]
   onSelectedValuesChange: (values: string[]) => void
+  onOptionToggle?: (value: string) => void
+  onOptionSelectOnly?: (value: string) => void
   allLabel: string
   hideLabel?: boolean
   className?: string
@@ -93,12 +97,20 @@ export function MultiCheckboxDropdown({
 
   /** Clic en el cuadrado: suma o quita ese valor (nunca deja el filtro vacío). */
   const toggle = (v: string) => {
+    if (onOptionToggle) {
+      onOptionToggle(v)
+      return
+    }
     const next = selectedValues.includes(v) ? selectedValues.filter((x) => x !== v) : [...selectedValues, v]
     onSelectedValuesChange(next.length === 0 ? allValues : next)
   }
 
   /** Clic en el texto: deja solo esa opción seleccionada. */
   const selectOnly = (v: string) => {
+    if (onOptionSelectOnly) {
+      onOptionSelectOnly(v)
+      return
+    }
     onSelectedValuesChange([v])
   }
 
@@ -148,6 +160,7 @@ export function MultiCheckboxDropdown({
         <div
           key={opt.value}
           className="flex w-full items-center gap-2 px-3 py-2 text-sm text-white/90"
+          style={opt.indentLevel ? { paddingLeft: `${12 + opt.indentLevel * 18}px` } : undefined}
         >
           <span className="shrink-0 flex items-center rounded p-0.5 hover:bg-white/10 focus-within:bg-white/10">
             <Checkbox checked={selectedValues.includes(opt.value)} onChange={() => toggle(opt.value)} />
