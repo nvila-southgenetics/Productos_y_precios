@@ -325,6 +325,7 @@ export async function deleteSalesByYear(year: string): Promise<{ deleted: number
 
 export const SIN_INSTITUCION_KEY = '__sin_institucion__'
 export const SIN_INSTITUCION_LABEL = 'Sin institución'
+export const GENERAL_LLC_COMPANY = 'SouthGenetics LLC'
 
 /** Año por defecto en la página Médicos (2025 no tiene médicos cargados). */
 export const MEDICOS_PAGE_YEAR = 2026
@@ -335,6 +336,8 @@ export interface MedicoInstitucionSalesParams {
   monthTo?: number
   /** Vacío = todas las compañías ya filtradas por permisos en la página. */
   companies?: string[]
+  /** Vacío = todos los países dentro de la LLC general. */
+  llcCountries?: string[]
   /** Vacío = todos los productos (nombres `test` / producto en ventas). */
   products?: string[]
   /** Vacío = todas las categorías del catálogo. */
@@ -358,6 +361,7 @@ type VentaMedicoRow = {
   id_producto: string | null
   medico: string | null
   institucion: string | null
+  pais: string | null
   quantity: string | number
   company: string
   fecha: string
@@ -377,10 +381,28 @@ function normalizeInstitucion(inst: string | null | undefined): { key: string; l
   return { key: trimmed, label: trimmed }
 }
 
+function normalizeVentaPais(pais: string | null | undefined): string | null {
+  const trimmed = (pais ?? '').trim()
+  return trimmed || null
+}
+
+function filterVentasByLlcCountries(rows: VentaMedicoRow[], llcCountries?: string[]): VentaMedicoRow[] {
+  if (!llcCountries?.length) return rows
+  const allowedCountries = new Set(llcCountries.map((country) => country.trim()).filter(Boolean))
+  if (!allowedCountries.size) return rows
+
+  return rows.filter((row) => {
+    if ((row.company ?? '').trim() !== GENERAL_LLC_COMPANY) return true
+    const pais = normalizeVentaPais(row.pais)
+    return pais ? allowedCountries.has(pais) : false
+  })
+}
+
 async function fetchVentasForMedicoMatrix(params: {
   fechaStart: string
   fechaEnd: string
   companies?: string[]
+  llcCountries?: string[]
 }): Promise<VentaMedicoRow[]> {
   const pageSize = 1000
   let offset = 0
@@ -389,7 +411,7 @@ async function fetchVentasForMedicoMatrix(params: {
   while (true) {
     let q = supabase
       .from('ventas')
-      .select('test, id_producto, medico, institucion, quantity, company, fecha')
+      .select('test, id_producto, medico, institucion, pais, quantity, company, fecha')
       .gte('fecha', params.fechaStart)
       .lte('fecha', params.fechaEnd)
       .order('fecha', { ascending: true })
@@ -407,7 +429,7 @@ async function fetchVentasForMedicoMatrix(params: {
     offset += pageSize
   }
 
-  return all
+  return filterVentasByLlcCountries(all, params.llcCountries)
 }
 
 /**
@@ -418,6 +440,7 @@ export async function getMedicosFromVentas(params: {
   monthFrom?: number
   monthTo?: number
   companies?: string[]
+  llcCountries?: string[]
 }): Promise<string[]> {
   const year = params.year ?? MEDICOS_PAGE_YEAR
   const monthFrom = params.monthFrom ?? 1
@@ -429,6 +452,7 @@ export async function getMedicosFromVentas(params: {
     fechaStart,
     fechaEnd,
     companies: params.companies?.length ? params.companies : undefined,
+    llcCountries: params.llcCountries?.length ? params.llcCountries : undefined,
   })
 
   const set = new Set<string>()
@@ -437,6 +461,42 @@ export async function getMedicosFromVentas(params: {
     if (m) set.add(m)
   }
   return [...set].sort((a, b) => a.localeCompare(b, 'es'))
+}
+
+/**
+ * Lista de países distintos cargados en ventas para la LLC general en un período.
+ */
+export async function getLlcCountriesFromVentas(params: {
+  year?: number
+  monthFrom?: number
+  monthTo?: number
+  companies?: string[]
+}): Promise<string[]> {
+  const year = params.year ?? MEDICOS_PAGE_YEAR
+  const monthFrom = params.monthFrom ?? 1
+  const monthTo = params.monthTo ?? 12
+  const companies = params.companies?.length ? params.companies : undefined
+
+  if (companies && !companies.includes(GENERAL_LLC_COMPANY)) {
+    return []
+  }
+
+  const fechaStart = `${year}-${padMonth(monthFrom)}-01`
+  const fechaEnd = lastDayOfMonth(year, monthTo)
+  const rawRows = await fetchVentasForMedicoMatrix({
+    fechaStart,
+    fechaEnd,
+    companies,
+  })
+
+  const countries = new Set<string>()
+  for (const row of rawRows) {
+    if ((row.company ?? '').trim() !== GENERAL_LLC_COMPANY) continue
+    const pais = normalizeVentaPais(row.pais)
+    if (pais) countries.add(pais)
+  }
+
+  return [...countries].sort((a, b) => a.localeCompare(b, 'es'))
 }
 
 /**
@@ -456,6 +516,7 @@ export async function getMedicoInstitucionSales(
     fechaStart,
     fechaEnd,
     companies: params.companies?.length ? params.companies : undefined,
+    llcCountries: params.llcCountries?.length ? params.llcCountries : undefined,
   })
 
   const productNames = [

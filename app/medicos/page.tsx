@@ -7,7 +7,9 @@ import { usePermissions } from "@/lib/use-permissions"
 import { filterCompaniesByCountries } from "@/lib/auth-constants"
 import { PRODUCT_CATEGORIES_SORTED } from "@/lib/product-categories"
 import {
+  GENERAL_LLC_COMPANY,
   getCompanies,
+  getLlcCountriesFromVentas,
   getMedicoInstitucionSales,
   getMedicosFromVentas,
   getProductsFromSales,
@@ -18,9 +20,11 @@ import {
 export default function MedicosPage() {
   const { allowedCountries, isAdmin, loading: permLoading } = usePermissions()
   const [companies, setCompanies] = useState<string[]>([])
+  const [llcCountries, setLlcCountries] = useState<string[]>([])
   const [products, setProducts] = useState<string[]>([])
   const [medicos, setMedicos] = useState<string[]>([])
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([])
+  const [selectedLlcCountries, setSelectedLlcCountries] = useState<string[]>([])
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [selectedMedicos, setSelectedMedicos] = useState<string[]>([])
   const [selectedCategories, setSelectedCategories] = useState<string[]>(PRODUCT_CATEGORIES_SORTED)
@@ -37,6 +41,20 @@ export default function MedicosPage() {
     if (isAdmin && allPicked) return companies
     return sel
   }, [companies, selectedCompanies, isAdmin])
+
+  const llcSelected = useMemo(
+    () => companiesForQuery.includes(GENERAL_LLC_COMPANY),
+    [companiesForQuery]
+  )
+
+  const llcCountriesForQuery = useMemo(() => {
+    if (!llcSelected || !llcCountries.length) return undefined
+    const sel = selectedLlcCountries.length ? selectedLlcCountries : llcCountries
+    const allPicked =
+      sel.length === llcCountries.length &&
+      llcCountries.every((country) => sel.includes(country))
+    return allPicked ? undefined : sel
+  }, [llcSelected, llcCountries, selectedLlcCountries])
 
   useEffect(() => {
     async function loadInitial() {
@@ -65,6 +83,7 @@ export default function MedicosPage() {
           monthFrom,
           monthTo,
           companies: companiesForQuery,
+          llcCountries: llcCountriesForQuery,
         })
         setMedicos(list)
       } catch (e) {
@@ -73,7 +92,49 @@ export default function MedicosPage() {
       }
     }
     loadMedicos()
-  }, [companies.length, companiesForQuery, monthFrom, monthTo, permLoading])
+  }, [companies.length, companiesForQuery, llcCountriesForQuery, monthFrom, monthTo, permLoading])
+
+  useEffect(() => {
+    async function loadLlcCountries() {
+      if (!companies.length || permLoading) return
+      if (!companies.includes(GENERAL_LLC_COMPANY)) {
+        setLlcCountries([])
+        setSelectedLlcCountries([])
+        return
+      }
+
+      try {
+        const list = await getLlcCountriesFromVentas({
+          year: MEDICOS_PAGE_YEAR,
+          monthFrom,
+          monthTo,
+          companies: [GENERAL_LLC_COMPANY],
+        })
+        const sameCountries =
+          list.length === llcCountries.length &&
+          list.every((country, index) => country === llcCountries[index])
+        if (!sameCountries) {
+          setLlcCountries(list)
+        }
+        setSelectedLlcCountries((prev) => {
+          const prevWasAllSelected =
+            llcCountries.length > 0 &&
+            prev.length === llcCountries.length &&
+            llcCountries.every((country) => prev.includes(country))
+          if (prevWasAllSelected) return [...list]
+          const stillValid = prev.filter((country) => list.includes(country))
+          if (stillValid.length) return stillValid
+          return [...list]
+        })
+      } catch (e) {
+        console.error("Error loading LLC countries:", e)
+        setLlcCountries([])
+        setSelectedLlcCountries([])
+      }
+    }
+
+    loadLlcCountries()
+  }, [companies, llcCountries, monthFrom, monthTo, permLoading])
 
   useEffect(() => {
     async function loadMatrix() {
@@ -88,6 +149,7 @@ export default function MedicosPage() {
           monthFrom,
           monthTo,
           companies: companiesForQuery,
+          llcCountries: llcCountriesForQuery,
           products: selectedProducts.length ? selectedProducts : undefined,
           categories: allCategories ? undefined : selectedCategories,
           medicos: selectedMedicos.length ? selectedMedicos : undefined,
@@ -104,6 +166,7 @@ export default function MedicosPage() {
   }, [
     companies.length,
     companiesForQuery,
+    llcCountriesForQuery,
     monthFrom,
     monthTo,
     selectedProducts,
@@ -125,15 +188,18 @@ export default function MedicosPage() {
 
         <MedicosFilters
           companies={companies}
+          llcCountries={llcCountries}
           products={products}
           medicos={medicos}
           selectedCompanies={selectedCompanies}
+          selectedLlcCountries={selectedLlcCountries}
           selectedProducts={selectedProducts}
           selectedMedicos={selectedMedicos}
           selectedCategories={selectedCategories}
           monthFrom={monthFrom}
           monthTo={monthTo}
           onCompaniesChange={setSelectedCompanies}
+          onLlcCountriesChange={setSelectedLlcCountries}
           onProductsChange={setSelectedProducts}
           onMedicosChange={setSelectedMedicos}
           onCategoriesChange={setSelectedCategories}
