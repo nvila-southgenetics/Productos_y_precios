@@ -57,6 +57,7 @@ export type PlTooltipLine =
   | "commercialDiscount"
   | "salesRevenue"
   | "productCost"
+  | "carrierCost"
   | "kitCost"
   | "paymentFee"
   | "bloodDraw"
@@ -75,6 +76,7 @@ export type PlTooltipLine =
 
 const TOOLTIP_LINE_TO_COS: Partial<Record<PlTooltipLine, CosCostLineKey>> = {
   productCost: "product_cost",
+  carrierCost: "carrier_cost",
   kitCost: "kit_cost",
   paymentFee: "payment_fee",
   bloodDraw: "blood_draw",
@@ -89,6 +91,7 @@ const OVERRIDE_LABELS: Record<OverrideFieldKey, string> = {
   grossSalesUSD: "Gross Sales",
   commercialDiscountUSD: "Commercial Discount",
   productCostUSD: "Product Cost",
+  carrierCostUSD: "Carrier Cost",
   kitCostUSD: "Kit Cost",
   paymentFeeUSD: "Payment Fee",
   bloodDrawSampleUSD: "Blood Draw & Sample",
@@ -145,6 +148,7 @@ const emptyOv = (): OverrideCostShape => ({
   grossSalesUSD: 0,
   commercialDiscountUSD: 0,
   productCostUSD: 0,
+  carrierCostUSD: 0,
   kitCostUSD: 0,
   paymentFeeUSD: 0,
   bloodDrawSampleUSD: 0,
@@ -384,6 +388,7 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
   const buildTotalCOS = (monthIdx: number): string | undefined => {
     const parts: { key: PlTooltipLine; label: string }[] = [
       { key: "productCost", label: "Product Cost" },
+      { key: "carrierCost", label: "Carrier Cost" },
       { key: "kitCost", label: "Kit Cost" },
       { key: "paymentFee", label: "Payment Fee" },
       { key: "bloodDraw", label: "Blood Draw" },
@@ -474,6 +479,8 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
         return (mi) => buildOverrideLine(mi, "commercialDiscountUSD")
       case "productCost":
         return (mi) => buildOverrideLine(mi, "productCostUSD")
+      case "carrierCost":
+        return (mi) => buildOverrideLine(mi, "carrierCostUSD")
       case "kitCost":
         return (mi) => buildOverrideLine(mi, "kitCostUSD")
       case "paymentFee":

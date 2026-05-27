@@ -128,6 +128,25 @@ export function ProductDetailModal({
       }),
     },
     {
+      concept: "Carrier Cost",
+      account: "5.1.1.1.02",
+      editable: true,
+      defaultChecked: false,
+      getValue: (o) => o.carrierCostUSD || 0,
+      getPct: (o, gs) => gs > 0 ? ((o.carrierCostUSD || 0) / gs) * 100 : 0,
+      setValue: (o, v, gs) => ({
+        ...o,
+        carrierCostUSD: v,
+        carrierCostPct: gs > 0 ? (v / gs) * 100 : 0,
+      }),
+      getChecked: (o) => (o.carrierCostUSD || 0) > 0,
+      setChecked: (o, checked) => ({
+        ...o,
+        carrierCostUSD: checked ? (o.carrierCostUSD || 0) : 0,
+        carrierCostPct: 0,
+      }),
+    },
+    {
       concept: "Kit Cost",
       account: "5.1.4.1.2",
       editable: true,

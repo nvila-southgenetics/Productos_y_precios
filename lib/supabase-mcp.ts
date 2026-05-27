@@ -33,6 +33,8 @@ export interface ProductCountryOverride {
     commercialDiscountPct?: number
     productCostUSD?: number
     productCostPct?: number
+    carrierCostUSD?: number
+    carrierCostPct?: number
     kitCostUSD?: number
     kitCostPct?: number
     paymentFeeUSD?: number
@@ -1660,6 +1662,7 @@ async function getProductsWithMetrics(
     
     const totalCostOfSalesUSD =
       (overrideData.productCostUSD || 0) +
+      (overrideData.carrierCostUSD || 0) +
       (overrideData.kitCostUSD || 0) +
       (overrideData.paymentFeeUSD || 0) +
       (overrideData.bloodDrawSampleUSD || 0) +

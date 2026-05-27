@@ -5,6 +5,7 @@ export const DIFFERENCIA_COSTOS_PRODUCT_NAME = "Diferencia de costos"
 
 export type CosCostLineKey =
   | "product_cost"
+  | "carrier_cost"
   | "kit_cost"
   | "payment_fee"
   | "blood_draw"
@@ -17,6 +18,7 @@ export type CosCostLineKey =
 export type OverrideCostShape = {
   productCostUSD: number
   commercialDiscountUSD?: number
+  carrierCostUSD?: number
   kitCostUSD?: number
   paymentFeeUSD?: number
   bloodDrawSampleUSD?: number
@@ -42,6 +44,12 @@ export const PL_COS_LINES: readonly CosLineConfig[] = [
     overrideField: "productCostUSD",
     diferenciaName: "Diferencia de costos",
     label: "Product Cost",
+  },
+  {
+    line: "carrier_cost",
+    overrideField: "carrierCostUSD",
+    diferenciaName: "Diferencia - Carrier Cost",
+    label: "Carrier Cost",
   },
   {
     line: "kit_cost",

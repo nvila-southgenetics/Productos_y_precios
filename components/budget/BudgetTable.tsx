@@ -86,6 +86,7 @@ function calculateGrossProfit(overrides: any): number {
 
   const totalCosts =
     (overrides?.productCostUSD || 0) +
+    (overrides?.carrierCostUSD || 0) +
     (overrides?.kitCostUSD || 0) +
     (overrides?.paymentFeeUSD || 0) +
     (overrides?.bloodDrawSampleUSD || 0) +

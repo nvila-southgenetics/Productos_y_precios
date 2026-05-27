@@ -37,6 +37,7 @@ export function calculateGrossProfit(overrides: MonthlySalesWithProduct['overrid
   // Sumar todos los costos
   const totalCostOfSalesUSD =
     (overrides?.productCostUSD || 0) +
+    (overrides?.carrierCostUSD || 0) +
     (overrides?.kitCostUSD || 0) +
     (overrides?.paymentFeeUSD || 0) +
     (overrides?.bloodDrawSampleUSD || 0) +

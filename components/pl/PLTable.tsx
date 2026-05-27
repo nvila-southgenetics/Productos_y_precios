@@ -59,6 +59,7 @@ interface OverrideData {
   grossSalesUSD: number
   commercialDiscountUSD: number
   productCostUSD: number
+  carrierCostUSD: number
   kitCostUSD: number
   paymentFeeUSD: number
   bloodDrawSampleUSD: number
@@ -127,6 +128,7 @@ const emptyOverride = (): OverrideData => ({
   grossSalesUSD: 0,
   commercialDiscountUSD: 0,
   productCostUSD: 0,
+  carrierCostUSD: 0,
   kitCostUSD: 0,
   paymentFeeUSD: 0,
   bloodDrawSampleUSD: 0,
@@ -441,6 +443,7 @@ export function PLTable({
     grossSales: number[],
     commercialDiscount: number[],
     productCost: number[],
+    carrierCost: number[],
     kitCost: number[],
     paymentFee: number[],
     bloodDraw: number[],
@@ -454,7 +457,7 @@ export function PLTable({
   ) => {
     const salesRevenue = grossSales.map((v, i) => v - commercialDiscount[i])
     const totalCOS = Array.from({ length: 12 }, (_, i) =>
-      productCost[i] + kitCost[i] + paymentFee[i] + bloodDraw[i] + sanitary[i] +
+      productCost[i] + carrierCost[i] + kitCost[i] + paymentFee[i] + bloodDraw[i] + sanitary[i] +
       extCourier[i] + intCourier[i] + physiciansFees[i] + salesCommission[i]
     )
     const grossProfit = salesRevenue.map((v, i) => v - totalCOS[i])
@@ -767,6 +770,7 @@ export function PLTable({
                 grossSalesUSD: prev.grossSalesUSD + (o.grossSalesUSD || 0),
                 commercialDiscountUSD: prev.commercialDiscountUSD + (o.commercialDiscountUSD || 0),
                 productCostUSD: prev.productCostUSD + (o.productCostUSD || 0),
+                carrierCostUSD: prev.carrierCostUSD + (o.carrierCostUSD || 0),
                 kitCostUSD: prev.kitCostUSD + (o.kitCostUSD || 0),
                 paymentFeeUSD: prev.paymentFeeUSD + (o.paymentFeeUSD || 0),
                 bloodDrawSampleUSD: prev.bloodDrawSampleUSD + (o.bloodDrawSampleUSD || 0),
@@ -874,6 +878,7 @@ export function PLTable({
                 grossSalesUSD: prev.grossSalesUSD + (o.grossSalesUSD || 0),
                 commercialDiscountUSD: prev.commercialDiscountUSD + (o.commercialDiscountUSD || 0),
                 productCostUSD: prev.productCostUSD + (o.productCostUSD || 0),
+                carrierCostUSD: prev.carrierCostUSD + (o.carrierCostUSD || 0),
                 kitCostUSD: prev.kitCostUSD + (o.kitCostUSD || 0),
                 paymentFeeUSD: prev.paymentFeeUSD + (o.paymentFeeUSD || 0),
                 bloodDrawSampleUSD: prev.bloodDrawSampleUSD + (o.bloodDrawSampleUSD || 0),
@@ -1021,6 +1026,7 @@ export function PLTable({
               grossSalesUSD: prev.grossSalesUSD + (o.grossSalesUSD || 0),
               commercialDiscountUSD: prev.commercialDiscountUSD + (o.commercialDiscountUSD || 0),
               productCostUSD: prev.productCostUSD + (o.productCostUSD || 0),
+              carrierCostUSD: prev.carrierCostUSD + (o.carrierCostUSD || 0),
               kitCostUSD: prev.kitCostUSD + (o.kitCostUSD || 0),
               paymentFeeUSD: prev.paymentFeeUSD + (o.paymentFeeUSD || 0),
               bloodDrawSampleUSD: prev.bloodDrawSampleUSD + (o.bloodDrawSampleUSD || 0),
@@ -1287,6 +1293,7 @@ export function PLTable({
           grossSalesUSD: prev.grossSalesUSD + (o.grossSalesUSD || 0),
           commercialDiscountUSD: prev.commercialDiscountUSD + (o.commercialDiscountUSD || 0),
           productCostUSD: prev.productCostUSD + (o.productCostUSD || 0),
+          carrierCostUSD: prev.carrierCostUSD + (o.carrierCostUSD || 0),
           kitCostUSD: prev.kitCostUSD + (o.kitCostUSD || 0),
           paymentFeeUSD: prev.paymentFeeUSD + (o.paymentFeeUSD || 0),
           bloodDrawSampleUSD: prev.bloodDrawSampleUSD + (o.bloodDrawSampleUSD || 0),
@@ -1372,6 +1379,7 @@ export function PLTable({
         grossSalesUSD: prev.grossSalesUSD + (o.grossSalesUSD || 0),
         commercialDiscountUSD: prev.commercialDiscountUSD + (o.commercialDiscountUSD || 0),
         productCostUSD: prev.productCostUSD + (o.productCostUSD || 0),
+        carrierCostUSD: prev.carrierCostUSD + (o.carrierCostUSD || 0),
         kitCostUSD: prev.kitCostUSD + (o.kitCostUSD || 0),
         paymentFeeUSD: prev.paymentFeeUSD + (o.paymentFeeUSD || 0),
         bloodDrawSampleUSD: prev.bloodDrawSampleUSD + (o.bloodDrawSampleUSD || 0),
@@ -1709,6 +1717,7 @@ export function PLTable({
       grossSales: number[]
       commercialDiscount: number[]
       productCost: number[]
+      carrierCost: number[]
       kitCost: number[]
       paymentFee: number[]
       bloodDraw: number[]
@@ -1737,6 +1746,7 @@ export function PLTable({
         const grossSales = computeMonthlyBudgetField(rows, ovs, "grossSalesUSD")
         const commercialDiscount = computeMonthlyBudgetField(rows, ovs, "commercialDiscountUSD")
         const productCost = computeMonthlyBudgetField(rows, ovs, "productCostUSD")
+        const carrierCost = computeMonthlyBudgetField(rows, ovs, "carrierCostUSD")
         const kitCost = computeMonthlyBudgetField(rows, ovs, "kitCostUSD")
         const paymentFee = computeMonthlyBudgetField(rows, ovs, "paymentFeeUSD")
         const bloodDraw = computeMonthlyBudgetField(rows, ovs, "bloodDrawSampleUSD")
@@ -1750,6 +1760,7 @@ export function PLTable({
           grossSales,
           commercialDiscount,
           productCost,
+          carrierCost,
           kitCost,
           paymentFee,
           bloodDraw,
@@ -1762,6 +1773,7 @@ export function PLTable({
             grossSales,
             commercialDiscount,
             productCost,
+            carrierCost,
             kitCost,
             paymentFee,
             bloodDraw,
@@ -1784,6 +1796,7 @@ export function PLTable({
         const grossSales = computeMonthlyRealGrossSalesFromOdoo(amts)
         const commercialDiscount = computeMonthlyRealField(qty, ovs, "commercialDiscountUSD")
         const productCost = computeRealCosLine("product_cost", qty, ovs)
+        const carrierCost = computeRealCosLine("carrier_cost", qty, ovs)
         const kitCost = computeRealCosLine("kit_cost", qty, ovs)
         const paymentFee = computeRealCosLine("payment_fee", qty, ovs)
         const bloodDraw = computeRealCosLine("blood_draw", qty, ovs)
@@ -1797,6 +1810,7 @@ export function PLTable({
           grossSales,
           commercialDiscount,
           productCost,
+          carrierCost,
           kitCost,
           paymentFee,
           bloodDraw,
@@ -1809,6 +1823,7 @@ export function PLTable({
             grossSales,
             commercialDiscount,
             productCost,
+            carrierCost,
             kitCost,
             paymentFee,
             bloodDraw,
@@ -1844,6 +1859,7 @@ export function PLTable({
   const salesRevenue = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.salesRevenue])) as Record<string, number[]>)
 
   const productCost = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.productCost])) as Record<string, number[]>)
+  const carrierCost = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.carrierCost])) as Record<string, number[]>)
   const kitCost = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.kitCost])) as Record<string, number[]>)
   const paymentFee = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.paymentFee])) as Record<string, number[]>)
   const bloodDraw = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.bloodDraw])) as Record<string, number[]>)
@@ -1854,7 +1870,7 @@ export function PLTable({
   const salesCommission = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.salesCommission])) as Record<string, number[]>)
 
   const totalCOS = Array.from({ length: 12 }, (_, i) =>
-    productCost[i] + kitCost[i] + paymentFee[i] + bloodDraw[i] + sanitary[i] +
+    productCost[i] + carrierCost[i] + kitCost[i] + paymentFee[i] + bloodDraw[i] + sanitary[i] +
     extCourier[i] + intCourier[i] + physiciansFees[i] + salesCommission[i]
   )
   const grossProfit = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.grossProfit])) as Record<string, number[]>)
@@ -1957,6 +1973,7 @@ export function PLTable({
     commercialDiscount,
     salesRevenue,
     productCost,
+    carrierCost,
     kitCost,
     paymentFee,
     bloodDraw,
@@ -2601,6 +2618,14 @@ export function PLTable({
                     indent
                     cellTitle={tooltipFor("productCost")}
                     cellPeriodTitle={periodTooltipFor("productCost")}
+                  />
+                  <Row
+                    label="Carrier Cost"
+                    values={carrierCost}
+                    negative
+                    indent
+                    cellTitle={tooltipFor("carrierCost")}
+                    cellPeriodTitle={periodTooltipFor("carrierCost")}
                   />
                   <Row
                     label="Kit Cost"

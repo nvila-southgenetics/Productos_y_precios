@@ -19,6 +19,7 @@ interface ConsolidatedCosts {
   commercialDiscountUSD: number
   salesRevenueUSD: number
   productCostUSD: number
+  carrierCostUSD: number
   kitCostUSD: number
   paymentFeeUSD: number
   bloodDrawSampleUSD: number
@@ -74,6 +75,7 @@ export function MonthlyPLModal({
         commercialDiscountUSD: 0,
         salesRevenueUSD: 0,
         productCostUSD: 0,
+        carrierCostUSD: 0,
         kitCostUSD: 0,
         paymentFeeUSD: 0,
         bloodDrawSampleUSD: 0,
@@ -95,6 +97,7 @@ export function MonthlyPLModal({
         totals.grossSalesUSD += Number(product.monto_total || 0)
         totals.commercialDiscountUSD += (overrides.commercialDiscountUSD || 0) * cantidad
         totals.productCostUSD += (overrides.productCostUSD || 0) * cantidad
+        totals.carrierCostUSD += (overrides.carrierCostUSD || 0) * cantidad
         totals.kitCostUSD += (overrides.kitCostUSD || 0) * cantidad
         totals.paymentFeeUSD += (overrides.paymentFeeUSD || 0) * cantidad
         totals.bloodDrawSampleUSD += (overrides.bloodDrawSampleUSD || 0) * cantidad
@@ -109,6 +112,7 @@ export function MonthlyPLModal({
       totals.salesRevenueUSD = totals.grossSalesUSD - totals.commercialDiscountUSD
       totals.totalCostOfSalesUSD =
         totals.productCostUSD +
+        totals.carrierCostUSD +
         totals.kitCostUSD +
         totals.paymentFeeUSD +
         totals.bloodDrawSampleUSD +
@@ -247,6 +251,22 @@ export function MonthlyPLModal({
                         %
                       </td>
                       <td className="px-3 py-2 text-right text-xs text-muted-foreground">5.1.1.6</td>
+                    </tr>
+
+                    {/* Carrier Cost */}
+                    <tr>
+                      <td className="px-3 py-2">Carrier Cost</td>
+                      <td className="px-3 py-2 text-right">
+                        {formatCurrency(consolidatedCosts.carrierCostUSD)}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {calculatePercentage(
+                          consolidatedCosts.carrierCostUSD,
+                          consolidatedCosts.grossSalesUSD
+                        )}
+                        %
+                      </td>
+                      <td className="px-3 py-2 text-right text-xs text-muted-foreground">5.1.1.1.02</td>
                     </tr>
 
                     {/* Kit Cost */}

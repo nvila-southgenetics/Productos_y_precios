@@ -7,6 +7,7 @@ La tabla `pl_company_monthly_cos` guarda el **monto contable mensual** por compa
 | `cost_line` | Fila P&L | Producto Diferencia |
 |-------------|----------|---------------------|
 | `product_cost` | Product Cost | Diferencia de costos |
+| `carrier_cost` | Carrier Cost | Diferencia - Carrier Cost |
 | `kit_cost` | Kit Cost | Diferencia - Kit Cost |
 | `payment_fee` | Payment Fee Costs | Diferencia - Payment Fee |
 | `blood_draw` | Blood Drawn & Sample Handling | Diferencia - Blood Draw |
