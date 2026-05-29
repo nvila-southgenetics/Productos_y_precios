@@ -101,6 +101,17 @@ export const PL_COS_LINES: readonly CosLineConfig[] = [
   },
 ] as const
 
+/** Líneas COS que n8n carga desde Odoo en pl_company_monthly_cos. */
+export const PL_COS_ODOO_LINES: readonly CosCostLineKey[] = [
+  "product_cost",
+  "carrier_cost",
+  "kit_cost",
+  "blood_draw",
+  "external_courier",
+  "internal_courier",
+  "physicians_fees",
+] as const
+
 export const PL_COS_DIFERENCIA_PRODUCT_NAMES = PL_COS_LINES.map((c) => c.diferenciaName)
 
 export type MonthlyCosRow = {

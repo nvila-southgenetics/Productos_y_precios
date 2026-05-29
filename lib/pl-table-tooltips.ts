@@ -2,6 +2,7 @@ import { formatNumber } from "@/lib/utils"
 import {
   getCosLineConfig,
   PL_COS_LINES,
+  PL_COS_ODOO_LINES,
   type CosCostLineKey,
   type MonthlyCosRow,
   type OverrideCostShape,
@@ -30,7 +31,10 @@ export type PlTooltipConfig = {
   modelo: "budget" | "real"
   reconcileCosEnabled: boolean
   cosReconciliation: Partial<
-    Record<CosCostLineKey, { hasRealData: boolean; diferenciaMonthly?: number[] }>
+    Record<
+      CosCostLineKey,
+      { hasRealData: boolean; monthly?: number[]; diferenciaMonthly?: number[] }
+    >
   > | null
   companyMonthlyCos: MonthlyCosRow[]
   resolveSalesCompanies: () => string[] | null
@@ -385,8 +389,44 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
     return joinLines(lines)
   }
 
+  const sumOdooContableForMonth = (monthIdx: number): number => {
+    const monthNumber = monthIdx + 1
+    const companies = resolveSalesCompanies()
+    const companySet =
+      companies && companies.length > 0 ? new Set(companies.map((c) => c.trim())) : null
+    let total = 0
+    for (const row of companyMonthlyCos) {
+      if (row.year !== year || row.month !== monthNumber) continue
+      if (companySet && !companySet.has(String(row.company || "").trim())) continue
+      if (!PL_COS_ODOO_LINES.includes(row.cost_line)) continue
+      total += Number(row.amount_usd || 0)
+    }
+    return total
+  }
+
+  const sumOdooContableByLineForMonth = (monthIdx: number): Map<CosCostLineKey, number> => {
+    const monthNumber = monthIdx + 1
+    const companies = resolveSalesCompanies()
+    const companySet =
+      companies && companies.length > 0 ? new Set(companies.map((c) => c.trim())) : null
+    const byLine = new Map<CosCostLineKey, number>()
+    for (const row of companyMonthlyCos) {
+      if (row.year !== year || row.month !== monthNumber) continue
+      if (companySet && !companySet.has(String(row.company || "").trim())) continue
+      if (!PL_COS_ODOO_LINES.includes(row.cost_line)) continue
+      byLine.set(row.cost_line, (byLine.get(row.cost_line) || 0) + Number(row.amount_usd || 0))
+    }
+    return byLine
+  }
+
+  const sumDiferenciaForMonth = (monthIdx: number): number =>
+    PL_COS_LINES.reduce(
+      (s, c) => s + (cosReconciliation?.[c.line]?.diferenciaMonthly?.[monthIdx] ?? 0),
+      0
+    )
+
   const buildTotalCOS = (monthIdx: number): string | undefined => {
-    const parts: { key: PlTooltipLine; label: string }[] = [
+    const plLineParts: { key: PlTooltipLine; label: string }[] = [
       { key: "productCost", label: "Product Cost" },
       { key: "carrierCost", label: "Carrier Cost" },
       { key: "kitCost", label: "Kit Cost" },
@@ -398,13 +438,62 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
       { key: "physiciansFees", label: "Physicians Fees" },
       { key: "salesCommission", label: "Sales Commission" },
     ]
-    const lines = [monthHeader(monthIdx, "Total Cost of Sales"), "Suma de líneas COS:"]
-    for (const p of parts) {
-      const v = getLineValue(p.key, monthIdx)
-      if (v !== 0) lines.push(`- ${p.label}: ${tooltipFmt(v)}`)
+
+    const lines = [monthHeader(monthIdx, "Total Cost of Sales")]
+    const odooContable = sumOdooContableForMonth(monthIdx)
+    const hasOdooContable =
+      reconcileCosEnabled && Boolean(cosReconciliation) && odooContable !== 0
+
+    if (hasOdooContable) {
+      lines.push("Contabilidad Odoo (pl_company_monthly_cos):")
+      const odooByLine = sumOdooContableByLineForMonth(monthIdx)
+      const odooItems = PL_COS_ODOO_LINES.map((line) => ({
+        label: getCosLineConfig(line).label,
+        amount: odooByLine.get(line) || 0,
+      }))
+      appendTopContributions(lines, odooItems, "Total contable Odoo")
+
+      const snap = getMonthSnapshot(monthIdx)
+      lines.push("Suma por producto (overrides × unidades, sin Diferencia):")
+      const productByLine = PL_COS_LINES.map(({ line, overrideField, label, diferenciaName }) => ({
+        label,
+        amount: breakdownOverrideField(snap, monthIdx, overrideField, {
+          excludeProduct: diferenciaName,
+        }).reduce((s, x) => s + x.amount, 0),
+      }))
+      appendTopContributions(lines, productByLine, "Total productos")
+
+      const ajusteItems = PL_COS_LINES.map(({ line, diferenciaName }) => ({
+        label: diferenciaName,
+        amount: cosReconciliation?.[line]?.diferenciaMonthly?.[monthIdx] ?? 0,
+      })).filter((x) => x.amount !== 0)
+      if (ajusteItems.length) {
+        lines.push("Ajuste (productos Diferencia):")
+        appendTopContributions(lines, ajusteItems, "Total ajuste")
+      } else {
+        lines.push("Ajuste (productos Diferencia): 0")
+      }
+
+      const productOnlyItems = plLineParts
+        .filter((p) => !TOOLTIP_LINE_TO_COS[p.key] || !PL_COS_ODOO_LINES.includes(TOOLTIP_LINE_TO_COS[p.key]!))
+        .map((p) => ({ label: p.label, amount: getLineValue(p.key, monthIdx) }))
+        .filter((x) => x.amount !== 0)
+      if (productOnlyItems.length) {
+        lines.push("Otras líneas COS (solo producto, sin Odoo):")
+        appendTopContributions(lines, productOnlyItems)
+      }
+    } else {
+      lines.push("Suma de líneas COS:")
+      for (const p of plLineParts) {
+        const v = getLineValue(p.key, monthIdx)
+        if (v !== 0) lines.push(`- ${p.label}: ${tooltipFmt(v)}`)
+      }
     }
-    lines.push(`Total: ${tooltipFmt(getLineValue("totalCOS", monthIdx))}`)
-    lines.push("(Pase el mouse en cada línea COS para detalle por producto)")
+
+    lines.push(`Total fila P&L: ${tooltipFmt(getLineValue("totalCOS", monthIdx))}`)
+    if (!hasOdooContable) {
+      lines.push("(Pase el mouse en cada línea COS para detalle por producto)")
+    }
     return joinLines(lines)
   }
 
@@ -466,6 +555,24 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
     const from = monthLabels[monthIndices[0]]
     const to = monthLabels[monthIndices[monthIndices.length - 1]]
     const total = monthIndices.reduce((s, mi) => s + (getLineValue(line, mi) || 0), 0)
+
+    if (
+      line === "totalCOS" &&
+      reconcileCosEnabled &&
+      cosReconciliation &&
+      monthIndices.some((mi) => sumOdooContableForMonth(mi) !== 0)
+    ) {
+      const contableOdoo = monthIndices.reduce((s, mi) => s + sumOdooContableForMonth(mi), 0)
+      const ajuste = monthIndices.reduce((s, mi) => s + sumDiferenciaForMonth(mi), 0)
+      return joinLines([
+        `PERIODO (${from}–${to})`,
+        `Total contable Odoo: ${tooltipFmt(contableOdoo)}`,
+        `Total ajuste (Diferencia): ${tooltipFmt(ajuste)}`,
+        `Total fila P&L: ${tooltipFmt(total)}`,
+        "Pase el mouse en cada mes para el desglose.",
+      ])
+    }
+
     return `PERIODO (${from}–${to}): ${tooltipFmt(total)}\nSuma de los meses visibles. Pase el mouse en cada mes para el desglose.`
   }
 
