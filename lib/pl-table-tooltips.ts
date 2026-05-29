@@ -107,7 +107,7 @@ const OVERRIDE_LABELS: Record<OverrideFieldKey, string> = {
   salesCommissionUSD: "Sales Commission",
 }
 
-const MAX_LINES = 16
+const MAX_DETAIL_LINES = 8
 
 function tooltipFmt(val: number): string {
   if (val === 0) return "0"
@@ -120,9 +120,44 @@ function displayProduct(name: string, aliases: Record<string, string>): string {
 }
 
 function joinLines(lines: string[]): string | undefined {
-  const trimmed = lines.filter(Boolean)
-  if (!trimmed.length) return undefined
-  return trimmed.join("\n")
+  if (!lines.length) return undefined
+  return lines.join("\n")
+}
+
+/** Título + mes · modelo (2 líneas para el tooltip visual). */
+function tooltipTitle(title: string, monthLabel: string, modelLabel: string): string[] {
+  return [title, `${monthLabel} · ${modelLabel}`]
+}
+
+function fmtRow(label: string, amount: number, width = 22): string {
+  const short =
+    label.length > width ? `${label.slice(0, width - 1)}…` : label.padEnd(width, " ")
+  return `${short} ${tooltipFmt(amount)}`
+}
+
+function appendAmountRows(
+  lines: string[],
+  items: { label: string; amount: number }[],
+  opts?: { max?: number; totalLabel?: string }
+): void {
+  const max = opts?.max ?? MAX_DETAIL_LINES
+  const sorted = items
+    .filter((x) => x.amount !== 0)
+    .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+  if (!sorted.length) {
+    lines.push("  (sin importes)")
+    return
+  }
+  for (const it of sorted.slice(0, max)) {
+    lines.push(`  ${fmtRow(it.label, it.amount, 20)}`)
+  }
+  if (sorted.length > max) {
+    lines.push(`  … +${sorted.length - max} más`)
+  }
+  if (opts?.totalLabel) {
+    const total = sorted.reduce((s, x) => s + x.amount, 0)
+    lines.push(`  ${fmtRow(opts.totalLabel, total, 20)}`)
+  }
 }
 
 function appendTopContributions(
@@ -134,19 +169,21 @@ function appendTopContributions(
     .filter((x) => x.amount !== 0)
     .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
   if (!sorted.length) {
-    lines.push("(sin contribuciones)")
+    lines.push("  (sin contribuciones)")
     return
   }
   let printed = 0
   for (const it of sorted) {
-    if (printed >= MAX_LINES) break
-    const extra = it.detail ? ` — ${it.detail}` : ""
-    lines.push(`- ${it.label}: ${tooltipFmt(it.amount)}${extra}`)
+    if (printed >= MAX_DETAIL_LINES) break
+    const extra = it.detail ? `  · ${it.detail}` : ""
+    lines.push(`  ${fmtRow(it.label, it.amount, 18)}${extra}`)
     printed++
   }
   const total = sorted.reduce((s, x) => s + x.amount, 0)
-  lines.push(`${totalLabel}: ${tooltipFmt(total)}`)
-  if (sorted.length > MAX_LINES) lines.push(`(mostrando top ${MAX_LINES})`)
+  lines.push(`  ${fmtRow(totalLabel, total, 18)}`)
+  if (sorted.length > MAX_DETAIL_LINES) {
+    lines.push(`  … +${sorted.length - MAX_DETAIL_LINES} más`)
+  }
 }
 
 const emptyOv = (): OverrideCostShape => ({
@@ -182,9 +219,9 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
     getLineValue,
   } = config
 
-  const monthHeader = (monthIdx: number, title: string) => {
+  const monthHeader = (monthIdx: number, title: string): string[] => {
     const snap = getMonthSnapshot(monthIdx)
-    return `${title} — ${monthLabels[monthIdx]} · ${snap.modelLabel}`
+    return tooltipTitle(title, monthLabels[monthIdx], snap.modelLabel)
   }
 
   const breakdownOverrideField = (
@@ -232,9 +269,9 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
 
   const buildUnits = (monthIdx: number): string | undefined => {
     const snap = getMonthSnapshot(monthIdx)
-    const lines = [monthHeader(monthIdx, "Unidades"), "Fuente: unidades del modelo del mes"]
+    const lines = [...monthHeader(monthIdx, "Unidades"), ""]
     if (snap.isBudget && !testMode) {
-      lines.push("Tabla budget (por producto × canal):")
+      lines.push("Budget (producto × canal):")
       const items = snap.budgetRows
         .map((row) => {
           const name = String((row as { product_name?: string }).product_name || "")
@@ -249,28 +286,24 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
             : null
         })
         .filter(Boolean) as { label: string; amount: number; detail?: string }[]
-      appendTopContributions(lines, items, "Total unidades")
+      appendTopContributions(lines, items, "Total")
     } else {
-      lines.push(
-        snap.isReal
-          ? "Ventas reales agregadas por producto (ventas_mensuales_view):"
-          : "Cantidades activas por producto:"
-      )
+      lines.push(snap.isReal ? "Ventas por producto:" : "Por producto:")
       const items = Object.entries(snap.quantities).map(([name, arr]) => ({
         label: displayProduct(name, productAliases),
         amount: arr[monthIdx] || 0,
       }))
-      appendTopContributions(lines, items, "Total unidades")
+      appendTopContributions(lines, items, "Total")
     }
     return joinLines(lines)
   }
 
   const buildGrossSales = (monthIdx: number): string | undefined => {
     const snap = getMonthSnapshot(monthIdx)
-    const lines = [monthHeader(monthIdx, "Gross Sales (sin IVA)")]
+    const lines = [...monthHeader(monthIdx, "Gross Sales"), ""]
 
     if (snap.isBudget && !testMode) {
-      lines.push("Fuente: budget × override grossSalesUSD (product_country_overrides / budget)")
+      lines.push("Budget × precio unitario:")
       appendTopContributions(
         lines,
         breakdownOverrideField(snap, monthIdx, "grossSalesUSD").map((x) => ({
@@ -282,7 +315,7 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
     }
 
     if (snap.isReal || testMode) {
-      lines.push("Fuente: ventas_mensuales_view — monto_total Odoo por producto:")
+      lines.push("Odoo por producto:")
       const items = Object.entries(snap.odooAmounts).map(([name, arr]) => ({
         label: displayProduct(name, productAliases),
         amount: arr[monthIdx] || 0,
@@ -291,7 +324,7 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
       return joinLines(lines)
     }
 
-    lines.push("Fuente: overrides × unidades")
+    lines.push("Overrides × unidades:")
     appendTopContributions(lines, breakdownOverrideField(snap, monthIdx, "grossSalesUSD"))
     return joinLines(lines)
   }
@@ -304,7 +337,7 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
   ): string | undefined => {
     const snap = getMonthSnapshot(monthIdx)
     const cfg = getCosLineConfig(cosLine)
-    const lines = [monthHeader(monthIdx, label)]
+    const lines = [...monthHeader(monthIdx, label), ""]
     const monthNumber = monthIdx + 1
     const companies = resolveSalesCompanies()
     const companySet =
@@ -318,37 +351,29 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
     })
 
     const recon = cosReconciliation?.[cosLine]
+    const plKey = Object.entries(TOOLTIP_LINE_TO_COS).find(([, v]) => v === cosLine)?.[0]
+    const rowTotal = plKey ? getLineValue(plKey as PlTooltipLine, monthIdx) : 0
+
     if (reconcileCosEnabled && recon?.hasRealData && companyRows.length > 0) {
-      lines.push(`Fuente total: pl_company_monthly_cos · ${cosLine} (contabilidad / Odoo)`)
+      lines.push(`Total en fila: ${tooltipFmt(rowTotal)}`)
+      lines.push("")
+      lines.push("Odoo por compañía:")
       const companyItems = companyRows
         .map((r) => ({ label: r.company, amount: Number(r.amount_usd || 0) }))
         .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
-      appendTopContributions(lines, companyItems, "Total contable")
-
-      lines.push("Suma por producto (overrides × unidades, sin Diferencia):")
-      appendTopContributions(
-        lines,
-        breakdownOverrideField(snap, monthIdx, field, {
-          excludeProduct: cfg.diferenciaName,
-        })
-      )
+      appendAmountRows(lines, companyItems, { totalLabel: "Subtotal Odoo" })
 
       const diff = recon.diferenciaMonthly?.[monthIdx] ?? 0
       if (diff !== 0) {
-        lines.push(`${cfg.diferenciaName} (ajuste): ${tooltipFmt(diff)}`)
-      }
-      const plKey = Object.entries(TOOLTIP_LINE_TO_COS).find(([, v]) => v === cosLine)?.[0]
-      if (plKey) {
-        lines.push(`Total fila P&L: ${tooltipFmt(getLineValue(plKey as PlTooltipLine, monthIdx))}`)
+        lines.push("")
+        lines.push(`Ajuste Diferencia: ${tooltipFmt(diff)}`)
       }
       return joinLines(lines)
     }
 
-    lines.push(
-      snap.isBudget && !testMode
-        ? `Fuente: budget × override ${field}`
-        : `Fuente: product_country_overrides.${field} × unidades`
-    )
+    lines.push(`Total: ${tooltipFmt(rowTotal)}`)
+    lines.push("")
+    lines.push(snap.isBudget && !testMode ? "Budget × unidad:" : "Overrides × unidades:")
     appendTopContributions(lines, breakdownOverrideField(snap, monthIdx, field))
     return joinLines(lines)
   }
@@ -362,16 +387,8 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
       return buildCosContable(monthIdx, cosKeyForField, label, field)
     }
 
-    const lines = [monthHeader(monthIdx, label)]
-    if (snap.isBudget && !testMode) {
-      lines.push(`Fuente: budget × override ${field}`)
-    } else if (snap.isReal) {
-      lines.push(
-        `Fuente: product_country_overrides.${field} × unidades (canal Paciente agregado por producto)`
-      )
-    } else {
-      lines.push(`Fuente: overrides × unidades`)
-    }
+    const lines = [...monthHeader(monthIdx, label), ""]
+    lines.push(snap.isBudget && !testMode ? "Budget × unidad:" : "Overrides × unidades:")
     appendTopContributions(lines, breakdownOverrideField(snap, monthIdx, field))
     return joinLines(lines)
   }
@@ -380,14 +397,13 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
     const gs = getLineValue("grossSales", monthIdx)
     const disc = getLineValue("commercialDiscount", monthIdx)
     const total = getLineValue("salesRevenue", monthIdx)
-    const lines = [
-      monthHeader(monthIdx, "Sales Revenue"),
-      "Fórmula: Gross Sales − Commercial Discount",
-      `Gross Sales: ${tooltipFmt(gs)}`,
-      `Commercial Discount: ${tooltipFmt(disc)}`,
-      `Total: ${tooltipFmt(total)}`,
-    ]
-    return joinLines(lines)
+    return joinLines([
+      ...monthHeader(monthIdx, "Sales Revenue"),
+      "",
+      fmtRow("Gross Sales", gs),
+      fmtRow("− Descuento comercial", disc),
+      fmtRow("= Total", total),
+    ])
   }
 
   const sumOdooContableForMonth = (monthIdx: number): number => {
@@ -424,27 +440,31 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
       0
     )
 
-  const buildTotalCOS = (monthIdx: number): string | undefined => {
-    const plLineParts: { key: PlTooltipLine; label: string }[] = [
-      { key: "productCost", label: "Product Cost" },
-      { key: "carrierCost", label: "Carrier Cost" },
-      { key: "kitCost", label: "Kit Cost" },
-      { key: "paymentFee", label: "Payment Fee" },
-      { key: "bloodDraw", label: "Blood Draw" },
-      { key: "sanitary", label: "Sanitary Permits" },
-      { key: "extCourier", label: "External Courier" },
-      { key: "intCourier", label: "Internal Courier" },
-      { key: "physiciansFees", label: "Physicians Fees" },
-      { key: "salesCommission", label: "Sales Commission" },
-    ]
+  const COS_PL_LINE_PARTS: { key: PlTooltipLine; label: string }[] = [
+    { key: "productCost", label: "Product Cost" },
+    { key: "carrierCost", label: "Carrier Cost" },
+    { key: "kitCost", label: "Kit Cost" },
+    { key: "paymentFee", label: "Payment Fee" },
+    { key: "bloodDraw", label: "Blood Draw" },
+    { key: "sanitary", label: "Sanitary" },
+    { key: "extCourier", label: "External Courier" },
+    { key: "intCourier", label: "Internal Courier" },
+    { key: "physiciansFees", label: "Physicians Fees" },
+    { key: "salesCommission", label: "Sales Commission" },
+  ]
 
-    const lines = [monthHeader(monthIdx, "Total Cost of Sales")]
+  const buildTotalCOS = (monthIdx: number): string | undefined => {
+    const lines = [...monthHeader(monthIdx, "Total Cost of Sales"), ""]
+    const rowTotal = getLineValue("totalCOS", monthIdx)
     const odooContable = sumOdooContableForMonth(monthIdx)
     const hasOdooContable =
       reconcileCosEnabled && Boolean(cosReconciliation) && odooContable !== 0
 
+    lines.push(`Total en fila: ${tooltipFmt(rowTotal)}`)
+
     if (hasOdooContable) {
-      lines.push("Contabilidad Odoo (pl_company_monthly_cos):")
+      lines.push("")
+      lines.push("Odoo por línea:")
       const odooByLine = sumOdooContableByLineForMonth(
         companyMonthlyCos,
         year,
@@ -455,54 +475,29 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
         label: getCosLineConfig(line).label,
         amount: odooByLine.get(line) || 0,
       }))
-      appendTopContributions(lines, odooItems, "Total contable Odoo")
+      appendAmountRows(lines, odooItems, { totalLabel: "Subtotal Odoo" })
 
-      const snap = getMonthSnapshot(monthIdx)
-      lines.push("Suma por producto (overrides × unidades, sin Diferencia):")
-      const productByLine = PL_COS_LINES.map(({ line, overrideField, label, diferenciaName }) => ({
-        label,
-        amount: breakdownOverrideField(snap, monthIdx, overrideField, {
-          excludeProduct: diferenciaName,
-        }).reduce((s, x) => s + x.amount, 0),
-      }))
-      appendTopContributions(lines, productByLine, "Total productos")
-
-      const ajusteItems = PL_COS_LINES.map(({ line, diferenciaName }) => ({
-        label: diferenciaName,
-        amount: cosReconciliation?.[line]?.diferenciaMonthly?.[monthIdx] ?? 0,
-      })).filter((x) => x.amount !== 0)
-      if (ajusteItems.length) {
-        lines.push("Ajuste (productos Diferencia):")
-        appendTopContributions(lines, ajusteItems, "Total ajuste")
-      } else {
-        lines.push("Ajuste (productos Diferencia): 0")
-      }
-
-      const productOnlyItems = plLineParts
-        .filter((p) => !TOOLTIP_LINE_TO_COS[p.key] || !PL_COS_ODOO_LINES.includes(TOOLTIP_LINE_TO_COS[p.key]!))
-        .map((p) => ({ label: p.label, amount: getLineValue(p.key, monthIdx) }))
-        .filter((x) => x.amount !== 0)
-      if (productOnlyItems.length) {
-        lines.push("Otras líneas COS (solo producto, sin Odoo):")
-        appendTopContributions(lines, productOnlyItems)
-      }
-    } else {
-      lines.push("Suma de líneas COS:")
-      for (const p of plLineParts) {
-        const v = getLineValue(p.key, monthIdx)
-        if (v !== 0) lines.push(`- ${p.label}: ${tooltipFmt(v)}`)
-      }
-    }
-
-    if (hasOdooContable) {
-      lines.push(`Total fila (contable Odoo): ${tooltipFmt(getLineValue("totalCOS", monthIdx))}`)
       const fullTotal = sumTotalCosFullForMonth(monthIdx)
       if (fullTotal !== odooContable) {
-        lines.push(`Total P&L (10 líneas COS): ${tooltipFmt(fullTotal)}`)
+        lines.push("")
+        lines.push(`P&L por producto (10 líneas): ${tooltipFmt(fullTotal)}`)
+        lines.push("Incluye líneas sin dato Odoo en el mes.")
+      }
+
+      const ajuste = sumDiferenciaForMonth(monthIdx)
+      if (ajuste !== 0) {
+        lines.push(`Ajuste Diferencia: ${tooltipFmt(ajuste)}`)
       }
     } else {
-      lines.push(`Total fila P&L: ${tooltipFmt(getLineValue("totalCOS", monthIdx))}`)
-      lines.push("(Pase el mouse en cada línea COS para detalle por producto)")
+      lines.push("")
+      lines.push("Por línea:")
+      appendAmountRows(
+        lines,
+        COS_PL_LINE_PARTS.map((p) => ({
+          label: p.label,
+          amount: getLineValue(p.key, monthIdx),
+        }))
+      )
     }
     return joinLines(lines)
   }
@@ -510,24 +505,24 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
   const buildGrossProfit = (monthIdx: number): string | undefined => {
     const rev = getLineValue("salesRevenue", monthIdx)
     const cos = getLineValue("totalCOS", monthIdx)
-    const lines = [
-      monthHeader(monthIdx, "Gross Profit"),
-      "Fórmula: Sales Revenue − Total Cost of Sales",
-      `Sales Revenue: ${tooltipFmt(rev)}`,
-      `Total Cost of Sales: ${tooltipFmt(cos)}`,
-      `Total: ${tooltipFmt(getLineValue("grossProfit", monthIdx))}`,
-    ]
-    return joinLines(lines)
+    const total = getLineValue("grossProfit", monthIdx)
+    return joinLines([
+      ...monthHeader(monthIdx, "Gross Profit"),
+      "",
+      fmtRow("Sales Revenue", rev),
+      fmtRow("− Cost of Sales", cos),
+      fmtRow("= Gross Profit", total),
+    ])
   }
 
   const buildIibbPct = (monthIdx: number): string | undefined => {
     const t = getTaxSnapshot(monthIdx)
     return joinLines([
-      monthHeader(monthIdx, "IIBB — tasa"),
-      "Fuente: pl_sga (fila país, product_name y channel vacíos)",
-      `Tasa configurada: ${t.iibb_pct}%`,
-      `Base: Sales Revenue del mes = ${tooltipFmt(t.salesRevenue)}`,
-      `Importe IIBB = base × tasa → ${tooltipFmt(t.iibbAmount)}`,
+      ...monthHeader(monthIdx, "IIBB"),
+      "",
+      `Tasa: ${t.iibb_pct}%`,
+      fmtRow("Base (revenue)", t.salesRevenue),
+      fmtRow("= Importe", t.iibbAmount),
     ])
   }
 
@@ -535,12 +530,13 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
 
   const buildIncomeTaxPct = (monthIdx: number): string | undefined => {
     const t = getTaxSnapshot(monthIdx)
+    const base = Math.max(0, t.grossProfit - t.totalSGA)
     return joinLines([
-      monthHeader(monthIdx, "Income tax — tasa"),
-      "Fuente: pl_sga (fila país, product_name y channel vacíos)",
-      `Tasa configurada: ${t.income_tax_pct}%`,
-      `Base: max(0, Gross Profit − SG&A) = ${tooltipFmt(Math.max(0, t.grossProfit - t.totalSGA))}`,
-      `Importe = base × tasa → ${tooltipFmt(t.incomeTax)}`,
+      ...monthHeader(monthIdx, "Income tax"),
+      "",
+      `Tasa: ${t.income_tax_pct}%`,
+      fmtRow("Base (GP − SG&A)", base),
+      fmtRow("= Importe", t.incomeTax),
     ])
   }
 
@@ -549,14 +545,13 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
   const buildNetIncome = (monthIdx: number): string | undefined => {
     const t = getTaxSnapshot(monthIdx)
     return joinLines([
-      monthHeader(monthIdx, "Net Income"),
-      "Fórmula: Gross Profit − SG&A − IIBB − Income tax",
-      `Gross Profit: ${tooltipFmt(t.grossProfit)}`,
-      `SG&A: ${tooltipFmt(t.totalSGA)}`,
-      `IIBB: ${tooltipFmt(t.iibbAmount)}`,
-      `Income tax: ${tooltipFmt(t.incomeTax)}`,
-      `Total: ${tooltipFmt(t.netIncome)}`,
-      "(SG&A: pase el mouse en filas SG&A para desglose por producto/canal)",
+      ...monthHeader(monthIdx, "Net Income"),
+      "",
+      fmtRow("Gross Profit", t.grossProfit),
+      fmtRow("− SG&A", t.totalSGA),
+      fmtRow("− IIBB", t.iibbAmount),
+      fmtRow("− Income tax", t.incomeTax),
+      fmtRow("= Net Income", t.netIncome),
     ])
   }
 
@@ -572,23 +567,30 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
       cosReconciliation &&
       monthIndices.some((mi) => sumOdooContableForMonth(mi) !== 0)
     ) {
-      const contableOdoo = monthIndices.reduce((s, mi) => s + sumOdooContableForMonth(mi), 0)
       const fullTotal = monthIndices.reduce((s, mi) => s + sumTotalCosFullForMonth(mi), 0)
       const ajuste = monthIndices.reduce((s, mi) => s + sumDiferenciaForMonth(mi), 0)
       const periodLines = [
-        `PERIODO (${from}–${to})`,
-        `Total fila (contable Odoo): ${tooltipFmt(total)}`,
-        `Total contable Odoo (detalle): ${tooltipFmt(contableOdoo)}`,
-        `Total ajuste (Diferencia): ${tooltipFmt(ajuste)}`,
+        `PERIODO ${from}–${to}`,
+        "",
+        `Total en fila: ${tooltipFmt(total)}`,
       ]
-      if (fullTotal !== contableOdoo) {
-        periodLines.push(`Total P&L (10 líneas COS): ${tooltipFmt(fullTotal)}`)
+      if (fullTotal !== total) {
+        periodLines.push(`P&L por producto: ${tooltipFmt(fullTotal)}`)
       }
-      periodLines.push("Pase el mouse en cada mes para el desglose.")
+      if (ajuste !== 0) {
+        periodLines.push(`Ajuste Diferencia: ${tooltipFmt(ajuste)}`)
+      }
+      periodLines.push("", "Detalle por mes al pasar el mouse.")
       return joinLines(periodLines)
     }
 
-    return `PERIODO (${from}–${to}): ${tooltipFmt(total)}\nSuma de los meses visibles. Pase el mouse en cada mes para el desglose.`
+    return joinLines([
+      `PERIODO ${from}–${to}`,
+      "",
+      `Total: ${tooltipFmt(total)}`,
+      "",
+      "Detalle por mes al pasar el mouse.",
+    ])
   }
 
   const forLine = (line: PlTooltipLine): ((monthIdx: number) => string | undefined) => {

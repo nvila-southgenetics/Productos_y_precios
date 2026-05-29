@@ -2119,26 +2119,17 @@ export function PLTable({
     })
     channelEntries.sort((a, b) => b.channelTotal - a.channelTotal)
 
-    const headerLabel =
-      field === "TOTAL"
-        ? `SG&A — ${MONTH_LABELS[monthIdx]}`
-        : `${SGA_FIELDS.find((f) => f.key === field)?.label || "SG&A"} — ${MONTH_LABELS[monthIdx]}`
-
-    const lines: string[] = [headerLabel, "Desglose por canal y producto:"]
-    let printed = 0
-    const maxProducts = 18
-    for (const ch of channelEntries) {
-      if (printed >= maxProducts) break
-      lines.push(`- ${ch.channel}: ${fmtSga(ch.channelTotal)}`)
-      for (const p of ch.prodEntries) {
-        if (printed >= maxProducts) break
-        lines.push(`  - ${p.product}: ${fmtSga(p.amount)}`)
-        printed++
-      }
-    }
+    const title =
+      field === "TOTAL" ? "SG&A" : SGA_FIELDS.find((f) => f.key === field)?.label || "SG&A"
     const total = channelEntries.reduce((s, x) => s + x.channelTotal, 0)
-    lines.push(`Total: ${fmtSga(total)}`)
-    if (printed >= maxProducts) lines.push("(mostrando top contribuciones)")
+    const lines: string[] = [title, MONTH_LABELS[monthIdx], "", `Total: ${fmtSga(total)}`, "", "Por canal:"]
+    const maxChannels = 6
+    for (const ch of channelEntries.slice(0, maxChannels)) {
+      lines.push(`  ${ch.channel.padEnd(20, " ")} ${fmtSga(ch.channelTotal)}`)
+    }
+    if (channelEntries.length > maxChannels) {
+      lines.push(`  … +${channelEntries.length - maxChannels} canales más`)
+    }
     return lines.join("\n")
   }
 
@@ -2792,7 +2783,7 @@ export function PLTable({
                 cellTitle={(mi) => buildSgaTooltip(mi, "TOTAL")}
                 cellPeriodTitle={
                   monthIndices.length
-                    ? `PERIODO (${MONTH_LABELS[monthIndices[0]]}–${MONTH_LABELS[monthIndices[monthIndices.length - 1]]}): ${fmtSga(periodSum(totalSGA))}\nPase el mouse en cada mes para desglose por producto/canal (pl_sga).`
+                    ? `PERIODO ${MONTH_LABELS[monthIndices[0]]}–${MONTH_LABELS[monthIndices[monthIndices.length - 1]]}\n\nTotal: ${fmtSga(periodSum(totalSGA))}\n\nDetalle por mes al pasar el mouse.`
                     : undefined
                 }
                 formatValue={(v) => fmtSga(v)}

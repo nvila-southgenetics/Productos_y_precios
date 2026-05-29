@@ -9,6 +9,59 @@ type PlHoverTooltipProps = {
   className?: string
 }
 
+function TooltipBody({ content }: { content: string }) {
+  const lines = content.split("\n")
+  return (
+    <div className="flex flex-col gap-0.5">
+      {lines.map((line, i) => {
+        const trimmed = line.trimEnd()
+        if (!trimmed) {
+          return <div key={i} className="h-1.5 shrink-0" aria-hidden />
+        }
+        if (i === 0) {
+          return (
+            <p key={i} className="text-[13px] font-semibold leading-tight text-white">
+              {trimmed}
+            </p>
+          )
+        }
+        if (i === 1 && !trimmed.includes(":")) {
+          return (
+            <p key={i} className="mb-0.5 text-[11px] text-white/55">
+              {trimmed}
+            </p>
+          )
+        }
+        const isSection = trimmed.endsWith(":") && !/\d[\d.,]*\s*$/.test(trimmed)
+        if (isSection) {
+          return (
+            <p
+              key={i}
+              className="mt-1.5 border-t border-white/10 pt-1.5 text-[10px] font-medium uppercase tracking-wide text-cyan-200/75 first:mt-0 first:border-0 first:pt-0"
+            >
+              {trimmed}
+            </p>
+          )
+        }
+        const isEmphasis =
+          /^(Total|Subtotal|PERIODO|=)/i.test(trimmed) ||
+          trimmed.startsWith("−") ||
+          trimmed.startsWith("=")
+        return (
+          <p
+            key={i}
+            className={`font-mono text-[11px] tabular-nums leading-snug ${
+              isEmphasis ? "font-medium text-white" : "text-white/85"
+            }`}
+          >
+            {trimmed}
+          </p>
+        )
+      })}
+    </div>
+  )
+}
+
 export function PlHoverTooltip({ content, children, className }: PlHoverTooltipProps) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState({ top: 0, left: 0 })
@@ -74,9 +127,9 @@ export function PlHoverTooltip({ content, children, className }: PlHoverTooltipP
               transform: "translate(-50%, -100%)",
               zIndex: 9999,
             }}
-            className="pointer-events-none max-w-[min(92vw,440px)] whitespace-pre-line rounded-lg border border-cyan-500/30 bg-slate-950 px-3 py-2.5 text-left text-[11px] leading-relaxed text-white shadow-2xl ring-1 ring-white/10"
+            className="pointer-events-none max-w-[min(92vw,360px)] rounded-lg border border-cyan-500/25 bg-slate-950/98 px-3.5 py-3 text-left shadow-2xl ring-1 ring-white/10 backdrop-blur-sm"
           >
-            {content}
+            <TooltipBody content={content} />
           </div>,
           document.body
         )}
