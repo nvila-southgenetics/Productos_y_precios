@@ -1,4 +1,15 @@
+import { PRODUCT_CATEGORIES_SORTED } from "@/lib/product-categories"
 import { supabase } from "@/lib/supabase"
+
+/** Canales del filtro P&L (app/pl); debe coincidir con la lista del dropdown. */
+export const PL_SALES_CHANNELS = [
+  "Gobierno",
+  "Instituciones SFL",
+  "Paciente",
+  "Pacientes desc",
+  "Aseguradoras",
+  "Distribuidores",
+] as const
 
 /** @deprecated Usar PL_COS_LINES; se mantiene por compatibilidad. */
 export const DIFFERENCIA_COSTOS_PRODUCT_NAME = "Diferencia de costos"
@@ -132,6 +143,22 @@ export type MonthlyProductCostRow = {
 
 export function shouldReconcileCos(productsFilter: string[]): boolean {
   return productsFilter.length === 0
+}
+
+/**
+ * Totales contables Odoo en COS solo cuando no hay filtro de producto, categoría ni canal.
+ */
+export function isPlCosContableView(filters: {
+  productsFilter: string[]
+  categoriesFilter: string[]
+  channelsFilter: string[]
+}): boolean {
+  if (filters.productsFilter.length > 0) return false
+  const catSet = new Set(filters.categoriesFilter)
+  if (!PRODUCT_CATEGORIES_SORTED.every((c) => catSet.has(c))) return false
+  const chSet = new Set(filters.channelsFilter)
+  if (!PL_SALES_CHANNELS.every((c) => chSet.has(c))) return false
+  return true
 }
 
 /** @deprecated */

@@ -12,6 +12,7 @@ import {
   fetchCompanyMonthlyCos,
   hasCompanyCosForFilter,
   PL_COS_LINES,
+  isPlCosContableView,
   reconcileAllCosLines,
   shouldReconcileCos,
   sumOdooContableByMonth,
@@ -277,10 +278,16 @@ export function PLTable({
     year,
     resolveSalesCompanies()
   )
+  const cosContableView = isPlCosContableView({
+    productsFilter: products,
+    categoriesFilter: categories,
+    channelsFilter: channels,
+  })
   const reconcileCosEnabled =
     modelo === "real" &&
     !combineEnabled &&
     !testMode &&
+    cosContableView &&
     (shouldReconcileCos(products) || hasContableCos)
 
   // Dropdowns independientes por fila de totales.
@@ -2476,8 +2483,7 @@ export function PLTable({
             )}
             {anyCosReconciliationActive && (
               <span className="text-xs text-sky-300/90">
-                · Total Cost of Sales: total contable Odoo (desglose completo al pasar el mouse)
-                {products.length > 0 ? " — con filtro de productos, los totales siguen siendo contables" : ""}
+                · Total Cost of Sales: total contable Odoo (todas las categorías, productos y canales)
               </span>
             )}
             <span className="text-xs text-white/35">
