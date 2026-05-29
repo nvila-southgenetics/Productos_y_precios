@@ -3,6 +3,7 @@ import {
   getCosLineConfig,
   PL_COS_LINES,
   PL_COS_ODOO_LINES,
+  sumOdooContableByLineForMonth,
   type CosCostLineKey,
   type MonthlyCosRow,
   type OverrideCostShape,
@@ -390,34 +391,32 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
   }
 
   const sumOdooContableForMonth = (monthIdx: number): number => {
-    const monthNumber = monthIdx + 1
-    const companies = resolveSalesCompanies()
-    const companySet =
-      companies && companies.length > 0 ? new Set(companies.map((c) => c.trim())) : null
+    const byLine = sumOdooContableByLineForMonth(
+      companyMonthlyCos,
+      year,
+      monthIdx,
+      resolveSalesCompanies()
+    )
     let total = 0
-    for (const row of companyMonthlyCos) {
-      if (row.year !== year || row.month !== monthNumber) continue
-      if (companySet && !companySet.has(String(row.company || "").trim())) continue
-      if (!PL_COS_ODOO_LINES.includes(row.cost_line)) continue
-      total += Number(row.amount_usd || 0)
-    }
+    for (const v of byLine.values()) total += v
     return total
   }
 
-  const sumOdooContableByLineForMonth = (monthIdx: number): Map<CosCostLineKey, number> => {
-    const monthNumber = monthIdx + 1
-    const companies = resolveSalesCompanies()
-    const companySet =
-      companies && companies.length > 0 ? new Set(companies.map((c) => c.trim())) : null
-    const byLine = new Map<CosCostLineKey, number>()
-    for (const row of companyMonthlyCos) {
-      if (row.year !== year || row.month !== monthNumber) continue
-      if (companySet && !companySet.has(String(row.company || "").trim())) continue
-      if (!PL_COS_ODOO_LINES.includes(row.cost_line)) continue
-      byLine.set(row.cost_line, (byLine.get(row.cost_line) || 0) + Number(row.amount_usd || 0))
-    }
-    return byLine
-  }
+  const COS_LINE_KEYS: PlTooltipLine[] = [
+    "productCost",
+    "carrierCost",
+    "kitCost",
+    "paymentFee",
+    "bloodDraw",
+    "sanitary",
+    "extCourier",
+    "intCourier",
+    "physiciansFees",
+    "salesCommission",
+  ]
+
+  const sumTotalCosFullForMonth = (monthIdx: number): number =>
+    COS_LINE_KEYS.reduce((s, k) => s + (getLineValue(k, monthIdx) || 0), 0)
 
   const sumDiferenciaForMonth = (monthIdx: number): number =>
     PL_COS_LINES.reduce(
@@ -446,7 +445,12 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
 
     if (hasOdooContable) {
       lines.push("Contabilidad Odoo (pl_company_monthly_cos):")
-      const odooByLine = sumOdooContableByLineForMonth(monthIdx)
+      const odooByLine = sumOdooContableByLineForMonth(
+        companyMonthlyCos,
+        year,
+        monthIdx,
+        resolveSalesCompanies()
+      )
       const odooItems = PL_COS_ODOO_LINES.map((line) => ({
         label: getCosLineConfig(line).label,
         amount: odooByLine.get(line) || 0,
@@ -490,8 +494,14 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
       }
     }
 
-    lines.push(`Total fila P&L: ${tooltipFmt(getLineValue("totalCOS", monthIdx))}`)
-    if (!hasOdooContable) {
+    if (hasOdooContable) {
+      lines.push(`Total fila (contable Odoo): ${tooltipFmt(getLineValue("totalCOS", monthIdx))}`)
+      const fullTotal = sumTotalCosFullForMonth(monthIdx)
+      if (fullTotal !== odooContable) {
+        lines.push(`Total P&L (10 líneas COS): ${tooltipFmt(fullTotal)}`)
+      }
+    } else {
+      lines.push(`Total fila P&L: ${tooltipFmt(getLineValue("totalCOS", monthIdx))}`)
       lines.push("(Pase el mouse en cada línea COS para detalle por producto)")
     }
     return joinLines(lines)
@@ -563,14 +573,19 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
       monthIndices.some((mi) => sumOdooContableForMonth(mi) !== 0)
     ) {
       const contableOdoo = monthIndices.reduce((s, mi) => s + sumOdooContableForMonth(mi), 0)
+      const fullTotal = monthIndices.reduce((s, mi) => s + sumTotalCosFullForMonth(mi), 0)
       const ajuste = monthIndices.reduce((s, mi) => s + sumDiferenciaForMonth(mi), 0)
-      return joinLines([
+      const periodLines = [
         `PERIODO (${from}–${to})`,
-        `Total contable Odoo: ${tooltipFmt(contableOdoo)}`,
+        `Total fila (contable Odoo): ${tooltipFmt(total)}`,
+        `Total contable Odoo (detalle): ${tooltipFmt(contableOdoo)}`,
         `Total ajuste (Diferencia): ${tooltipFmt(ajuste)}`,
-        `Total fila P&L: ${tooltipFmt(total)}`,
-        "Pase el mouse en cada mes para el desglose.",
-      ])
+      ]
+      if (fullTotal !== contableOdoo) {
+        periodLines.push(`Total P&L (10 líneas COS): ${tooltipFmt(fullTotal)}`)
+      }
+      periodLines.push("Pase el mouse en cada mes para el desglose.")
+      return joinLines(periodLines)
     }
 
     return `PERIODO (${from}–${to}): ${tooltipFmt(total)}\nSuma de los meses visibles. Pase el mouse en cada mes para el desglose.`

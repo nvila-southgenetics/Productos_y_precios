@@ -169,6 +169,46 @@ export const hasCompanyProductCostForFilter = (
     companies
   )
 
+/** Suma mensual de todas las líneas Odoo en pl_company_monthly_cos (7 líneas n8n). */
+export function sumOdooContableByMonth(
+  rows: MonthlyCosRow[],
+  year: number,
+  companies: string[] | null
+): number[] {
+  const monthly = Array(12).fill(0)
+  const companySet =
+    companies && companies.length > 0 ? new Set(companies.map((c) => c.trim())) : null
+
+  for (const row of rows) {
+    if (row.year !== year) continue
+    if (!PL_COS_ODOO_LINES.includes(row.cost_line)) continue
+    if (companySet && !companySet.has(String(row.company || "").trim())) continue
+    const idx = Number(row.month) - 1
+    if (idx < 0 || idx >= 12) continue
+    monthly[idx] += Number(row.amount_usd || 0)
+  }
+  return monthly
+}
+
+export function sumOdooContableByLineForMonth(
+  rows: MonthlyCosRow[],
+  year: number,
+  monthIdx: number,
+  companies: string[] | null
+): Map<CosCostLineKey, number> {
+  const monthNumber = monthIdx + 1
+  const companySet =
+    companies && companies.length > 0 ? new Set(companies.map((c) => c.trim())) : null
+  const byLine = new Map<CosCostLineKey, number>()
+  for (const row of rows) {
+    if (row.year !== year || row.month !== monthNumber) continue
+    if (!PL_COS_ODOO_LINES.includes(row.cost_line)) continue
+    if (companySet && !companySet.has(String(row.company || "").trim())) continue
+    byLine.set(row.cost_line, (byLine.get(row.cost_line) || 0) + Number(row.amount_usd || 0))
+  }
+  return byLine
+}
+
 export function sumRealCosByMonth(
   rows: MonthlyCosRow[],
   costLine: CosCostLineKey,

@@ -14,6 +14,7 @@ import {
   PL_COS_LINES,
   reconcileAllCosLines,
   shouldReconcileCos,
+  sumOdooContableByMonth,
   type CosCostLineKey,
 } from "@/lib/pl-cost-reconciliation"
 import { PlHoverTooltip } from "@/components/pl/PlHoverTooltip"
@@ -1869,16 +1870,30 @@ export function PLTable({
   const physiciansFees = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.physiciansFees])) as Record<string, number[]>)
   const salesCommission = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.salesCommission])) as Record<string, number[]>)
 
-  const totalCOS = Array.from({ length: 12 }, (_, i) =>
+  const totalSGA = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.totalSGA])) as Record<string, number[]>)
+  const iibbAmount = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.iibbAmount])) as Record<string, number[]>)
+
+  const totalCOSFull = Array.from({ length: 12 }, (_, i) =>
     productCost[i] + carrierCost[i] + kitCost[i] + paymentFee[i] + bloodDraw[i] + sanitary[i] +
     extCourier[i] + intCourier[i] + physiciansFees[i] + salesCommission[i]
   )
-  const grossProfit = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.grossProfit])) as Record<string, number[]>)
-
-  const totalSGA = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.totalSGA])) as Record<string, number[]>)
-  const iibbAmount = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.iibbAmount])) as Record<string, number[]>)
-  const incomeTax = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.incomeTax])) as Record<string, number[]>)
-  const netIncome = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.netIncome])) as Record<string, number[]>)
+  const odooContableByMonth = reconcileCosEnabled
+    ? sumOdooContableByMonth(companyMonthlyCos, year, resolveSalesCompanies())
+    : Array(12).fill(0)
+  /** Fila Total COS: contable Odoo cuando hay dato; si no, suma de las 10 líneas. */
+  const totalCOS = Array.from({ length: 12 }, (_, i) =>
+    reconcileCosEnabled && odooContableByMonth[i] !== 0
+      ? odooContableByMonth[i]
+      : totalCOSFull[i]
+  )
+  const grossProfit = salesRevenue.map((v, i) => v - totalCOS[i])
+  const incomeTaxBase = grossProfit.map((v, i) => v - totalSGA[i])
+  const incomeTax = incomeTaxBase.map((v, i) =>
+    Math.max(0, v) * ((taxRates[i]?.income_tax_pct ?? 0) / 100)
+  )
+  const netIncome = grossProfit.map(
+    (v, i) => v - totalSGA[i] - iibbAmount[i] - incomeTax[i]
+  )
 
   // Solo se usa para mostrar el detalle por campo cuando no estamos combinando.
   const sgaMonthly: Record<keyof SGAData, number[]> = Object.fromEntries(
@@ -2461,7 +2476,7 @@ export function PLTable({
             )}
             {anyCosReconciliationActive && (
               <span className="text-xs text-sky-300/90">
-                · Cost of Sales: cifras contables por compañía (ajuste en productos Diferencia)
+                · Total Cost of Sales: total contable Odoo (desglose completo al pasar el mouse)
                 {products.length > 0 ? " — con filtro de productos, los totales siguen siendo contables" : ""}
               </span>
             )}
