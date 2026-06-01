@@ -551,7 +551,9 @@ export function PLTable({
     // En UI podemos mostrar alias (p.ej. "Unity") aunque en pl_sga esté guardado el nombre canónico
     // (p.ej. "Unity Básico"). Comparamos siempre por nombre canónico.
     const selectedProducts =
-      products.length > 0 ? new Set(products.map((p) => resolveToCatalogName(p)).filter(Boolean)) : null
+      productsFilter.length > 0
+        ? new Set(productsFilter.map((p) => resolveToCatalogName(p)).filter(Boolean))
+        : null
     for (const row of data || []) {
       const rowProduct = String((row as any).product_name || "")
       if (!rowProduct) continue
@@ -1304,7 +1306,7 @@ export function PLTable({
       if (!name) continue
       const categorySet = shouldFilterCategories ? categoriesSet : null
       if (categorySet && idToCat[prodId] && !categorySet.has(idToCat[prodId])) continue
-      if (products.length > 0 && !products.includes(name)) continue
+      if (productsFilter.length > 0 && !productsFilter.includes(name)) continue
 
       const o = row.overrides || {}
       const ch = row.channel || ""
@@ -1394,7 +1396,7 @@ export function PLTable({
       if (!name) continue
       const categorySet = shouldFilterCategories ? categoriesSet : null
       if (categorySet && idToCat[row.product_id] && !categorySet.has(idToCat[row.product_id])) continue
-      if (products.length > 0 && !products.includes(name)) continue
+      if (productsFilter.length > 0 && !productsFilter.includes(name)) continue
 
       const o = row.overrides || {}
 
@@ -1492,7 +1494,9 @@ export function PLTable({
 
     // Ver comentario en fetchSGAFor: el filtro por producto debe matchear por nombre canónico
     const selectedProducts =
-      products.length > 0 ? new Set(products.map((p) => resolveToCatalogName(p)).filter(Boolean)) : null
+      productsFilter.length > 0
+        ? new Set(productsFilter.map((p) => resolveToCatalogName(p)).filter(Boolean))
+        : null
     const usedRows: any[] = []
     for (const row of sgaData || []) {
       const rowProduct = String(row.product_name || "")
@@ -2053,6 +2057,7 @@ export function PLTable({
     testMode: Boolean(testMode),
     modelo,
     reconcileCosEnabled,
+    diferenciaOnlyView,
     cosReconciliation,
     companyMonthlyCos,
     resolveSalesCompanies,

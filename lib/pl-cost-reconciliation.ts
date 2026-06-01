@@ -327,6 +327,8 @@ export function reconcileMonthlyCosLine(
 ): {
   monthly: number[]
   diferenciaMonthly: number[]
+  /** Suma overrides × unidades (sin productos Diferencia). */
+  computedMonthly: number[]
   hasRealData: boolean
 } {
   const enabled = options?.enabled !== false
@@ -346,7 +348,12 @@ export function reconcileMonthlyCosLine(
         return sum + Number(ov?.[overrideField] ?? 0) * (qtArr[m] || 0)
       }, 0)
     )
-    return { monthly: fallback, diferenciaMonthly: Array(12).fill(0), hasRealData: false }
+    return {
+      monthly: fallback,
+      diferenciaMonthly: Array(12).fill(0),
+      computedMonthly: fallback,
+      hasRealData: false,
+    }
   }
 
   const diferenciaMonthly = Array.from({ length: 12 }, (_, m) => {
@@ -367,7 +374,35 @@ export function reconcileMonthlyCosLine(
     return real
   })
 
-  return { monthly, diferenciaMonthly, hasRealData }
+  return { monthly, diferenciaMonthly, computedMonthly: computed, hasRealData }
+}
+
+/** Suma mensual P&L por producto (10 líneas COS, sin fila Diferencia). */
+export function sumProductCosFromReconciliation(
+  cosReconciliation: Partial<
+    Record<
+      CosCostLineKey,
+      {
+        hasRealData: boolean
+        monthly?: number[]
+        diferenciaMonthly?: number[]
+        computedMonthly?: number[]
+      }
+    >
+  > | null,
+  monthIdx: number
+): number {
+  if (!cosReconciliation) return 0
+  return PL_COS_LINES.reduce((s, { line }) => {
+    const rec = cosReconciliation[line]
+    if (!rec) return s
+    const computed = rec.computedMonthly?.[monthIdx]
+    if (computed != null) return s + computed
+    const monthly = rec.monthly?.[monthIdx] ?? 0
+    const diff = rec.diferenciaMonthly?.[monthIdx] ?? 0
+    if (rec.hasRealData && monthly !== 0) return s + (monthly - diff)
+    return s + monthly
+  }, 0)
 }
 
 /** @deprecated */
@@ -433,12 +468,22 @@ export function reconcileAllCosLines(
   options?: { enabled?: boolean }
 ): Record<
   CosCostLineKey,
-  { monthly: number[]; diferenciaMonthly: number[]; hasRealData: boolean }
+  {
+    monthly: number[]
+    diferenciaMonthly: number[]
+    computedMonthly: number[]
+    hasRealData: boolean
+  }
 > {
   const enabled = options?.enabled !== false
   const out = {} as Record<
     CosCostLineKey,
-    { monthly: number[]; diferenciaMonthly: number[]; hasRealData: boolean }
+    {
+      monthly: number[]
+      diferenciaMonthly: number[]
+      computedMonthly: number[]
+      hasRealData: boolean
+    }
   >
   for (const { line, overrideField, diferenciaName } of PL_COS_LINES) {
     const realByMonth = sumRealCosByMonth(rows, line, companies)
