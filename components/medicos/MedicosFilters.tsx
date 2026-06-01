@@ -3,7 +3,11 @@
 import { ProductMultiSearchFilter } from "@/components/dashboard/ProductMultiSearchFilter"
 import { MedicoMultiSearchFilter } from "@/components/medicos/MedicoMultiSearchFilter"
 import { MultiCheckboxDropdown, type MultiSelectOption } from "@/components/filters/MultiCheckboxDropdown"
-import { MonthRangeFilter } from "@/components/filters/MonthRangeFilter"
+import {
+  DateRangeFilter,
+  type DateRangePreset,
+  type DateRangeValue,
+} from "@/components/filters/DateRangeFilter"
 import { PRODUCT_CATEGORIES_SORTED } from "@/lib/product-categories"
 import { GENERAL_LLC_COMPANY } from "@/lib/supabase-mcp"
 
@@ -29,14 +33,17 @@ interface MedicosFiltersProps {
   selectedProducts: string[]
   selectedMedicos: string[]
   selectedCategories: string[]
-  monthFrom: number
-  monthTo: number
+  fechaDesde: string
+  fechaHasta: string
+  fechaMin?: string
+  fechaMax?: string
+  datePresets?: DateRangePreset[]
   onCompaniesChange: (companies: string[]) => void
   onLlcCountriesChange: (countries: string[]) => void
   onProductsChange: (products: string[]) => void
   onMedicosChange: (medicos: string[]) => void
   onCategoriesChange: (categories: string[]) => void
-  onMonthRangeChange: (range: { fromMonth: number; toMonth: number }) => void
+  onDateRangeChange: (range: DateRangeValue) => void
   showAllCompanies?: boolean
 }
 
@@ -50,14 +57,17 @@ export function MedicosFilters({
   selectedProducts,
   selectedMedicos,
   selectedCategories,
-  monthFrom,
-  monthTo,
+  fechaDesde,
+  fechaHasta,
+  fechaMin,
+  fechaMax,
+  datePresets = [],
   onCompaniesChange,
   onLlcCountriesChange,
   onProductsChange,
   onMedicosChange,
   onCategoriesChange,
-  onMonthRangeChange,
+  onDateRangeChange,
   showAllCompanies = true,
 }: MedicosFiltersProps) {
   const selectedCompaniesEffective = selectedCompanies.length ? selectedCompanies : companies
@@ -185,7 +195,7 @@ export function MedicosFilters({
   }))
 
   return (
-    <div className="relative z-40 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+    <div className="relative z-40 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
       <MultiCheckboxDropdown
         label="Compañía"
         options={companyOptions}
@@ -222,11 +232,14 @@ export function MedicosFilters({
         allLabel="Todos los médicos"
       />
 
-      <MonthRangeFilter
-        label="Mes"
-        fromMonth={monthFrom}
-        toMonth={monthTo}
-        onChange={onMonthRangeChange}
+      <DateRangeFilter
+        label="Período"
+        fechaDesde={fechaDesde}
+        fechaHasta={fechaHasta}
+        minDate={fechaMin}
+        maxDate={fechaMax}
+        presets={datePresets}
+        onChange={onDateRangeChange}
       />
     </div>
   )

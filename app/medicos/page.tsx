@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { MedicosFilters } from "@/components/medicos/MedicosFilters"
 import { MedicosMatrixTable } from "@/components/medicos/MedicosMatrixTable"
+import type { DateRangePreset } from "@/components/filters/DateRangeFilter"
 import { usePermissions } from "@/lib/use-permissions"
 import { filterCompaniesByCountries } from "@/lib/auth-constants"
 import { PRODUCT_CATEGORIES_SORTED } from "@/lib/product-categories"
@@ -13,8 +14,29 @@ import {
   getMedicoInstitucionSales,
   getMedicosFromVentas,
   getProductsFromSales,
+  getVentasFechaBounds,
   type MedicoInstitucionSaleRow,
 } from "@/lib/supabase-mcp"
+
+function buildDatePresets(min: string, max: string): DateRangePreset[] {
+  const minYear = Number(min.slice(0, 4))
+  const maxYear = Number(max.slice(0, 4))
+  const years: DateRangePreset[] = []
+  for (let y = maxYear; y >= minYear; y--) {
+    const desde = `${y}-01-01`
+    const hasta = `${y}-12-31`
+    years.push({
+      id: String(y),
+      label: String(y),
+      fechaDesde: desde < min ? min : desde,
+      fechaHasta: hasta > max ? max : hasta,
+    })
+  }
+  return [
+    { id: "all", label: "Todo el histórico", fechaDesde: min, fechaHasta: max },
+    ...years,
+  ]
+}
 
 export default function MedicosPage() {
   const { allowedCountries, isAdmin, loading: permLoading } = usePermissions()
@@ -27,10 +49,18 @@ export default function MedicosPage() {
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [selectedMedicos, setSelectedMedicos] = useState<string[]>([])
   const [selectedCategories, setSelectedCategories] = useState<string[]>(PRODUCT_CATEGORIES_SORTED)
-  const [monthFrom, setMonthFrom] = useState(1)
-  const [monthTo, setMonthTo] = useState(12)
+  const [fechaBounds, setFechaBounds] = useState<{ min: string; max: string } | null>(null)
+  const [fechaDesde, setFechaDesde] = useState("")
+  const [fechaHasta, setFechaHasta] = useState("")
   const [rows, setRows] = useState<MedicoInstitucionSaleRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
+
+  const datePresets = useMemo(
+    () => (fechaBounds ? buildDatePresets(fechaBounds.min, fechaBounds.max) : []),
+    [fechaBounds]
+  )
+
+  const dateRangeReady = Boolean(fechaDesde && fechaHasta)
 
   const companiesForQuery = useMemo(() => {
     if (!companies.length) return []
@@ -55,6 +85,34 @@ export default function MedicosPage() {
     return allPicked ? undefined : sel
   }, [llcSelected, llcCountries, selectedLlcCountries])
 
+  const salesQueryParams = useMemo(
+    () => ({
+      fechaDesde,
+      fechaHasta,
+      companies: companiesForQuery,
+      llcCountries: llcCountriesForQuery,
+    }),
+    [fechaDesde, fechaHasta, companiesForQuery, llcCountriesForQuery]
+  )
+
+  useEffect(() => {
+    async function loadBounds() {
+      try {
+        const bounds = await getVentasFechaBounds()
+        setFechaBounds(bounds)
+        setFechaDesde(bounds.min)
+        setFechaHasta(bounds.max)
+      } catch (e) {
+        console.error("Error loading ventas date bounds:", e)
+        const fallback = { min: "2025-01-01", max: new Date().toISOString().slice(0, 10) }
+        setFechaBounds(fallback)
+        setFechaDesde(fallback.min)
+        setFechaHasta(fallback.max)
+      }
+    }
+    if (!permLoading) loadBounds()
+  }, [permLoading])
+
   useEffect(() => {
     async function loadInitial() {
       try {
@@ -75,14 +133,9 @@ export default function MedicosPage() {
 
   useEffect(() => {
     async function loadMedicos() {
-      if (!companies.length || permLoading) return
+      if (!companies.length || permLoading || !dateRangeReady) return
       try {
-        const list = await getMedicosFromVentas({
-          monthFrom,
-          monthTo,
-          companies: companiesForQuery,
-          llcCountries: llcCountriesForQuery,
-        })
+        const list = await getMedicosFromVentas(salesQueryParams)
         setMedicos(list)
       } catch (e) {
         console.error("Error loading médicos list:", e)
@@ -90,11 +143,11 @@ export default function MedicosPage() {
       }
     }
     loadMedicos()
-  }, [companies.length, companiesForQuery, llcCountriesForQuery, monthFrom, monthTo, permLoading])
+  }, [companies.length, permLoading, dateRangeReady, salesQueryParams])
 
   useEffect(() => {
     async function loadLlcCountries() {
-      if (!companies.length || permLoading) return
+      if (!companies.length || permLoading || !dateRangeReady) return
       if (!companies.includes(GENERAL_LLC_COMPANY)) {
         setLlcCountries([])
         setSelectedLlcCountries([])
@@ -103,8 +156,7 @@ export default function MedicosPage() {
 
       try {
         const list = await getLlcCountriesFromVentas({
-          monthFrom,
-          monthTo,
+          ...salesQueryParams,
           companies: [GENERAL_LLC_COMPANY],
         })
         const sameCountries =
@@ -131,21 +183,18 @@ export default function MedicosPage() {
     }
 
     loadLlcCountries()
-  }, [companies, llcCountries, monthFrom, monthTo, permLoading])
+  }, [companies, llcCountries, permLoading, dateRangeReady, salesQueryParams])
 
   useEffect(() => {
     async function loadMatrix() {
-      if (!companies.length || permLoading) return
+      if (!companies.length || permLoading || !dateRangeReady) return
       setIsLoading(true)
       try {
         const allCategories =
           selectedCategories.length === PRODUCT_CATEGORIES_SORTED.length &&
           PRODUCT_CATEGORIES_SORTED.every((c) => selectedCategories.includes(c))
         const data = await getMedicoInstitucionSales({
-          monthFrom,
-          monthTo,
-          companies: companiesForQuery,
-          llcCountries: llcCountriesForQuery,
+          ...salesQueryParams,
           products: selectedProducts.length ? selectedProducts : undefined,
           categories: allCategories ? undefined : selectedCategories,
           medicos: selectedMedicos.length ? selectedMedicos : undefined,
@@ -161,14 +210,12 @@ export default function MedicosPage() {
     loadMatrix()
   }, [
     companies.length,
-    companiesForQuery,
-    llcCountriesForQuery,
-    monthFrom,
-    monthTo,
+    permLoading,
+    dateRangeReady,
+    salesQueryParams,
     selectedProducts,
     selectedMedicos,
     selectedCategories,
-    permLoading,
   ])
 
   return (
@@ -177,9 +224,8 @@ export default function MedicosPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">Médicos</h1>
           <p className="text-sm text-white/80 mt-1">
-            Unidades vendidas por médico e institución (todo el histórico en ventas). Filas: médicos
-            (agrupables por institución). Columnas: total y productos ordenados por ventas. El filtro
-            de mes aplica a cada año (ej. mar–jun = todos los marzo a junio).
+            Unidades vendidas por médico e institución. Elegí el período con las fechas o un
+            atajo (año completo, todo el histórico). Filas: médicos agrupables por institución.
           </p>
         </div>
 
@@ -193,21 +239,24 @@ export default function MedicosPage() {
           selectedProducts={selectedProducts}
           selectedMedicos={selectedMedicos}
           selectedCategories={selectedCategories}
-          monthFrom={monthFrom}
-          monthTo={monthTo}
+          fechaDesde={fechaDesde}
+          fechaHasta={fechaHasta}
+          fechaMin={fechaBounds?.min}
+          fechaMax={fechaBounds?.max}
+          datePresets={datePresets}
           onCompaniesChange={setSelectedCompanies}
           onLlcCountriesChange={setSelectedLlcCountries}
           onProductsChange={setSelectedProducts}
           onMedicosChange={setSelectedMedicos}
           onCategoriesChange={setSelectedCategories}
-          onMonthRangeChange={({ fromMonth, toMonth }) => {
-            setMonthFrom(fromMonth)
-            setMonthTo(toMonth)
+          onDateRangeChange={({ fechaDesde: d, fechaHasta: h }) => {
+            setFechaDesde(d)
+            setFechaHasta(h)
           }}
           showAllCompanies={isAdmin}
         />
 
-        <MedicosMatrixTable rows={rows} isLoading={isLoading || permLoading} />
+        <MedicosMatrixTable rows={rows} isLoading={isLoading || permLoading || !dateRangeReady} />
       </div>
     </div>
   )
