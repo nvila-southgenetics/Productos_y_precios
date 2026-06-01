@@ -42,6 +42,7 @@ export default function PLPage() {
   const [budgetNames, setBudgetNames] = useState<string[]>(["budget"])
   // Arrays con multi-selección: si elegís "Todos", guardamos todos los valores posibles.
   const [companies, setCompanies] = useState<string[]>([])
+  const [companiesLoading, setCompaniesLoading] = useState(true)
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([])
   const [selectedCategories, setSelectedCategories] = useState<string[]>(CATEGORIES)
   const [productsSelected, setProductsSelected] = useState<string[]>([])
@@ -64,6 +65,14 @@ export default function PLPage() {
   // Cargar lista de compañías de ventas (mismo origen que Real Import)
   useEffect(() => {
     async function loadCompanies() {
+      if (permLoading) return
+      if (!userId) {
+        setCompanies([])
+        setSelectedCompanies([])
+        setCompaniesLoading(false)
+        return
+      }
+      setCompaniesLoading(true)
       try {
         const companiesData = await getCompanies()
         const filtered = filterCompaniesByCountries(companiesData, allowedCountryCodes)
@@ -73,14 +82,12 @@ export default function PLPage() {
         console.error("Error loading companies:", e)
         setCompanies([])
         setSelectedCompanies([])
+      } finally {
+        setCompaniesLoading(false)
       }
     }
-    if (!permLoading && userId) loadCompanies()
-    if (!permLoading && !userId) {
-      setCompanies([])
-      setSelectedCompanies([])
-    }
-  }, [permLoading, isAdmin, allowedCountryCodes.join("|")])
+    loadCompanies()
+  }, [permLoading, userId, isAdmin, allowedCountryCodes.join("|")])
 
   const companyParam = useMemo(
     () => companyQueryFromSelection(companies, selectedCompanies, isAdmin),
@@ -224,7 +231,9 @@ export default function PLPage() {
   }
 
   const countriesForPL = countriesFromCompanies
-  const plDataReady = !permLoading && countriesForPL.length > 0 && companies.length > 0
+  const filtersStillLoading = permLoading || (Boolean(userId) && companiesLoading)
+  const plDataReady =
+    !filtersStillLoading && Boolean(userId) && countriesForPL.length > 0 && companies.length > 0
 
   return (
     <div className="min-h-screen bg-gradient-to-r from-blue-900 via-blue-950 to-slate-900">
@@ -271,7 +280,13 @@ export default function PLPage() {
               selectedValues={selectedCompanies.length ? selectedCompanies : companies}
               onSelectedValuesChange={setSelectedCompanies}
               allLabel={isAdmin ? "Todas las compañías" : "Todas (mis compañías)"}
-              pendingLabel={permLoading ? "Cargando permisos…" : undefined}
+              pendingLabel={
+                permLoading
+                  ? "Cargando permisos…"
+                  : companiesLoading
+                    ? "Cargando compañías…"
+                    : undefined
+              }
             />
 
             {/* Categoría */}
@@ -395,7 +410,7 @@ export default function PLPage() {
               setMonthModels((prev) => prev.map((m, i) => (i === monthIdx0 ? nextKey : m)))
             }}
           />
-        ) : permLoading ? (
+        ) : filtersStillLoading ? (
           <div className="rounded-lg border border-white/20 bg-slate-800/40 px-6 py-16 text-center text-white/70 text-sm">
             Preparando filtros y datos…
           </div>
