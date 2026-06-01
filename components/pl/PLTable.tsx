@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback, useMemo, type ReactNode } from "react"
+import { useEffect, useState, useCallback, useMemo, useRef, type ReactNode } from "react"
 import { supabase } from "@/lib/supabase"
 import { ChevronDown, ChevronRight, Plus, Table2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -116,6 +116,9 @@ const MONTH_LABELS = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Ju
 const SHORT_LABELS = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"]
 
 const KNOWN_PL_CATEGORIES = PRODUCT_CATEGORIES_SORTED
+
+/** Referencia estable: evita re-fetch en bucle cuando el filtro es vista Diferencia. */
+const EMPTY_PRODUCTS_FILTER: string[] = []
 
 const SGA_FIELDS: { key: keyof SGAData; label: string }[] = [
   { key: "salaries_wages", label: "Salaries & Wages" },
@@ -265,7 +268,10 @@ export function PLTable({
   const product = products.length === 1 ? products[0] : "all"
   const diferenciaOnlyView = isDiferenciaAggregateOnly(products)
   /** Sin filtro de producto en queries: hace falta el universo completo para calcular ajustes. */
-  const productsFilter = diferenciaOnlyView ? [] : products
+  const productsFilter = useMemo(
+    () => (diferenciaOnlyView ? EMPTY_PRODUCTS_FILTER : products),
+    [diferenciaOnlyView, products]
+  )
   const { openCreateProductDialog } = useProductCreateDialog()
   const categoriesSet = new Set(categories)
   const allKnownCategoriesSelected = KNOWN_PL_CATEGORIES.every((c) => categoriesSet.has(c))
@@ -292,8 +298,9 @@ export function PLTable({
     modelo === "real" &&
     !combineEnabled &&
     !testMode &&
-    cosContableView &&
-    (shouldReconcileCos(products) || hasContableCos)
+    (diferenciaOnlyView
+      ? hasContableCos
+      : cosContableView && (shouldReconcileCos(products) || hasContableCos))
 
   // Dropdowns independientes por fila de totales.
   // Al expandir una fila, se muestra el desglose correspondiente (y dependencias),
@@ -683,7 +690,7 @@ export function PLTable({
     ovs: Record<string, OverrideData>
   ): number[] => {
     const cfg = PL_COS_LINES.find((c) => c.line === line)!
-    if (diferenciaOnlyView && cosReconciliation?.[line]?.diferenciaMonthly) {
+    if (diferenciaOnlyView && cosReconciliation?.[line]) {
       return [...(cosReconciliation[line].diferenciaMonthly ?? Array(12).fill(0))]
     }
     if (reconcileCosEnabled && cosReconciliation?.[line]?.monthly) {
@@ -698,8 +705,11 @@ export function PLTable({
 
   // ── Data fetching ─────────────────────────────────────────────────────────
 
+  const plDataLoadedRef = useRef(false)
+
   const fetchData = useCallback(async () => {
-    setLoading(true)
+    const showFullLoading = !plDataLoadedRef.current
+    if (showFullLoading) setLoading(true)
     setCombineError(null)
     // En Real queremos "limpiar" únicamente SG&A/Impuestos (no el resto).
     // Los costos de producto (Gross Sales / Gross Profit) se calculan desde overrides + cantidades,
@@ -709,6 +719,7 @@ export function PLTable({
     setSgaRowsRaw([])
     try {
       if (countries.length === 0) {
+        plDataLoadedRef.current = false
         setQuantities({})
         setOdooAmounts({})
         setBudgetRows([])
@@ -1098,6 +1109,7 @@ export function PLTable({
       console.error("PLTable fetchData:", e)
       if (combineEnabled) setCombineError("Error cargando datos para combinar")
     } finally {
+      plDataLoadedRef.current = true
       setLoading(false)
     }
   }, [modelo, year, countries, categories, productsFilter, channels, testMode, budgetName, combineEnabled, effectiveMonthModels.join("|")])
