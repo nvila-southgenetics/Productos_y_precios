@@ -14,6 +14,7 @@ import {
   PL_COS_LINES,
   isDiferenciaAggregateOnly,
   isPlCosContableView,
+  omitPlCosDiferenciaProducts,
   reconcileAllCosLines,
   shouldReconcileCos,
   sumDiferenciaMonthlyAllLines,
@@ -1651,14 +1652,21 @@ export function PLTable({
       }
     }
 
-    return { qty, odoo }
+    return {
+      qty: omitPlCosDiferenciaProducts(qty),
+      odoo: omitPlCosDiferenciaProducts(odoo),
+    }
   }
 
   const detailData = (() => {
     if (combineEnabled) {
       // En modo combinar, el detalle solo soporta Gross Sale para meses "real" (odooAmounts) por ahora.
       const built = buildCombinedDetail()
-      return { ...built, grossSale: built.odoo }
+      return {
+        qty: built.qty,
+        odoo: built.odoo,
+        grossSale: omitPlCosDiferenciaProducts(built.odoo),
+      }
     }
     // No combinar: usar los estados actuales.
     // En real, Gross Sales viene de Odoo (odooAmounts). En budget/test no tenemos Odoo.
@@ -1734,15 +1742,12 @@ export function PLTable({
       }
     }
 
-    const qty =
-      reconcileCosEnabled
-        ? ensureAllDiferenciaInDataset(activeQuantities, overrides).quantities
-        : activeQuantities
+    const qty = omitPlCosDiferenciaProducts(activeQuantities)
 
     return {
       qty,
-      odoo: modelo === "real" ? odooAmounts : {},
-      grossSale,
+      odoo: modelo === "real" ? omitPlCosDiferenciaProducts(odooAmounts) : {},
+      grossSale: omitPlCosDiferenciaProducts(grossSale),
     }
   })()
 

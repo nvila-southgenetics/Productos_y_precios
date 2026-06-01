@@ -128,6 +128,30 @@ export const PL_COS_ODOO_LINES: readonly CosCostLineKey[] = [
 
 export const PL_COS_DIFERENCIA_PRODUCT_NAMES = PL_COS_LINES.map((c) => c.diferenciaName)
 
+const PL_COS_DIFERENCIA_NAME_SET = new Set<string>([
+  DIFERENCIA_AGGREGATE_PRODUCT_NAME,
+  ...PL_COS_DIFERENCIA_PRODUCT_NAMES,
+])
+
+/** Productos virtuales COS (ajuste contable); no se listan en el detalle de productos del P&L. */
+export function isPlCosDiferenciaProductName(name: string): boolean {
+  const t = String(name || "").trim()
+  if (!t) return false
+  if (PL_COS_DIFERENCIA_NAME_SET.has(t)) return true
+  const lower = t.toLowerCase()
+  return lower === "diferencia" || lower.startsWith("diferencia ")
+}
+
+export function omitPlCosDiferenciaProducts<T extends unknown>(
+  record: Record<string, T>
+): Record<string, T> {
+  const out: Record<string, T> = {}
+  for (const [key, value] of Object.entries(record)) {
+    if (!isPlCosDiferenciaProductName(key)) out[key] = value
+  }
+  return out
+}
+
 export function isDiferenciaAggregateOnly(productsFilter: string[]): boolean {
   const sel = productsFilter.map((p) => p.trim()).filter(Boolean)
   return sel.length === 1 && sel[0] === DIFERENCIA_AGGREGATE_PRODUCT_NAME
