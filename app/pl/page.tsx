@@ -13,7 +13,10 @@ import { getCompanies } from "@/lib/supabase-mcp"
 import { filterCompaniesByCountries, getCountryForCompany } from "@/lib/auth-constants"
 import { companyQueryFromSelection } from "@/lib/company-filter"
 import { PRODUCT_CATEGORIES_SORTED } from "@/lib/product-categories"
-import { PL_COS_DIFERENCIA_PRODUCT_NAMES } from "@/lib/pl-cost-reconciliation"
+import {
+  DIFERENCIA_AGGREGATE_PRODUCT_NAME,
+  PL_COS_DIFERENCIA_PRODUCT_NAMES,
+} from "@/lib/pl-cost-reconciliation"
 
 const BASE_COUNTRIES = [
   { code: "AR", name: "Argentina" },
@@ -169,17 +172,22 @@ export default function PLPage() {
           const catNames = new Set(prods?.map((p: { name: string }) => p.name) || [])
           names = names.filter((n) => catNames.has(n))
         }
-        setProducts(
-          names.sort((a, b) =>
+        const sortedBudget = names
+          .filter(
+            (n) =>
+              n !== DIFERENCIA_AGGREGATE_PRODUCT_NAME &&
+              !PL_COS_DIFERENCIA_PRODUCT_NAMES.includes(n)
+          )
+          .sort((a, b) =>
             productNameSortKey(a).localeCompare(productNameSortKey(b), "es", { sensitivity: "base" })
           )
-        )
+        setProducts([DIFERENCIA_AGGREGATE_PRODUCT_NAME, ...sortedBudget])
 
         // Aliases (mejora UX de búsqueda/label): buscar alias para los nombres que estén en catálogo.
         const { data: aliasRows } = await supabase
           .from("products")
           .select("name, alias")
-          .in("name", names)
+          .in("name", sortedBudget)
         const map: Record<string, string> = {}
         for (const r of aliasRows || []) {
           const n = String((r as any).name || "")
@@ -218,11 +226,16 @@ export default function PLPage() {
           }
         }
 
-        setProducts(
-          names.sort((a: string, b: string) =>
+        const sorted = names
+          .filter(
+            (n) =>
+              n !== DIFERENCIA_AGGREGATE_PRODUCT_NAME &&
+              !PL_COS_DIFERENCIA_PRODUCT_NAMES.includes(n)
+          )
+          .sort((a: string, b: string) =>
             productNameSortKey(a).localeCompare(productNameSortKey(b), "es", { sensitivity: "base" })
           )
-        )
+        setProducts([DIFERENCIA_AGGREGATE_PRODUCT_NAME, ...sorted])
         setAliasesByName(map)
       }
     } catch (err) {

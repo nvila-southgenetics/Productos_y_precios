@@ -14,6 +14,9 @@ export const PL_SALES_CHANNELS = [
 /** @deprecated Usar PL_COS_LINES; se mantiene por compatibilidad. */
 export const DIFFERENCIA_COSTOS_PRODUCT_NAME = "Diferencia de costos"
 
+/** Producto virtual en el filtro P&L: muestra solo ajustes (productos Diferencia × líneas COS). */
+export const DIFERENCIA_AGGREGATE_PRODUCT_NAME = "Diferencia"
+
 export type CosCostLineKey =
   | "product_cost"
   | "carrier_cost"
@@ -124,6 +127,32 @@ export const PL_COS_ODOO_LINES: readonly CosCostLineKey[] = [
 ] as const
 
 export const PL_COS_DIFERENCIA_PRODUCT_NAMES = PL_COS_LINES.map((c) => c.diferenciaName)
+
+export function isDiferenciaAggregateOnly(productsFilter: string[]): boolean {
+  const sel = productsFilter.map((p) => p.trim()).filter(Boolean)
+  return sel.length === 1 && sel[0] === DIFERENCIA_AGGREGATE_PRODUCT_NAME
+}
+
+export function sumDiferenciaMonthlyByLine(
+  cosReconciliation: Partial<
+    Record<CosCostLineKey, { diferenciaMonthly?: number[] }>
+  > | null,
+  monthIdx: number
+): number {
+  if (!cosReconciliation) return 0
+  return PL_COS_LINES.reduce(
+    (s, c) => s + (cosReconciliation[c.line]?.diferenciaMonthly?.[monthIdx] ?? 0),
+    0
+  )
+}
+
+export function sumDiferenciaMonthlyAllLines(
+  cosReconciliation: Partial<
+    Record<CosCostLineKey, { diferenciaMonthly?: number[] }>
+  > | null
+): number[] {
+  return Array.from({ length: 12 }, (_, m) => sumDiferenciaMonthlyByLine(cosReconciliation, m))
+}
 
 export type MonthlyCosRow = {
   year: number

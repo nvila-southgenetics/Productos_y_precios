@@ -12,9 +12,11 @@ import {
   fetchCompanyMonthlyCos,
   hasCompanyCosForFilter,
   PL_COS_LINES,
+  isDiferenciaAggregateOnly,
   isPlCosContableView,
   reconcileAllCosLines,
   shouldReconcileCos,
+  sumDiferenciaMonthlyAllLines,
   sumOdooContableByMonth,
   type CosCostLineKey,
 } from "@/lib/pl-cost-reconciliation"
@@ -261,6 +263,9 @@ export function PLTable({
   >([])
 
   const product = products.length === 1 ? products[0] : "all"
+  const diferenciaOnlyView = isDiferenciaAggregateOnly(products)
+  /** Sin filtro de producto en queries: hace falta el universo completo para calcular ajustes. */
+  const productsFilter = diferenciaOnlyView ? [] : products
   const { openCreateProductDialog } = useProductCreateDialog()
   const categoriesSet = new Set(categories)
   const allKnownCategoriesSelected = KNOWN_PL_CATEGORIES.every((c) => categoriesSet.has(c))
@@ -678,6 +683,9 @@ export function PLTable({
     ovs: Record<string, OverrideData>
   ): number[] => {
     const cfg = PL_COS_LINES.find((c) => c.line === line)!
+    if (diferenciaOnlyView && cosReconciliation?.[line]?.diferenciaMonthly) {
+      return [...(cosReconciliation[line].diferenciaMonthly ?? Array(12).fill(0))]
+    }
     if (reconcileCosEnabled && cosReconciliation?.[line]?.monthly) {
       return cosReconciliation[line].monthly
     }
@@ -727,7 +735,7 @@ export function PLTable({
             .eq("year", year)
             .eq("budget_name", forBudgetName)
           if (countries.length) q = q.in("country_code", countries)
-          if (products.length > 0) q = q.in("product_name", products)
+          if (productsFilter.length > 0) q = q.in("product_name", productsFilter)
           if (channels.length) q = q.in("channel", channels)
           const { data: budData } = await q
 
@@ -769,7 +777,7 @@ export function PLTable({
               const name = idToName[prodId]
               if (!name) continue
               if (shouldFilterCategories && idToCat[prodId] && !categoriesSet.has(idToCat[prodId])) continue
-              if (products.length > 0 && !products.includes(name)) continue
+              if (productsFilter.length > 0 && !productsFilter.includes(name)) continue
 
               const o = row.overrides || {}
               const key = `${prodId}|${row.channel || ""}`
@@ -835,7 +843,7 @@ export function PLTable({
             const { data } = await qSales
 
             const categorySet = shouldFilterCategories ? categoriesSet : null
-            const selectedProductKeys = new Set((products || []).map((p) => normalizeProductKey(p)))
+            const selectedProductKeys = new Set((productsFilter || []).map((p) => normalizeProductKey(p)))
             for (const row of (data || []) as any[]) {
               const rawName = row.producto as string
               if (!rawName) continue
@@ -879,7 +887,7 @@ export function PLTable({
               const name = idToName[row.product_id]
               if (!name) continue
               if (shouldFilterCategories && idToCat[row.product_id] && !categoriesSet.has(idToCat[row.product_id])) continue
-              if (products.length > 0 && !products.includes(name)) continue
+              if (productsFilter.length > 0 && !productsFilter.includes(name)) continue
               const o = row.overrides || {}
               const prev = ovs[name] || emptyOverride()
               ovs[name] = {
@@ -981,7 +989,7 @@ export function PLTable({
           const { data } = await qSales
 
           const categorySet = shouldFilterCategories ? categoriesSet : null
-          const selectedProductKeys = new Set((products || []).map((p) => normalizeProductKey(p)))
+          const selectedProductKeys = new Set((productsFilter || []).map((p) => normalizeProductKey(p)))
           for (const row of (data || []) as any[]) {
             const rawName = row.producto as string
             if (!rawName) continue
@@ -1027,7 +1035,7 @@ export function PLTable({
             const name = idToName[row.product_id]
             if (!name) continue
             if (shouldFilterCategories && idToCat[row.product_id] && !categoriesSet.has(idToCat[row.product_id])) continue
-            if (products.length > 0 && !products.includes(name)) continue
+            if (productsFilter.length > 0 && !productsFilter.includes(name)) continue
             const o = row.overrides || {}
             const prev = ovs[name] || emptyOverride()
             ovs[name] = {
@@ -1092,7 +1100,7 @@ export function PLTable({
     } finally {
       setLoading(false)
     }
-  }, [modelo, year, countries, categories, products, channels, testMode, budgetName, combineEnabled, effectiveMonthModels.join("|")])
+  }, [modelo, year, countries, categories, productsFilter, channels, testMode, budgetName, combineEnabled, effectiveMonthModels.join("|")])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -1155,8 +1163,8 @@ export function PLTable({
         .eq("budget_name", budgetName)
 
       if (countries.length) q = q.in("country_code", countries)
-      if (products.length > 0) {
-        q = q.in("product_name", products)
+      if (productsFilter.length > 0) {
+        q = q.in("product_name", productsFilter)
       }
       // Si se selecciona un canal específico, las unidades deben provenir solo de ese canal.
       // Si el canal es "all", sumamos las unidades de todos los canales.
@@ -1203,7 +1211,7 @@ export function PLTable({
       // Si el producto no existe en `public.products` (no está en `cats`),
       // NO lo descartamos. Así mostramos las ventas aunque falte el match.
       const categorySet = shouldFilterCategories ? categoriesSet : null
-      const selectedProductKeys = new Set((products || []).map((p) => normalizeProductKey(p)))
+      const selectedProductKeys = new Set((productsFilter || []).map((p) => normalizeProductKey(p)))
 
       for (const row of data as { producto: string; mes: number; cantidad_ventas: number | string | null; monto_total?: number | string | null; compañia: string | null }[]) {
         const rawName = row.producto
@@ -1541,7 +1549,9 @@ export function PLTable({
     )
   }
 
-  const totalUnits = Array.from({ length: 12 }, (_, i) => {
+  const totalUnits = diferenciaOnlyView
+    ? Array(12).fill(0)
+    : Array.from({ length: 12 }, (_, i) => {
     // En modo Test, siempre usamos las cantidades activas simuladas
     if (testMode) {
       return Object.values(activeQuantities).reduce((s, arr) => s + (arr[i] || 0), 0)
@@ -1862,9 +1872,16 @@ export function PLTable({
 
   const modelLines = computeAllModelLines()
 
-  const grossSales = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.grossSales])) as Record<string, number[]>)
-  const commercialDiscount = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.commercialDiscount])) as Record<string, number[]>)
-  const salesRevenue = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.salesRevenue])) as Record<string, number[]>)
+  const zeros12 = Array(12).fill(0)
+  const grossSales = diferenciaOnlyView
+    ? zeros12
+    : mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.grossSales])) as Record<string, number[]>)
+  const commercialDiscount = diferenciaOnlyView
+    ? zeros12
+    : mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.commercialDiscount])) as Record<string, number[]>)
+  const salesRevenue = diferenciaOnlyView
+    ? zeros12
+    : mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.salesRevenue])) as Record<string, number[]>)
 
   const productCost = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.productCost])) as Record<string, number[]>)
   const carrierCost = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.carrierCost])) as Record<string, number[]>)
@@ -1887,12 +1904,15 @@ export function PLTable({
   const odooContableByMonth = reconcileCosEnabled
     ? sumOdooContableByMonth(companyMonthlyCos, year, resolveSalesCompanies())
     : Array(12).fill(0)
-  /** Fila Total COS: contable Odoo cuando hay dato; si no, suma de las 10 líneas. */
-  const totalCOS = Array.from({ length: 12 }, (_, i) =>
-    reconcileCosEnabled && odooContableByMonth[i] !== 0
-      ? odooContableByMonth[i]
-      : totalCOSFull[i]
-  )
+  const diferenciaMonthlyTotal = sumDiferenciaMonthlyAllLines(cosReconciliation)
+  /** Fila Total COS: vista Diferencia = suma ajustes; sin filtro = contable Odoo; si no = 10 líneas. */
+  const totalCOS = diferenciaOnlyView
+    ? diferenciaMonthlyTotal
+    : Array.from({ length: 12 }, (_, i) =>
+        reconcileCosEnabled && odooContableByMonth[i] !== 0
+          ? odooContableByMonth[i]
+          : totalCOSFull[i]
+      )
   const grossProfit = salesRevenue.map((v, i) => v - totalCOS[i])
   const incomeTaxBase = grossProfit.map((v, i) => v - totalSGA[i])
   const incomeTax = incomeTaxBase.map((v, i) =>
@@ -2472,7 +2492,12 @@ export function PLTable({
                 · SG&A de solo lectura — seleccioná un canal específico para editar
               </span>
             )}
-            {anyCosReconciliationActive && (
+            {diferenciaOnlyView && (
+              <span className="text-xs text-amber-200/90">
+                · Vista Diferencia: ajuste contable vs productos (por línea COS y mes)
+              </span>
+            )}
+            {anyCosReconciliationActive && !diferenciaOnlyView && (
               <span className="text-xs text-sky-300/90">
                 · Total Cost of Sales: total contable Odoo (todas las categorías, productos y canales)
               </span>
