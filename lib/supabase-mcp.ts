@@ -1001,35 +1001,61 @@ export async function getTotalSalesByProductIds(
 
   const opts =
     typeof filter === "string" ? { countryCode: filter } : filter ?? {}
-  const companySet =
+  const companiesForQuery: string[] =
     opts.companies?.length && opts.companies.length > 0
-      ? new Set(opts.companies.map((c) => c.trim()))
-      : null
-
-  const { data, error } = await supabase
-    .from('ventas')
-    .select('id_producto, company')
-    .in('id_producto', productIds)
-
-  if (error) {
-    console.error('Error fetching total sales by product:', error)
-    throw error
-  }
+      ? opts.companies.map((c) => c.trim()).filter(Boolean)
+      : opts.countryCode
+        ? Object.entries(COMPANY_TO_COUNTRY)
+            .filter(([, cc]) => cc === opts.countryCode)
+            .map(([company]) => company)
+        : []
 
   const counts: Record<string, number> = {}
-  productIds.forEach(id => { counts[id] = 0 })
-
-  ;(data || []).forEach((row: { id_producto: string | null; company: string | null }) => {
-    if (!row.id_producto) return
-    const company = row.company?.trim() ?? ""
-    if (companySet) {
-      if (!companySet.has(company)) return
-    } else if (opts.countryCode) {
-      const companyCountry = company ? COMPANY_TO_COUNTRY[company] : undefined
-      if (companyCountry !== opts.countryCode) return
-    }
-    counts[row.id_producto] = (counts[row.id_producto] ?? 0) + 1
+  productIds.forEach((id) => {
+    counts[id] = 0
   })
+
+  const pageSize = 1000
+  const productIdChunkSize = 200
+
+  for (let pi = 0; pi < productIds.length; pi += productIdChunkSize) {
+    const idChunk = productIds.slice(pi, pi + productIdChunkSize)
+    let offset = 0
+
+    while (true) {
+      let q = supabase
+        .from("ventas")
+        .select("id_producto, company")
+        .in("id_producto", idChunk)
+        .not("id_producto", "is", null)
+
+      if (companiesForQuery.length > 0) {
+        q = q.in("company", companiesForQuery)
+      }
+
+      const { data, error } = await q.range(offset, offset + pageSize - 1)
+
+      if (error) {
+        console.error("Error fetching total sales by product:", error)
+        throw error
+      }
+
+      const batch = data || []
+      for (const row of batch as { id_producto: string | null; company: string | null }[]) {
+        const id = row.id_producto
+        if (!id) continue
+        if (!companiesForQuery.length && opts.countryCode) {
+          const company = row.company?.trim() ?? ""
+          if (COMPANY_TO_COUNTRY[company] !== opts.countryCode) continue
+        }
+        counts[id] = (counts[id] ?? 0) + 1
+      }
+
+      if (batch.length < pageSize) break
+      offset += pageSize
+    }
+  }
+
   return counts
 }
 
