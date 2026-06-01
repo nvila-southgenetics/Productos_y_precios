@@ -329,10 +329,11 @@ export const SIN_INSTITUCION_KEY = '__sin_institucion__'
 export const SIN_INSTITUCION_LABEL = 'Sin institución'
 export const GENERAL_LLC_COMPANY = 'SouthGenetics LLC'
 
-/** Año por defecto en la página Médicos (2025 no tiene médicos cargados). */
+/** @deprecated La página Médicos usa todo el histórico; no fijar año. */
 export const MEDICOS_PAGE_YEAR = 2026
 
 export interface MedicoInstitucionSalesParams {
+  /** Si se omite, incluye todas las fechas en `ventas`. */
   year?: number
   monthFrom?: number
   monthTo?: number
@@ -377,6 +378,48 @@ function lastDayOfMonth(year: number, month: number): string {
   return new Date(year, month, 0).toISOString().slice(0, 10)
 }
 
+function monthFromFecha(fecha: string): number {
+  const m = Number(fecha.slice(5, 7))
+  return m >= 1 && m <= 12 ? m : 0
+}
+
+function filterVentasByCalendarMonths(
+  rows: VentaMedicoRow[],
+  monthFrom: number,
+  monthTo: number
+): VentaMedicoRow[] {
+  if (monthFrom === 1 && monthTo === 12) return rows
+  return rows.filter((row) => {
+    const m = monthFromFecha(row.fecha)
+    return m >= monthFrom && m <= monthTo
+  })
+}
+
+function resolveMedicoVentasDateRange(params: {
+  year?: number
+  monthFrom?: number
+  monthTo?: number
+}): {
+  fechaStart?: string
+  fechaEnd?: string
+  monthFrom: number
+  monthTo: number
+  allYears: boolean
+} {
+  const monthFrom = params.monthFrom ?? 1
+  const monthTo = params.monthTo ?? 12
+  if (params.year == null) {
+    return { fechaStart: undefined, fechaEnd: undefined, monthFrom, monthTo, allYears: true }
+  }
+  return {
+    fechaStart: `${params.year}-${padMonth(monthFrom)}-01`,
+    fechaEnd: lastDayOfMonth(params.year, monthTo),
+    monthFrom,
+    monthTo,
+    allYears: false,
+  }
+}
+
 function normalizeInstitucion(inst: string | null | undefined): { key: string; label: string } {
   const trimmed = (inst ?? '').trim()
   if (!trimmed) return { key: SIN_INSTITUCION_KEY, label: SIN_INSTITUCION_LABEL }
@@ -401,10 +444,12 @@ function filterVentasByLlcCountries(rows: VentaMedicoRow[], llcCountries?: strin
 }
 
 async function fetchVentasForMedicoMatrix(params: {
-  fechaStart: string
-  fechaEnd: string
+  fechaStart?: string
+  fechaEnd?: string
   companies?: string[]
   llcCountries?: string[]
+  /** Solo filas con médico cargado (menos datos en listados de médicos). */
+  requireMedico?: boolean
 }): Promise<VentaMedicoRow[]> {
   const pageSize = 1000
   let offset = 0
@@ -414,14 +459,13 @@ async function fetchVentasForMedicoMatrix(params: {
     let q = supabase
       .from('ventas')
       .select('test, id_producto, medico, institucion, pais, quantity, company, fecha')
-      .gte('fecha', params.fechaStart)
-      .lte('fecha', params.fechaEnd)
       .order('fecha', { ascending: true })
       .range(offset, offset + pageSize - 1)
 
-    if (params.companies?.length) {
-      q = q.in('company', params.companies)
-    }
+    if (params.fechaStart) q = q.gte('fecha', params.fechaStart)
+    if (params.fechaEnd) q = q.lte('fecha', params.fechaEnd)
+    if (params.companies?.length) q = q.in('company', params.companies)
+    if (params.requireMedico) q = q.not('medico', 'is', null).neq('medico', '')
 
     const { data, error } = await q
     if (error) throw error
@@ -431,7 +475,11 @@ async function fetchVentasForMedicoMatrix(params: {
     offset += pageSize
   }
 
-  return filterVentasByLlcCountries(all, params.llcCountries)
+  const withMedico = params.requireMedico
+    ? all.filter((row) => Boolean(row.medico?.trim()))
+    : all
+
+  return filterVentasByLlcCountries(withMedico, params.llcCountries)
 }
 
 /**
@@ -444,18 +492,18 @@ export async function getMedicosFromVentas(params: {
   companies?: string[]
   llcCountries?: string[]
 }): Promise<string[]> {
-  const year = params.year ?? MEDICOS_PAGE_YEAR
-  const monthFrom = params.monthFrom ?? 1
-  const monthTo = params.monthTo ?? 12
-  const fechaStart = `${year}-${padMonth(monthFrom)}-01`
-  const fechaEnd = lastDayOfMonth(year, monthTo)
+  const range = resolveMedicoVentasDateRange(params)
 
-  const rawRows = await fetchVentasForMedicoMatrix({
-    fechaStart,
-    fechaEnd,
+  let rawRows = await fetchVentasForMedicoMatrix({
+    fechaStart: range.fechaStart,
+    fechaEnd: range.fechaEnd,
     companies: params.companies?.length ? params.companies : undefined,
     llcCountries: params.llcCountries?.length ? params.llcCountries : undefined,
+    requireMedico: true,
   })
+  if (range.allYears) {
+    rawRows = filterVentasByCalendarMonths(rawRows, range.monthFrom, range.monthTo)
+  }
 
   const set = new Set<string>()
   for (const row of rawRows) {
@@ -474,22 +522,21 @@ export async function getLlcCountriesFromVentas(params: {
   monthTo?: number
   companies?: string[]
 }): Promise<string[]> {
-  const year = params.year ?? MEDICOS_PAGE_YEAR
-  const monthFrom = params.monthFrom ?? 1
-  const monthTo = params.monthTo ?? 12
+  const range = resolveMedicoVentasDateRange(params)
   const companies = params.companies?.length ? params.companies : undefined
 
   if (companies && !companies.includes(GENERAL_LLC_COMPANY)) {
     return []
   }
 
-  const fechaStart = `${year}-${padMonth(monthFrom)}-01`
-  const fechaEnd = lastDayOfMonth(year, monthTo)
-  const rawRows = await fetchVentasForMedicoMatrix({
-    fechaStart,
-    fechaEnd,
+  let rawRows = await fetchVentasForMedicoMatrix({
+    fechaStart: range.fechaStart,
+    fechaEnd: range.fechaEnd,
     companies,
   })
+  if (range.allYears) {
+    rawRows = filterVentasByCalendarMonths(rawRows, range.monthFrom, range.monthTo)
+  }
 
   const countries = new Set<string>()
   for (const row of rawRows) {
@@ -508,18 +555,18 @@ export async function getLlcCountriesFromVentas(params: {
 export async function getMedicoInstitucionSales(
   params: MedicoInstitucionSalesParams
 ): Promise<MedicoInstitucionSaleRow[]> {
-  const year = params.year ?? MEDICOS_PAGE_YEAR
-  const monthFrom = params.monthFrom ?? 1
-  const monthTo = params.monthTo ?? 12
-  const fechaStart = `${year}-${padMonth(monthFrom)}-01`
-  const fechaEnd = lastDayOfMonth(year, monthTo)
+  const range = resolveMedicoVentasDateRange(params)
 
-  const rawRows = await fetchVentasForMedicoMatrix({
-    fechaStart,
-    fechaEnd,
+  let rawRows = await fetchVentasForMedicoMatrix({
+    fechaStart: range.fechaStart,
+    fechaEnd: range.fechaEnd,
     companies: params.companies?.length ? params.companies : undefined,
     llcCountries: params.llcCountries?.length ? params.llcCountries : undefined,
+    requireMedico: true,
   })
+  if (range.allYears) {
+    rawRows = filterVentasByCalendarMonths(rawRows, range.monthFrom, range.monthTo)
+  }
 
   const productNames = [
     ...new Set(

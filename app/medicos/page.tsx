@@ -13,7 +13,6 @@ import {
   getMedicoInstitucionSales,
   getMedicosFromVentas,
   getProductsFromSales,
-  MEDICOS_PAGE_YEAR,
   type MedicoInstitucionSaleRow,
 } from "@/lib/supabase-mcp"
 
@@ -79,7 +78,6 @@ export default function MedicosPage() {
       if (!companies.length || permLoading) return
       try {
         const list = await getMedicosFromVentas({
-          year: MEDICOS_PAGE_YEAR,
           monthFrom,
           monthTo,
           companies: companiesForQuery,
@@ -105,7 +103,6 @@ export default function MedicosPage() {
 
       try {
         const list = await getLlcCountriesFromVentas({
-          year: MEDICOS_PAGE_YEAR,
           monthFrom,
           monthTo,
           companies: [GENERAL_LLC_COMPANY],
@@ -145,7 +142,6 @@ export default function MedicosPage() {
           selectedCategories.length === PRODUCT_CATEGORIES_SORTED.length &&
           PRODUCT_CATEGORIES_SORTED.every((c) => selectedCategories.includes(c))
         const data = await getMedicoInstitucionSales({
-          year: MEDICOS_PAGE_YEAR,
           monthFrom,
           monthTo,
           companies: companiesForQuery,
@@ -181,8 +177,9 @@ export default function MedicosPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">Médicos</h1>
           <p className="text-sm text-white/80 mt-1">
-            Unidades vendidas por médico e institución ({MEDICOS_PAGE_YEAR}). Filas: médicos (agrupables
-            por institución). Columnas: total y productos ordenados por ventas.
+            Unidades vendidas por médico e institución (todo el histórico en ventas). Filas: médicos
+            (agrupables por institución). Columnas: total y productos ordenados por ventas. El filtro
+            de mes aplica a cada año (ej. mar–jun = todos los marzo a junio).
           </p>
         </div>
 
