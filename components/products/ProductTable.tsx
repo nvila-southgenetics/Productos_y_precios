@@ -56,6 +56,18 @@ function productDetailHref(productId: string, selectedCountry: string, listRetur
   return `/productos/${productId}?${params.toString()}`
 }
 
+function openProductInNewTab(href: string) {
+  window.open(href, "_blank", "noopener,noreferrer")
+}
+
+/** Clic central (rueda), Ctrl o Cmd → nueva pestaña. */
+function shouldOpenProductInNewTab(e: React.MouseEvent): boolean {
+  return e.button === 1 || e.ctrlKey || e.metaKey
+}
+
+const productActionLinkClass =
+  "inline-flex h-9 w-9 items-center justify-center rounded-md text-white/70 hover:bg-white/20 hover:text-white transition-colors"
+
 export function ProductTable({
   products,
   selectedCountry,
@@ -92,18 +104,28 @@ export function ProductTable({
     setReviewedStates(states)
   }, [products, selectedCountry])
 
-  const handleProductClick = (product: ProductWithOverrides) => {
-    router.push(productDetailHref(product.id, selectedCountry, listReturnUrl))
+  const hrefFor = (product: ProductWithOverrides) =>
+    productDetailHref(product.id, selectedCountry, listReturnUrl)
+
+  const navigateToProduct = (product: ProductWithOverrides, e: React.MouseEvent) => {
+    const href = hrefFor(product)
+    if (shouldOpenProductInNewTab(e)) {
+      e.preventDefault()
+      e.stopPropagation()
+      openProductInNewTab(href)
+      return
+    }
+    if (e.type === "click" && e.button !== 0) return
+    router.push(href)
   }
 
-  const handleViewClick = (e: React.MouseEvent, product: ProductWithOverrides) => {
+  const handleProductLinkClick = (product: ProductWithOverrides, e: React.MouseEvent) => {
     e.stopPropagation()
-    router.push(productDetailHref(product.id, selectedCountry, listReturnUrl))
-  }
-
-  const handleEditClick = (e: React.MouseEvent, product: ProductWithOverrides) => {
-    e.stopPropagation()
-    router.push(productDetailHref(product.id, selectedCountry, listReturnUrl))
+    if (shouldOpenProductInNewTab(e)) return
+    if (e.button === 0) {
+      e.preventDefault()
+      router.push(hrefFor(product))
+    }
   }
 
   const handleDeleteClick = (e: React.MouseEvent, product: ProductWithOverrides) => {
@@ -343,7 +365,13 @@ export function ProductTable({
                 <tr
                   key={product.id}
                   className="border-b border-white/10 transition-colors hover:bg-white/5 cursor-pointer"
-                  onClick={() => handleProductClick(product)}
+                  onClick={(e) => navigateToProduct(product, e)}
+                  onMouseDown={(e) => {
+                    if (e.button === 1) {
+                      e.preventDefault()
+                      openProductInNewTab(hrefFor(product))
+                    }
+                  }}
                 >
                   {canEdit && (
                     <td className="p-4">
@@ -363,9 +391,13 @@ export function ProductTable({
                   )}
                   <td className="p-4">
                   <div className="flex flex-col gap-2">
-                    <div className="font-semibold text-white hover:text-blue-300 transition-colors">
+                    <a
+                      href={hrefFor(product)}
+                      className="font-semibold text-white hover:text-blue-300 transition-colors w-fit"
+                      onClick={(e) => handleProductLinkClick(product, e)}
+                    >
                       {product.alias || "—"}
-                    </div>
+                    </a>
                     <div className="text-[11px] text-white/50 font-mono">
                       {displayProductName(product.name)}
                     </div>
@@ -399,26 +431,24 @@ export function ProductTable({
                 </td>
                 <td className="p-4">
                   <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={(e) => handleViewClick(e, product)}
-                      title="Ver producto"
-                      className="hover:bg-white/20 hover:text-white text-white/70"
+                    <a
+                      href={hrefFor(product)}
+                      className={productActionLinkClass}
+                      title="Ver producto (clic central: nueva pestaña)"
+                      onClick={(e) => handleProductLinkClick(product, e)}
                     >
                       <Eye className="h-4 w-4" />
-                    </Button>
+                    </a>
                     {canEdit && (
                       <>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => handleEditClick(e, product)}
-                          title="Editar producto"
-                          className="hover:bg-white/20 hover:text-white text-white/70"
+                        <a
+                          href={hrefFor(product)}
+                          className={productActionLinkClass}
+                          title="Editar producto (clic central: nueva pestaña)"
+                          onClick={(e) => handleProductLinkClick(product, e)}
                         >
                           <Edit className="h-4 w-4" />
-                        </Button>
+                        </a>
                         <Button
                           variant="ghost"
                           size="icon"
