@@ -1398,7 +1398,9 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
                   </div>
           </div>
           <div>
-            <label className="text-xs font-semibold text-white/70 uppercase tracking-wide">Tipo</label>
+            <label className="text-xs font-semibold text-white/70 uppercase tracking-wide">
+              Tipo <span className="normal-case font-normal text-white/40">(opcional)</span>
+            </label>
                   <div className="mt-2">
                     {canEdit ? (
                       <Select
@@ -1430,20 +1432,20 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
                     <Button
                       onClick={async () => {
                         const categoryToSave = displayedCategory
-                        if (!categoryToSave || !metaTipo.trim()) {
-                          alert("Completá categoría y tipo de muestra antes de guardar.")
+                        if (!categoryToSave) {
+                          alert("Seleccioná una categoría antes de guardar.")
                           return
                         }
                         setIsSavingMeta(true)
                         try {
                           await updateProductMeta(product.id, {
                             category: categoryToSave,
-                            tipo: metaTipo.trim(),
+                            tipo: metaTipo.trim() || null,
                           })
                           router.refresh()
                         } catch (e) {
                           console.error("Error updating product meta:", e)
-                          alert("Error al guardar categoría/tipo. Intenta nuevamente.")
+                          alert("Error al guardar. Intenta nuevamente.")
                         } finally {
                           setIsSavingMeta(false)
                         }
@@ -1451,7 +1453,7 @@ export function ProductDetailView({ product, canEdit = true, allowedCountries }:
                       disabled={isSavingMeta}
                       className="w-full"
                     >
-                      {isSavingMeta ? "Guardando..." : "Guardar categoría y tipo"}
+                      {isSavingMeta ? "Guardando..." : "Guardar categoría"}
                     </Button>
                   </div>
                 )}
