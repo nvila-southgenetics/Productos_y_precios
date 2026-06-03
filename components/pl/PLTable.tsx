@@ -324,6 +324,7 @@ export function PLTable({
   // SG&A / impuestos se pueden usar tanto en Budget como en Real,
   // pero siempre filtrando por la columna `modelo` en `pl_sga`.
   const financialEnabled = true
+  const plCompaniesFilter = resolveSalesCompanies()
   // Can edit SGA amounts only when both product AND channel are specific (exactly one product)
   // En multi-selección: podemos editar solo cuando se seleccionó un único canal.
   const canEditSGA =
@@ -331,7 +332,11 @@ export function PLTable({
   // Taxes are stored at country-level (one country_code row), so allow editing only when a single country is selected.
   const canEditTax = canEdit && financialEnabled && countries.length === 1
   const canEditOtherIncome =
-    canEdit && financialEnabled && countries.length === 1 && !combineEnabled
+    canEdit &&
+    financialEnabled &&
+    !combineEnabled &&
+    plCompaniesFilter !== null &&
+    plCompaniesFilter.length === 1
 
   const canEditBudgetUnits =
     canEdit &&
@@ -1536,12 +1541,13 @@ export function PLTable({
       setOtherIncomeByAccount({})
       return
     }
+    const companies = resolveSalesCompanies()
     let q = supabase
       .from("pl_other_income")
-      .select("month, account_name, amount_usd, country_code")
+      .select("month, account_name, amount_usd, company")
       .eq("year", year)
       .eq("modelo", modelo)
-    if (countries.length) q = q.in("country_code", countries)
+    if (companies && companies.length > 0) q = q.in("company", companies)
     const { data, error } = await q
     if (error) {
       console.error("fetchOtherIncome:", error)
@@ -2180,7 +2186,9 @@ export function PLTable({
   }
 
   const commitOtherIncomeEdit = async () => {
-    if (!editingOtherIncome || countries.length !== 1) return
+    const companies = resolveSalesCompanies()
+    if (!editingOtherIncome || !companies || companies.length !== 1) return
+    const company = companies[0].trim()
     const { accountName, month } = editingOtherIncome
     const newVal = parseFloat(otherIncomeEditValue) || 0
     setOtherIncomeByAccount((prev) => {
@@ -2192,14 +2200,14 @@ export function PLTable({
     const { error } = await supabase.from("pl_other_income").upsert(
       {
         year,
-        country_code: countries[0],
+        company,
         month: month + 1,
         modelo,
         account_name: accountName,
         amount_usd: newVal,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "year,country_code,month,modelo,account_name" }
+      { onConflict: "year,company,month,modelo,account_name" }
     )
     if (error) {
       console.error("commitOtherIncomeEdit:", error)
@@ -2944,8 +2952,8 @@ export function PLTable({
                 labelNode={
                   <span className="inline-flex items-center gap-2">
                     <span>Other Income</span>
-                    {canEdit && !canEditOtherIncome && countries.length !== 1 && (
-                      <span className="text-[10px] text-white/30 font-normal">(un país)</span>
+                    {canEdit && !canEditOtherIncome && (
+                      <span className="text-[10px] text-white/30 font-normal">(una compañía)</span>
                     )}
                     <button
                       type="button"
