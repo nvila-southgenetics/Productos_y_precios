@@ -80,6 +80,7 @@ export type PlTooltipLine =
   | "physiciansFees"
   | "salesCommission"
   | "totalCOS"
+  | "otherIncome"
   | "grossProfit"
   | "iibb_pct"
   | "iibbAmount"
@@ -522,17 +523,31 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
     return joinLines(lines)
   }
 
+  const buildOtherIncome = (monthIdx: number): string | undefined => {
+    const total = getLineValue("otherIncome", monthIdx)
+    const lines = [...monthHeader(monthIdx, "Other Income"), ""]
+    if (total === 0) {
+      lines.push("Sin montos en el mes.")
+    } else {
+      lines.push(`Total: ${tooltipFmt(total)}`)
+    }
+    return joinLines(lines)
+  }
+
   const buildGrossProfit = (monthIdx: number): string | undefined => {
     const rev = getLineValue("salesRevenue", monthIdx)
     const cos = getLineValue("totalCOS", monthIdx)
+    const oi = getLineValue("otherIncome", monthIdx)
     const total = getLineValue("grossProfit", monthIdx)
-    return joinLines([
+    const lines = [
       ...monthHeader(monthIdx, "Gross Profit"),
       "",
       fmtRow("Sales Revenue", rev),
       fmtRow("− Cost of Sales", cos),
-      fmtRow("= Gross Profit", total),
-    ])
+    ]
+    if (oi !== 0) lines.push(fmtRow("+ Other Income", oi))
+    lines.push(fmtRow("= Gross Profit", total))
+    return joinLines(lines)
   }
 
   const buildIibbPct = (monthIdx: number): string | undefined => {
@@ -648,6 +663,8 @@ export function createPlTooltipBuilders(config: PlTooltipConfig) {
         return buildSalesRevenue
       case "totalCOS":
         return buildTotalCOS
+      case "otherIncome":
+        return buildOtherIncome
       case "grossProfit":
         return buildGrossProfit
       case "iibb_pct":

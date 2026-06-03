@@ -252,8 +252,15 @@ export function PLTable({
   const [sgaRowsRaw, setSgaRowsRaw] = useState<any[]>([])
   // Tax rates: country-level, stored with product_name='' and channel=''
   const [taxRates, setTaxRates] = useState<TaxData[]>(Array.from({ length: 12 }, emptyTax))
+  /** Other Income por cuenta (nombre → montos mensuales 0..11). */
+  const [otherIncomeByAccount, setOtherIncomeByAccount] = useState<Record<string, number[]>>({})
   // Editing state
   const [editingCell, setEditingCell] = useState<{ field: keyof SGAData | keyof TaxData; month: number } | null>(null)
+  const [editingOtherIncome, setEditingOtherIncome] = useState<{
+    accountName: string
+    month: number
+  } | null>(null)
+  const [otherIncomeEditValue, setOtherIncomeEditValue] = useState("")
   const [editValue, setEditValue] = useState<string>("")
   const [editingBudgetUnit, setEditingBudgetUnit] = useState<{ productName: string; monthIdx: number } | null>(null)
   const [budgetUnitEditValue, setBudgetUnitEditValue] = useState<string>("")
@@ -309,6 +316,7 @@ export function PLTable({
   const [expandedSalesRevenue, setExpandedSalesRevenue] = useState(false)
   /** Desglose Product Cost … Sales Commission bajo "Total Cost of Sales" (sección independiente de Gross Profit). */
   const [expandedCostOfSalesBreakdown, setExpandedCostOfSalesBreakdown] = useState(false)
+  const [expandedOtherIncome, setExpandedOtherIncome] = useState(false)
   const [expandedSGA, setExpandedSGA] = useState(false)
   /** IIBB / income tax bajo Net Income (mismo patrón que SG&A + desglose). */
   const [expandedNetIncome, setExpandedNetIncome] = useState(false)
@@ -322,6 +330,8 @@ export function PLTable({
     canEdit && financialEnabled && products.length === 1 && channels.length === 1 && countries.length === 1
   // Taxes are stored at country-level (one country_code row), so allow editing only when a single country is selected.
   const canEditTax = canEdit && financialEnabled && countries.length === 1
+  const canEditOtherIncome =
+    canEdit && financialEnabled && countries.length === 1 && !combineEnabled
 
   const canEditBudgetUnits =
     canEdit &&
@@ -474,14 +484,16 @@ export function PLTable({
     physiciansFees: number[],
     salesCommission: number[],
     sgaMonth: SGAData[],
-    taxRates: TaxData[]
+    taxRates: TaxData[],
+    otherIncome?: number[]
   ) => {
     const salesRevenue = grossSales.map((v, i) => v - commercialDiscount[i])
     const totalCOS = Array.from({ length: 12 }, (_, i) =>
       productCost[i] + carrierCost[i] + kitCost[i] + paymentFee[i] + bloodDraw[i] + sanitary[i] +
       extCourier[i] + intCourier[i] + physiciansFees[i] + salesCommission[i]
     )
-    const grossProfit = salesRevenue.map((v, i) => v - totalCOS[i])
+    const totalOtherIncome = otherIncome ?? Array(12).fill(0)
+    const grossProfit = salesRevenue.map((v, i) => v - totalCOS[i] + totalOtherIncome[i])
     const totalSGA = Array.from({ length: 12 }, (_, i) =>
       SGA_FIELDS.reduce((s, f) => s + sgaMonth[i][f.key], 0)
     )
@@ -720,6 +732,7 @@ export function PLTable({
     setSga(Array.from({ length: 12 }, emptySGA))
     setTaxRates(Array.from({ length: 12 }, emptyTax))
     setSgaRowsRaw([])
+    setOtherIncomeByAccount({})
     try {
       if (countries.length === 0) {
         plDataLoadedRef.current = false
@@ -1083,12 +1096,12 @@ export function PLTable({
       if (modelo === "budget") {
         if (testMode) {
           // En modo Test usamos overrides agregados por producto, igual que en REAL
-          await Promise.all([fetchQuantities(), fetchOverrides(), fetchSGA()])
+          await Promise.all([fetchQuantities(), fetchOverrides(), fetchSGA(), fetchOtherIncome()])
         } else {
-          await Promise.all([fetchQuantities(), fetchBudgetOverrides(), fetchSGA()])
+          await Promise.all([fetchQuantities(), fetchBudgetOverrides(), fetchSGA(), fetchOtherIncome()])
         }
       } else {
-        await Promise.all([fetchQuantities(), fetchOverrides(), fetchSGA()])
+        await Promise.all([fetchQuantities(), fetchOverrides(), fetchSGA(), fetchOtherIncome()])
         const rows = await fetchCompanyMonthlyCos(year, resolveSalesCompanies())
         setCompanyMonthlyCos(rows)
       }
@@ -1518,6 +1531,35 @@ export function PLTable({
     setSgaRowsRaw(usedRows)
   }
 
+  const fetchOtherIncome = async () => {
+    if (combineEnabled || countries.length === 0) {
+      setOtherIncomeByAccount({})
+      return
+    }
+    let q = supabase
+      .from("pl_other_income")
+      .select("month, account_name, amount_usd, country_code")
+      .eq("year", year)
+      .eq("modelo", modelo)
+    if (countries.length) q = q.in("country_code", countries)
+    const { data, error } = await q
+    if (error) {
+      console.error("fetchOtherIncome:", error)
+      setOtherIncomeByAccount({})
+      return
+    }
+    const byAccount: Record<string, number[]> = {}
+    for (const row of data || []) {
+      const account = String((row as { account_name?: string }).account_name || "").trim()
+      if (!account) continue
+      const mIdx = Number((row as { month?: number }).month) - 1
+      if (mIdx < 0 || mIdx >= 12) continue
+      if (!byAccount[account]) byAccount[account] = Array(12).fill(0)
+      byAccount[account][mIdx] += Number((row as { amount_usd?: number }).amount_usd || 0)
+    }
+    setOtherIncomeByAccount(byAccount)
+  }
+
   // ── P&L calculations ──────────────────────────────────────────────────────
 
   const computeMonthly = (field: keyof OverrideData): number[] => {
@@ -1891,6 +1933,13 @@ export function PLTable({
     )
   }
 
+  const otherIncomeAccountNames = Object.keys(otherIncomeByAccount).sort((a, b) =>
+    a.localeCompare(b, "es", { sensitivity: "base" })
+  )
+  const totalOtherIncome = Array.from({ length: 12 }, (_, mIdx) =>
+    otherIncomeAccountNames.reduce((s, name) => s + (otherIncomeByAccount[name]?.[mIdx] ?? 0), 0)
+  )
+
   const modelLines = computeAllModelLines()
 
   const zeros12 = Array(12).fill(0)
@@ -1934,7 +1983,7 @@ export function PLTable({
           ? odooContableByMonth[i]
           : totalCOSFull[i]
       )
-  const grossProfit = salesRevenue.map((v, i) => v - totalCOS[i])
+  const grossProfit = salesRevenue.map((v, i) => v - totalCOS[i] + totalOtherIncome[i])
   const incomeTaxBase = grossProfit.map((v, i) => v - totalSGA[i])
   const incomeTax = incomeTaxBase.map((v, i) =>
     Math.max(0, v) * ((taxRates[i]?.income_tax_pct ?? 0) / 100)
@@ -2046,6 +2095,7 @@ export function PLTable({
     physiciansFees,
     salesCommission,
     totalCOS,
+    otherIncome: totalOtherIncome,
     grossProfit,
     iibb_pct: taxRates.map((t) => t.iibb_pct),
     iibbAmount,
@@ -2121,6 +2171,57 @@ export function PLTable({
   }
 
   const cancelEdit = () => setEditingCell(null)
+
+  const startEditOtherIncome = (accountName: string, monthIdx: number) => {
+    if (!canEditOtherIncome) return
+    setEditingCell(null)
+    setEditingOtherIncome({ accountName, month: monthIdx })
+    setOtherIncomeEditValue(String(otherIncomeByAccount[accountName]?.[monthIdx] ?? 0))
+  }
+
+  const commitOtherIncomeEdit = async () => {
+    if (!editingOtherIncome || countries.length !== 1) return
+    const { accountName, month } = editingOtherIncome
+    const newVal = parseFloat(otherIncomeEditValue) || 0
+    setOtherIncomeByAccount((prev) => {
+      const arr = [...(prev[accountName] || Array(12).fill(0))]
+      arr[month] = newVal
+      return { ...prev, [accountName]: arr }
+    })
+    setEditingOtherIncome(null)
+    const { error } = await supabase.from("pl_other_income").upsert(
+      {
+        year,
+        country_code: countries[0],
+        month: month + 1,
+        modelo,
+        account_name: accountName,
+        amount_usd: newVal,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "year,country_code,month,modelo,account_name" }
+    )
+    if (error) {
+      console.error("commitOtherIncomeEdit:", error)
+      alert("Error al guardar Other Income. Intenta nuevamente.")
+      await fetchOtherIncome()
+    }
+  }
+
+  const cancelOtherIncomeEdit = () => setEditingOtherIncome(null)
+
+  const handleAddOtherIncomeAccount = () => {
+    if (!canEditOtherIncome) return
+    const name = window.prompt("Nombre de la cuenta (Other Income):")
+    if (!name?.trim()) return
+    const accountName = name.trim()
+    if (otherIncomeByAccount[accountName]) {
+      alert("Esa cuenta ya existe.")
+      return
+    }
+    setOtherIncomeByAccount((prev) => ({ ...prev, [accountName]: Array(12).fill(0) }))
+    setExpandedOtherIncome(true)
+  }
 
   const buildSgaTooltip = (monthIdx: number, field: keyof SGAData | "TOTAL") => {
     if (combineEnabled) return undefined
@@ -2342,6 +2443,62 @@ export function PLTable({
     )
   }
 
+  const OtherIncomeAccountRow = ({ accountName }: { accountName: string }) => {
+    const values = otherIncomeByAccount[accountName] || Array(12).fill(0)
+    const ytdVal = periodSum(values)
+    const totalVal = sum(values)
+
+    return (
+      <tr className="hover:bg-white/5 transition-colors">
+        <td className={stickyLabel()}>
+          <span className="ml-4 text-white/90">{accountName}</span>
+        </td>
+        {monthIndices.map((mIdx) => {
+          const v = values[mIdx] ?? 0
+          const isEditing =
+            editingOtherIncome?.accountName === accountName && editingOtherIncome.month === mIdx
+          const numColor =
+            v > 0 ? "text-emerald-300/90" : v < 0 ? "text-rose-300" : "text-white/25"
+          return (
+            <td
+              key={mIdx}
+              className={`${cellCls} ${numColor} ${canEditOtherIncome ? "cursor-pointer hover:bg-white/10 rounded" : ""}`}
+              onDoubleClick={() => startEditOtherIncome(accountName, mIdx)}
+              title={canEditOtherIncome ? "Doble clic para editar" : undefined}
+            >
+              {isEditing ? (
+                <input
+                  type="number"
+                  className="w-20 bg-white/20 text-white text-xs text-right px-1 rounded border border-white/30 focus:outline-none"
+                  value={otherIncomeEditValue}
+                  onChange={(e) => setOtherIncomeEditValue(e.target.value)}
+                  onBlur={commitOtherIncomeEdit}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commitOtherIncomeEdit()
+                    if (e.key === "Escape") cancelOtherIncomeEdit()
+                  }}
+                  autoFocus
+                />
+              ) : (
+                fmtSigned(v)
+              )}
+            </td>
+          )
+        })}
+        <td
+          className={`${cellCls} ${ytdVal > 0 ? "text-emerald-300/90" : ytdVal < 0 ? "text-rose-300" : "text-white/25"} border-l border-white/10`}
+        >
+          {fmtSigned(ytdVal)}
+        </td>
+        <td
+          className={`${cellCls} ${totalVal > 0 ? "text-emerald-300/90" : totalVal < 0 ? "text-rose-300" : "text-white/25"}`}
+        >
+          {fmtSigned(totalVal)}
+        </td>
+      </tr>
+    )
+  }
+
   // Render an editable SGA row (negative display)
   const SGARow = ({ field, label }: { field: keyof SGAData; label: string }) => {
     const values = sgaMonthly[field]
@@ -2486,6 +2643,7 @@ export function PLTable({
 
   const showGrossSalesAndDiscount = expandedSalesRevenue
   // En modo combinar, deshabilitamos desglose editable por campo (SGA/tasas) porque el modelo puede cambiar por mes.
+  const showOtherIncomeAccounts = !combineEnabled && financialEnabled && expandedOtherIncome
   const showSGAFields = !combineEnabled && financialEnabled && expandedSGA
   const showTaxRows = !combineEnabled && financialEnabled && expandedNetIncome
 
@@ -2781,7 +2939,79 @@ export function PLTable({
                 cellPeriodTitle={periodTooltipFor("totalCOS")}
               />
 
-              {/* ─ Gross Profit = Sales Revenue − Total Cost of Sales (sin desglose anidado) ─ */}
+              <Row
+                label="Other Income"
+                labelNode={
+                  <span className="inline-flex items-center gap-2">
+                    <span>Other Income</span>
+                    {canEdit && !canEditOtherIncome && countries.length !== 1 && (
+                      <span className="text-[10px] text-white/30 font-normal">(un país)</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!financialEnabled) return
+                        setExpandedOtherIncome((v) => !v)
+                      }}
+                      className={`p-0.5 ${financialEnabled ? "text-white/70 hover:text-white" : "text-white/20 cursor-not-allowed"}`}
+                      aria-label="Alternar desglose Other Income"
+                    >
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${
+                          financialEnabled && expandedOtherIncome ? "rotate-0" : "-rotate-90"
+                        }`}
+                      />
+                    </button>
+                  </span>
+                }
+                values={totalOtherIncome}
+                bold
+                prominent
+                forceGray
+                colorClass="text-white"
+                formatValue={(v) => fmtSigned(v)}
+                cellTitle={(mi) => {
+                  if (!otherIncomeAccountNames.length) {
+                    return `Other Income\n${MONTH_LABELS[mi]}\n\nSin cuentas cargadas.`
+                  }
+                  const lines = [
+                    `Other Income — ${MONTH_LABELS[mi]}`,
+                    "",
+                    ...otherIncomeAccountNames.map(
+                      (name) => `${name}: ${fmt(otherIncomeByAccount[name]?.[mi] ?? 0)}`
+                    ),
+                    "",
+                    `Total: ${fmt(totalOtherIncome[mi])}`,
+                  ]
+                  return lines.join("\n")
+                }}
+                cellPeriodTitle={
+                  monthIndices.length
+                    ? `PERIODO ${MONTH_LABELS[monthIndices[0]]}–${MONTH_LABELS[monthIndices[monthIndices.length - 1]]}\n\nTotal: ${fmt(periodSum(totalOtherIncome))}`
+                    : undefined
+                }
+              />
+              {showOtherIncomeAccounts &&
+                otherIncomeAccountNames.map((accountName) => (
+                  <OtherIncomeAccountRow key={accountName} accountName={accountName} />
+                ))}
+              {showOtherIncomeAccounts && canEditOtherIncome && (
+                <tr className="hover:bg-white/5">
+                  <td className={stickyLabel()} colSpan={1}>
+                    <button
+                      type="button"
+                      onClick={handleAddOtherIncomeAccount}
+                      className="ml-4 inline-flex items-center gap-1.5 text-xs text-blue-300 hover:text-blue-200"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Agregar cuenta
+                    </button>
+                  </td>
+                  <td colSpan={monthIndices.length + 2} />
+                </tr>
+              )}
+
+              {/* ─ Gross Profit = Sales Revenue − COS + Other Income ─ */}
               <Row
                 label="Gross Profit"
                 values={grossProfit}
