@@ -331,7 +331,10 @@ export function PLTable({
     canEdit && financialEnabled && products.length === 1 && channels.length === 1 && countries.length === 1
   // Taxes are stored at country-level (one country_code row), so allow editing only when a single country is selected.
   const canEditTax = canEdit && financialEnabled && countries.length === 1
+  /** Other Income solo existe en P&L Real (Odoo / pl_other_income.modelo = real). */
+  const otherIncomeEnabled = modelo === "real"
   const canEditOtherIncome =
+    otherIncomeEnabled &&
     canEdit &&
     financialEnabled &&
     !combineEnabled &&
@@ -1101,9 +1104,9 @@ export function PLTable({
       if (modelo === "budget") {
         if (testMode) {
           // En modo Test usamos overrides agregados por producto, igual que en REAL
-          await Promise.all([fetchQuantities(), fetchOverrides(), fetchSGA(), fetchOtherIncome()])
+          await Promise.all([fetchQuantities(), fetchOverrides(), fetchSGA()])
         } else {
-          await Promise.all([fetchQuantities(), fetchBudgetOverrides(), fetchSGA(), fetchOtherIncome()])
+          await Promise.all([fetchQuantities(), fetchBudgetOverrides(), fetchSGA()])
         }
       } else {
         await Promise.all([fetchQuantities(), fetchOverrides(), fetchSGA(), fetchOtherIncome()])
@@ -1537,7 +1540,7 @@ export function PLTable({
   }
 
   const fetchOtherIncome = async () => {
-    if (combineEnabled || countries.length === 0) {
+    if (!otherIncomeEnabled || combineEnabled || countries.length === 0) {
       setOtherIncomeByAccount({})
       return
     }
@@ -1546,7 +1549,7 @@ export function PLTable({
       .from("pl_other_income")
       .select("month, account_name, amount_usd, company")
       .eq("year", year)
-      .eq("modelo", modelo)
+      .eq("modelo", "real")
     if (companies && companies.length > 0) q = q.in("company", companies)
     const { data, error } = await q
     if (error) {
@@ -2202,7 +2205,7 @@ export function PLTable({
         year,
         company,
         month: month + 1,
-        modelo,
+        modelo: "real",
         account_name: accountName,
         amount_usd: newVal,
         updated_at: new Date().toISOString(),
@@ -2651,7 +2654,8 @@ export function PLTable({
 
   const showGrossSalesAndDiscount = expandedSalesRevenue
   // En modo combinar, deshabilitamos desglose editable por campo (SGA/tasas) porque el modelo puede cambiar por mes.
-  const showOtherIncomeAccounts = !combineEnabled && financialEnabled && expandedOtherIncome
+  const showOtherIncomeAccounts =
+    otherIncomeEnabled && !combineEnabled && financialEnabled && expandedOtherIncome
   const showSGAFields = !combineEnabled && financialEnabled && expandedSGA
   const showTaxRows = !combineEnabled && financialEnabled && expandedNetIncome
 
@@ -2947,79 +2951,80 @@ export function PLTable({
                 cellPeriodTitle={periodTooltipFor("totalCOS")}
               />
 
-              <Row
-                label="Other Income"
-                labelNode={
-                  <span className="inline-flex items-center gap-2">
-                    <span>Other Income</span>
-                    {canEdit && !canEditOtherIncome && (
-                      <span className="text-[10px] text-white/30 font-normal">(una compañía)</span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!financialEnabled) return
-                        setExpandedOtherIncome((v) => !v)
-                      }}
-                      className={`p-0.5 ${financialEnabled ? "text-white/70 hover:text-white" : "text-white/20 cursor-not-allowed"}`}
-                      aria-label="Alternar desglose Other Income"
-                    >
-                      <ChevronDown
-                        className={`h-4 w-4 transition-transform ${
-                          financialEnabled && expandedOtherIncome ? "rotate-0" : "-rotate-90"
-                        }`}
-                      />
-                    </button>
-                  </span>
-                }
-                values={totalOtherIncome}
-                bold
-                prominent
-                forceGray
-                colorClass="text-white"
-                formatValue={(v) => fmtSigned(v)}
-                cellTitle={(mi) => {
-                  if (!otherIncomeAccountNames.length) {
-                    return `Other Income\n${MONTH_LABELS[mi]}\n\nSin cuentas cargadas.`
-                  }
-                  const lines = [
-                    `Other Income — ${MONTH_LABELS[mi]}`,
-                    "",
-                    ...otherIncomeAccountNames.map(
-                      (name) => `${name}: ${fmt(otherIncomeByAccount[name]?.[mi] ?? 0)}`
-                    ),
-                    "",
-                    `Total: ${fmt(totalOtherIncome[mi])}`,
-                  ]
-                  return lines.join("\n")
-                }}
-                cellPeriodTitle={
-                  monthIndices.length
-                    ? `PERIODO ${MONTH_LABELS[monthIndices[0]]}–${MONTH_LABELS[monthIndices[monthIndices.length - 1]]}\n\nTotal: ${fmt(periodSum(totalOtherIncome))}`
-                    : undefined
-                }
-              />
-              {showOtherIncomeAccounts &&
-                otherIncomeAccountNames.map((accountName) => (
-                  <OtherIncomeAccountRow key={accountName} accountName={accountName} />
-                ))}
-              {showOtherIncomeAccounts && canEditOtherIncome && (
-                <tr className="hover:bg-white/5">
-                  <td className={stickyLabel()} colSpan={1}>
-                    <button
-                      type="button"
-                      onClick={handleAddOtherIncomeAccount}
-                      className="ml-4 inline-flex items-center gap-1.5 text-xs text-blue-300 hover:text-blue-200"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      Agregar cuenta
-                    </button>
-                  </td>
-                  <td colSpan={monthIndices.length + 2} />
-                </tr>
+              {otherIncomeEnabled && (
+                <>
+                  <Row
+                    label="Other Income"
+                    labelNode={
+                      <span className="inline-flex items-center gap-2">
+                        <span>Other Income</span>
+                        {canEdit && !canEditOtherIncome && (
+                          <span className="text-[10px] text-white/30 font-normal">(una compañía)</span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setExpandedOtherIncome((v) => !v)}
+                          className="p-0.5 text-white/70 hover:text-white"
+                          aria-label="Alternar desglose Other Income"
+                        >
+                          <ChevronDown
+                            className={`h-4 w-4 transition-transform ${
+                              expandedOtherIncome ? "rotate-0" : "-rotate-90"
+                            }`}
+                          />
+                        </button>
+                      </span>
+                    }
+                    values={totalOtherIncome}
+                    bold
+                    prominent
+                    forceGray
+                    colorClass="text-white"
+                    formatValue={(v) => fmtSigned(v)}
+                    cellTitle={(mi) => {
+                      if (!otherIncomeAccountNames.length) {
+                        return `Other Income\n${MONTH_LABELS[mi]}\n\nSin cuentas cargadas.`
+                      }
+                      const lines = [
+                        `Other Income — ${MONTH_LABELS[mi]}`,
+                        "",
+                        ...otherIncomeAccountNames.map(
+                          (name) => `${name}: ${fmt(otherIncomeByAccount[name]?.[mi] ?? 0)}`
+                        ),
+                        "",
+                        `Total: ${fmt(totalOtherIncome[mi])}`,
+                      ]
+                      return lines.join("\n")
+                    }}
+                    cellPeriodTitle={
+                      monthIndices.length
+                        ? `PERIODO ${MONTH_LABELS[monthIndices[0]]}–${MONTH_LABELS[monthIndices[monthIndices.length - 1]]}\n\nTotal: ${fmt(periodSum(totalOtherIncome))}`
+                        : undefined
+                    }
+                  />
+                  {showOtherIncomeAccounts &&
+                    otherIncomeAccountNames.map((accountName) => (
+                      <OtherIncomeAccountRow key={accountName} accountName={accountName} />
+                    ))}
+                  {showOtherIncomeAccounts && canEditOtherIncome && (
+                    <tr className="hover:bg-white/5">
+                      <td className={stickyLabel()} colSpan={1}>
+                        <button
+                          type="button"
+                          onClick={handleAddOtherIncomeAccount}
+                          className="ml-4 inline-flex items-center gap-1.5 text-xs text-blue-300 hover:text-blue-200"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Agregar cuenta
+                        </button>
+                      </td>
+                      <td colSpan={monthIndices.length + 2} />
+                    </tr>
+                  )}
+                </>
               )}
 
-              {/* ─ Gross Profit = Sales Revenue − COS + Other Income ─ */}
+              {/* ─ Gross Profit = Sales Revenue − COS + Other Income (Real) ─ */}
               <Row
                 label="Gross Profit"
                 values={grossProfit}
