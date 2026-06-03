@@ -20,11 +20,10 @@ Línea **Other Income** entre **Total Cost of Sales** y **Gross Profit**.
 
 ## Uso en la app
 
-1. P&L → expandir **Other Income**.
-2. **Agregar cuenta** o cargar desde n8n.
-3. **Doble clic** en un mes para editar (requiere **una sola compañía** en el filtro del P&L).
+1. P&L **Real** → expandir **Other Income** para ver el desglose por cuenta (solo lectura).
+2. Los montos se cargan **solo desde n8n** (upsert en `pl_other_income`); no se editan en la UI.
 
-Con varias compañías tildadas se **suman** las cuentas con el mismo nombre para mostrar totales.
+Con varias compañías en el filtro se **suman** las cuentas con el mismo nombre para mostrar totales.
 
 ---
 
@@ -122,7 +121,6 @@ Odoo → Code normalizar → Code filtrar Other Income → Supabase upsert `pl_o
 | Problema | Causa |
 |----------|--------|
 | No aparece en P&L | `company` distinto al del filtro (espacios, typo, “Arge” vs “Argentina”) |
-| No edita en app | Más de una compañía seleccionada en P&L |
 | Duplicados | Upsert sin `on_conflict` en las 5 columnas clave |
 | Signo invertido | Ajustar `amount_usd` en Code según convención Odoo |
 

@@ -256,11 +256,6 @@ export function PLTable({
   const [otherIncomeByAccount, setOtherIncomeByAccount] = useState<Record<string, number[]>>({})
   // Editing state
   const [editingCell, setEditingCell] = useState<{ field: keyof SGAData | keyof TaxData; month: number } | null>(null)
-  const [editingOtherIncome, setEditingOtherIncome] = useState<{
-    accountName: string
-    month: number
-  } | null>(null)
-  const [otherIncomeEditValue, setOtherIncomeEditValue] = useState("")
   const [editValue, setEditValue] = useState<string>("")
   const [editingBudgetUnit, setEditingBudgetUnit] = useState<{ productName: string; monthIdx: number } | null>(null)
   const [budgetUnitEditValue, setBudgetUnitEditValue] = useState<string>("")
@@ -331,15 +326,8 @@ export function PLTable({
     canEdit && financialEnabled && products.length === 1 && channels.length === 1 && countries.length === 1
   // Taxes are stored at country-level (one country_code row), so allow editing only when a single country is selected.
   const canEditTax = canEdit && financialEnabled && countries.length === 1
-  /** Other Income solo existe en P&L Real (Odoo / pl_other_income.modelo = real). */
+  /** Other Income solo existe en P&L Real (Odoo / pl_other_income.modelo = real). Solo lectura; carga vía n8n. */
   const otherIncomeEnabled = modelo === "real"
-  const canEditOtherIncome =
-    otherIncomeEnabled &&
-    canEdit &&
-    financialEnabled &&
-    !combineEnabled &&
-    plCompaniesFilter !== null &&
-    plCompaniesFilter.length === 1
 
   const canEditBudgetUnits =
     canEdit &&
@@ -2181,59 +2169,6 @@ export function PLTable({
 
   const cancelEdit = () => setEditingCell(null)
 
-  const startEditOtherIncome = (accountName: string, monthIdx: number) => {
-    if (!canEditOtherIncome) return
-    setEditingCell(null)
-    setEditingOtherIncome({ accountName, month: monthIdx })
-    setOtherIncomeEditValue(String(otherIncomeByAccount[accountName]?.[monthIdx] ?? 0))
-  }
-
-  const commitOtherIncomeEdit = async () => {
-    const companies = resolveSalesCompanies()
-    if (!editingOtherIncome || !companies || companies.length !== 1) return
-    const company = companies[0].trim()
-    const { accountName, month } = editingOtherIncome
-    const newVal = parseFloat(otherIncomeEditValue) || 0
-    setOtherIncomeByAccount((prev) => {
-      const arr = [...(prev[accountName] || Array(12).fill(0))]
-      arr[month] = newVal
-      return { ...prev, [accountName]: arr }
-    })
-    setEditingOtherIncome(null)
-    const { error } = await supabase.from("pl_other_income").upsert(
-      {
-        year,
-        company,
-        month: month + 1,
-        modelo: "real",
-        account_name: accountName,
-        amount_usd: newVal,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "year,company,month,modelo,account_name" }
-    )
-    if (error) {
-      console.error("commitOtherIncomeEdit:", error)
-      alert("Error al guardar Other Income. Intenta nuevamente.")
-      await fetchOtherIncome()
-    }
-  }
-
-  const cancelOtherIncomeEdit = () => setEditingOtherIncome(null)
-
-  const handleAddOtherIncomeAccount = () => {
-    if (!canEditOtherIncome) return
-    const name = window.prompt("Nombre de la cuenta (Other Income):")
-    if (!name?.trim()) return
-    const accountName = name.trim()
-    if (otherIncomeByAccount[accountName]) {
-      alert("Esa cuenta ya existe.")
-      return
-    }
-    setOtherIncomeByAccount((prev) => ({ ...prev, [accountName]: Array(12).fill(0) }))
-    setExpandedOtherIncome(true)
-  }
-
   const buildSgaTooltip = (monthIdx: number, field: keyof SGAData | "TOTAL") => {
     if (combineEnabled) return undefined
     const monthNumber = monthIdx + 1
@@ -2466,33 +2401,11 @@ export function PLTable({
         </td>
         {monthIndices.map((mIdx) => {
           const v = values[mIdx] ?? 0
-          const isEditing =
-            editingOtherIncome?.accountName === accountName && editingOtherIncome.month === mIdx
           const numColor =
             v > 0 ? "text-emerald-300/90" : v < 0 ? "text-rose-300" : "text-white/25"
           return (
-            <td
-              key={mIdx}
-              className={`${cellCls} ${numColor} ${canEditOtherIncome ? "cursor-pointer hover:bg-white/10 rounded" : ""}`}
-              onDoubleClick={() => startEditOtherIncome(accountName, mIdx)}
-              title={canEditOtherIncome ? "Doble clic para editar" : undefined}
-            >
-              {isEditing ? (
-                <input
-                  type="number"
-                  className="w-20 bg-white/20 text-white text-xs text-right px-1 rounded border border-white/30 focus:outline-none"
-                  value={otherIncomeEditValue}
-                  onChange={(e) => setOtherIncomeEditValue(e.target.value)}
-                  onBlur={commitOtherIncomeEdit}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") commitOtherIncomeEdit()
-                    if (e.key === "Escape") cancelOtherIncomeEdit()
-                  }}
-                  autoFocus
-                />
-              ) : (
-                fmtSigned(v)
-              )}
+            <td key={mIdx} className={`${cellCls} ${numColor}`}>
+              {fmtSigned(v)}
             </td>
           )
         })}
@@ -2958,9 +2871,6 @@ export function PLTable({
                     labelNode={
                       <span className="inline-flex items-center gap-2">
                         <span>Other Income</span>
-                        {canEdit && !canEditOtherIncome && (
-                          <span className="text-[10px] text-white/30 font-normal">(una compañía)</span>
-                        )}
                         <button
                           type="button"
                           onClick={() => setExpandedOtherIncome((v) => !v)}
@@ -3006,21 +2916,6 @@ export function PLTable({
                     otherIncomeAccountNames.map((accountName) => (
                       <OtherIncomeAccountRow key={accountName} accountName={accountName} />
                     ))}
-                  {showOtherIncomeAccounts && canEditOtherIncome && (
-                    <tr className="hover:bg-white/5">
-                      <td className={stickyLabel()} colSpan={1}>
-                        <button
-                          type="button"
-                          onClick={handleAddOtherIncomeAccount}
-                          className="ml-4 inline-flex items-center gap-1.5 text-xs text-blue-300 hover:text-blue-200"
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                          Agregar cuenta
-                        </button>
-                      </td>
-                      <td colSpan={monthIndices.length + 2} />
-                    </tr>
-                  )}
                 </>
               )}
 
