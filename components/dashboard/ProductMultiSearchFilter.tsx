@@ -13,6 +13,8 @@ interface ProductMultiSearchFilterProps {
   aliasesByName?: Record<string, string>
   disabled?: boolean
   allLabel?: string
+  /** Texto mientras se recarga la lista (p. ej. al cambiar categoría). */
+  pendingLabel?: string
 }
 
 export function ProductMultiSearchFilter({
@@ -22,6 +24,7 @@ export function ProductMultiSearchFilter({
   aliasesByName,
   disabled = false,
   allLabel = "Todos los productos",
+  pendingLabel,
 }: ProductMultiSearchFilterProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
@@ -45,6 +48,7 @@ export function ProductMultiSearchFilter({
   const isAllSelected = selectedProducts.length > 0 && selectedProducts.length === safeProducts.length
 
   const displayValue = useMemo(() => {
+    if (pendingLabel) return pendingLabel
     if (selectedProducts.length === 0) return allLabel
     if (selectedProducts.length === safeProducts.length) return allLabel
     if (selectedProducts.length === 1) {
@@ -52,7 +56,7 @@ export function ProductMultiSearchFilter({
       return aliasesByName?.[n] || displayProductName(n)
     }
     return `${selectedProducts.length} productos`
-  }, [allLabel, selectedProducts, safeProducts.length, aliasesByName])
+  }, [allLabel, selectedProducts, safeProducts.length, aliasesByName, pendingLabel])
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

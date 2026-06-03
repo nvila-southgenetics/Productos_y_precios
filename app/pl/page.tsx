@@ -51,6 +51,7 @@ export default function PLPage() {
   const [productsSelected, setProductsSelected] = useState<string[]>([])
   const [selectedChannels, setSelectedChannels] = useState<string[]>(CHANNELS)
   const [products, setProducts] = useState<string[]>([])
+  const [productsLoading, setProductsLoading] = useState(false)
   const [aliasesByName, setAliasesByName] = useState<Record<string, string>>({})
   const [monthFrom, setMonthFrom] = useState<number>(1)
   const [monthTo, setMonthTo] = useState<number>(12)
@@ -155,6 +156,7 @@ export default function PLPage() {
   }
 
   const fetchProducts = async () => {
+    setProductsLoading(true)
     try {
       if (isBudgetModel) {
         let q = supabase.from("budget").select("product_name").eq("year", budgetYear)
@@ -240,6 +242,8 @@ export default function PLPage() {
       }
     } catch (err) {
       console.error(err)
+    } finally {
+      setProductsLoading(false)
     }
   }
 
@@ -309,6 +313,7 @@ export default function PLPage() {
               selectedValues={selectedCategories}
               onSelectedValuesChange={setSelectedCategories}
               allLabel="Todas las categorías"
+              pendingLabel={productsLoading ? "Actualizando…" : undefined}
             />
 
             {/* Producto */}
@@ -319,6 +324,7 @@ export default function PLPage() {
                 onSelectedProductsChange={setProductsSelected}
                 aliasesByName={aliasesByName}
                 allLabel="Todos los productos"
+                pendingLabel={productsLoading ? "Actualizando productos…" : undefined}
               />
             </div>
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef, type ReactNode } from "react"
 import { supabase } from "@/lib/supabase"
-import { ChevronDown, ChevronRight, Plus, Table2 } from "lucide-react"
+import { ChevronDown, ChevronRight, Loader2, Plus, Table2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { capitalizeFirstLetter, displayProductName, displayProductLabelFromName, formatNumber } from "@/lib/utils"
 import { useProductCreateDialog } from "@/components/products/ProductCreateDialogProvider"
@@ -27,6 +27,12 @@ import {
   type PlMonthSnapshot,
   type PlTooltipLine,
 } from "@/lib/pl-table-tooltips"
+import { fetchVentasMensualesPaginated } from "@/lib/pl-ventas-fetch"
+import {
+  allowedProductNamesForCategories,
+  fetchPlProductCatalog,
+  type PlProductCatalogRow,
+} from "@/lib/pl-product-catalog"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -236,6 +242,8 @@ export function PLTable({
   onMonthModelChange,
 }: PLTableProps) {
   const [loading, setLoading] = useState(true)
+  const [refetching, setRefetching] = useState(false)
+  const [hasInitialLoad, setHasInitialLoad] = useState(false)
   const [quantities, setQuantities] = useState<Record<string, number[]>>({})
   // Real-only: monto_total (Odoo) agregado por producto y mes (incluye devoluciones si vienen negativas)
   const [odooAmounts, setOdooAmounts] = useState<Record<string, number[]>>({})
@@ -276,9 +284,11 @@ export function PLTable({
     [diferenciaOnlyView, products]
   )
   const { openCreateProductDialog } = useProductCreateDialog()
-  const categoriesSet = new Set(categories)
+  const categoriesSet = useMemo(() => new Set(categories), [categories.join("\0")])
+  const categoriesKey = useMemo(() => [...categories].sort().join("\0"), [categories])
   const allKnownCategoriesSelected = KNOWN_PL_CATEGORIES.every((c) => categoriesSet.has(c))
   const shouldFilterCategories = categories.length > 0 && !allKnownCategoriesSelected
+  const productCatalogRef = useRef<PlProductCatalogRow[]>([])
 
   const resolveSalesCompanies = useCallback((): string[] | null => {
     if (salesCompanies !== undefined) return salesCompanies
@@ -549,11 +559,9 @@ export function PLTable({
 
     let allowedProductsByCategory: Set<string> | null = null
     if (shouldFilterCategories) {
-      const { data: allProds } = await supabase.from("products").select("name, category")
-      allowedProductsByCategory = new Set(
-        (allProds || [])
-          .filter((p: { name: string; category: string | null }) => categoriesSet.has(p.category || ""))
-          .map((p: { name: string }) => p.name)
+      allowedProductsByCategory = allowedProductNamesForCategories(
+        productCatalogRef.current,
+        categoriesSet
       )
     }
 
@@ -716,22 +724,21 @@ export function PLTable({
 
   // ── Data fetching ─────────────────────────────────────────────────────────
 
-  const plDataLoadedRef = useRef(false)
+  const fetchGenRef = useRef(0)
+  const hasInitialLoadRef = useRef(false)
 
   const fetchData = useCallback(async () => {
-    const showFullLoading = !plDataLoadedRef.current
-    if (showFullLoading) setLoading(true)
+    const gen = ++fetchGenRef.current
+    setRefetching(true)
+    if (!hasInitialLoadRef.current) setLoading(true)
     setCombineError(null)
-    // En Real queremos "limpiar" únicamente SG&A/Impuestos (no el resto).
-    // Los costos de producto (Gross Sales / Gross Profit) se calculan desde overrides + cantidades,
-    // por eso NO debemos tocarlos.
-    setSga(Array.from({ length: 12 }, emptySGA))
-    setTaxRates(Array.from({ length: 12 }, emptyTax))
-    setSgaRowsRaw([])
-    setOtherIncomeByAccount({})
     try {
+      productCatalogRef.current = await fetchPlProductCatalog()
+
       if (countries.length === 0) {
-        plDataLoadedRef.current = false
+        if (fetchGenRef.current !== gen) return
+        hasInitialLoadRef.current = false
+        setHasInitialLoad(false)
         setQuantities({})
         setOdooAmounts({})
         setBudgetRows([])
@@ -765,11 +772,9 @@ export function PLTable({
           // Filtrado por categoría (solo si categoría filtra)
           const rowsForBudget: Record<string, unknown>[] = []
           if (shouldFilterCategories) {
-            const { data: allProds } = await supabase.from("products").select("name, category")
-            const allowed = new Set(
-              (allProds || [])
-                .filter((p: { name: string; category: string | null }) => categoriesSet.has(p.category || ""))
-                .map((p: { name: string }) => p.name)
+            const allowed = allowedProductNamesForCategories(
+              productCatalogRef.current,
+              categoriesSet
             )
             for (const row of budData || []) {
               const name = (row as any).product_name as string
@@ -834,11 +839,10 @@ export function PLTable({
           const cats: Record<string, string> = {}
           const aliases: Record<string, string> = {}
           const saleKeyToCatalogName = new Map<string, string>()
-          const { data: allProds } = await supabase.from("products").select("name, category, alias")
-          for (const p of allProds || []) {
-            const name = String((p as any).name || "")
-            const alias = String((p as any).alias || "")
-            cats[name] = (p as any).category || ""
+          for (const p of productCatalogRef.current) {
+            const name = p.name
+            const alias = p.alias
+            cats[name] = p.category || ""
             aliases[name] = alias || ""
             const nameKey = normalizeProductKey(name)
             if (nameKey) saleKeyToCatalogName.set(nameKey, name)
@@ -856,15 +860,9 @@ export function PLTable({
           }
 
           const companies = resolveSalesCompanies()
-          let qSales = supabase
-            .from("ventas_mensuales_view")
-            .select("producto, mes, cantidad_ventas, monto_total, compañia")
-            .eq("año", forYear)
-          if (companies && companies.length) qSales = qSales.in("compañia", companies)
+          const data = await fetchVentasMensualesPaginated(forYear, companies)
 
           {
-            const { data } = await qSales
-
             const categorySet = shouldFilterCategories ? categoriesSet : null
             const selectedProductKeys = new Set((productsFilter || []).map((p) => normalizeProductKey(p)))
             for (const row of (data || []) as any[]) {
@@ -981,11 +979,10 @@ export function PLTable({
         const aliases: Record<string, string> = {}
         const saleKeyToCatalogName = new Map<string, string>()
 
-        const { data: allProds } = await supabase.from("products").select("name, category, alias")
-        for (const p of allProds || []) {
-          const name = String((p as any).name || "")
-          const alias = String((p as any).alias || "")
-          cats[name] = (p as any).category || ""
+        for (const p of productCatalogRef.current) {
+          const name = p.name
+          const alias = p.alias
+          cats[name] = p.category || ""
           aliases[name] = alias || ""
           const nameKey = normalizeProductKey(name)
           if (nameKey) saleKeyToCatalogName.set(nameKey, name)
@@ -1002,15 +999,9 @@ export function PLTable({
         }
 
         const companies = resolveSalesCompanies()
-        let qSales = supabase
-          .from("ventas_mensuales_view")
-          .select("producto, mes, cantidad_ventas, monto_total, compañia")
-          .eq("año", forYear)
-        if (companies && companies.length) qSales = qSales.in("compañia", companies)
+        const data = await fetchVentasMensualesPaginated(forYear, companies)
 
         {
-          const { data } = await qSales
-
           const categorySet = shouldFilterCategories ? categoriesSet : null
           const selectedProductKeys = new Set((productsFilter || []).map((p) => normalizeProductKey(p)))
           for (const row of (data || []) as any[]) {
@@ -1098,7 +1089,9 @@ export function PLTable({
         }
       } else {
         await Promise.all([fetchQuantities(), fetchOverrides(), fetchSGA(), fetchOtherIncome()])
+        if (fetchGenRef.current !== gen) return
         const rows = await fetchCompanyMonthlyCos(year, resolveSalesCompanies())
+        if (fetchGenRef.current !== gen) return
         setCompanyMonthlyCos(rows)
       }
 
@@ -1121,10 +1114,25 @@ export function PLTable({
       console.error("PLTable fetchData:", e)
       if (combineEnabled) setCombineError("Error cargando datos para combinar")
     } finally {
-      plDataLoadedRef.current = true
-      setLoading(false)
+      if (fetchGenRef.current === gen) {
+        setRefetching(false)
+        setLoading(false)
+        hasInitialLoadRef.current = true
+        setHasInitialLoad(true)
+      }
     }
-  }, [modelo, year, countries, categories, productsFilter, channels, testMode, budgetName, combineEnabled, effectiveMonthModels.join("|")])
+  }, [
+    modelo,
+    year,
+    countries,
+    categoriesKey,
+    productsFilter,
+    channels,
+    testMode,
+    budgetName,
+    combineEnabled,
+    effectiveMonthModels.join("|"),
+  ])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -1134,14 +1142,12 @@ export function PLTable({
     const cats: Record<string, string> = {}
     const aliases: Record<string, string> = {}
 
-    const { data: allProds } = await supabase.from("products").select("name, category, alias")
-    // Resolver: texto de ventas (test/producto) -> nombre canónico en catálogo,
-    // soportando que Odoo envíe "alias/apodo" en vez de `products.name`.
+    // Catálogo cargado una vez por fetchData (cache en memoria).
     const saleKeyToCatalogName = new Map<string, string>()
-    for (const p of allProds || []) {
-      const name = String((p as any).name || "")
-      const alias = String((p as any).alias || "")
-      cats[name] = (p as any).category || ""
+    for (const p of productCatalogRef.current) {
+      const name = p.name
+      const alias = p.alias
+      cats[name] = p.category || ""
       aliases[name] = alias || ""
       const nameKey = normalizeProductKey(name)
       if (nameKey) saleKeyToCatalogName.set(nameKey, name)
@@ -1221,15 +1227,13 @@ export function PLTable({
       // Modo REAL: no usamos budgetRows
       setBudgetRows([])
       const companies = resolveSalesCompanies()
-      let qSales = supabase
-        .from("ventas_mensuales_view")
-        .select("producto, mes, cantidad_ventas, monto_total, compañia")
-        .eq("año", year)
-      if (companies && companies.length) qSales = qSales.in("compañia", companies)
+      const data = await fetchVentasMensualesPaginated(year, companies)
 
-      const { data } = await qSales
-
-      if (!data) { setProductCategories(cats); setProductAliases(aliases); return }
+      if (!data.length) {
+        setProductCategories(cats)
+        setProductAliases(aliases)
+        return
+      }
 
       // IMPORTANTE (Real):
       // Si el producto no existe en `public.products` (no está en `cats`),
@@ -1493,12 +1497,9 @@ export function PLTable({
     // SG&A depende de producto; si filtramos por categoría, traducimos categoría -> nombres de producto permitidos.
     let allowedProductsByCategory: Set<string> | null = null
     if (shouldFilterCategories) {
-      const { data: allProds } = await supabase.from("products").select("name, category")
-      const categorySet = categoriesSet
-      allowedProductsByCategory = new Set(
-        (allProds || [])
-          .filter((p: { name: string; category: string | null }) => categorySet.has(p.category || ""))
-          .map((p: { name: string; category: string | null }) => p.name)
+      allowedProductsByCategory = allowedProductNamesForCategories(
+        productCatalogRef.current,
+        categoriesSet
       )
     }
 
@@ -1922,10 +1923,11 @@ export function PLTable({
 
   // Importante: no calcular líneas ni helpers de tabla hasta tener datos en modo combinar
   // (si no, el primer render después de togglear puede crashear con snapshots vacíos).
-  if (loading || (combineEnabled && !combineReady)) {
+  if ((!hasInitialLoad && loading) || (combineEnabled && !combineReady)) {
     return (
-      <div className="flex items-center justify-center py-20 text-white/60 text-sm">
-        {combineError ? `Error en combinar: ${combineError}` : "Cargando datos..."}
+      <div className="flex flex-col items-center justify-center gap-3 py-20 text-white/60 text-sm">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-300/80" aria-hidden />
+        <span>{combineError ? `Error en combinar: ${combineError}` : "Cargando P&L…"}</span>
       </div>
     )
   }
@@ -2578,7 +2580,20 @@ export function PLTable({
 
   return (
     <>
-      <div className="rounded-lg border border-white/20 bg-slate-800/60 backdrop-blur-sm shadow-xl overflow-hidden">
+      <div className="relative rounded-lg border border-white/20 bg-slate-800/60 backdrop-blur-sm shadow-xl overflow-hidden">
+        {refetching && (
+          <div
+            className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 bg-slate-900/55 backdrop-blur-[2px]"
+            role="status"
+            aria-live="polite"
+            aria-busy="true"
+          >
+            <Loader2 className="h-7 w-7 animate-spin text-blue-300" aria-hidden />
+            <span className="text-sm text-white/85">
+              {shouldFilterCategories ? "Actualizando P&L (categoría)…" : "Actualizando P&L…"}
+            </span>
+          </div>
+        )}
         {/* Info bar */}
         <div className="flex items-center justify-between px-4 py-2 bg-white/5 border-b border-white/10">
           <div className="flex items-center gap-4 flex-wrap">
