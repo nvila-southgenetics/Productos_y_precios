@@ -2702,24 +2702,6 @@ export function PLTable({
               </tr>
 
               {/* ─ Revenue ────────────────────────────────────────────── */}
-              {showGrossSalesAndDiscount && (
-                <Row
-                  label="Gross Sales (sin IVA)"
-                  values={grossSales}
-                  cellTitle={tooltipFor("grossSales")}
-                  cellPeriodTitle={periodTooltipFor("grossSales")}
-                />
-              )}
-              {showGrossSalesAndDiscount && (
-                <Row
-                  label="Commercial Discount"
-                  values={commercialDiscount}
-                  negative
-                  indent
-                  cellTitle={tooltipFor("commercialDiscount")}
-                  cellPeriodTitle={periodTooltipFor("commercialDiscount")}
-                />
-              )}
               <Row
                 label="Sales Revenue"
                 labelNode={
@@ -2749,8 +2731,54 @@ export function PLTable({
                 cellTitle={tooltipFor("salesRevenue")}
                 cellPeriodTitle={periodTooltipFor("salesRevenue")}
               />
+              {showGrossSalesAndDiscount && (
+                <Row
+                  label="Gross Sales (sin IVA)"
+                  values={grossSales}
+                  cellTitle={tooltipFor("grossSales")}
+                  cellPeriodTitle={periodTooltipFor("grossSales")}
+                />
+              )}
+              {showGrossSalesAndDiscount && (
+                <Row
+                  label="Commercial Discount"
+                  values={commercialDiscount}
+                  negative
+                  indent
+                  cellTitle={tooltipFor("commercialDiscount")}
+                  cellPeriodTitle={periodTooltipFor("commercialDiscount")}
+                />
+              )}
 
-              {/* ─ Total Cost of Sales (sección propia; no depende de Gross Profit) ─ */}
+              {/* ─ Total Cost of Sales (desglose debajo de la fila madre) ─ */}
+              <Row
+                label="Total Cost of Sales"
+                labelNode={
+                  <span className="inline-flex items-center gap-2">
+                    <span>Total Cost of Sales</span>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedCostOfSalesBreakdown((v) => !v)}
+                      className="p-0.5 text-white/70 hover:text-white"
+                      aria-label="Alternar desglose Total Cost of Sales"
+                    >
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${
+                          expandedCostOfSalesBreakdown ? "rotate-0" : "-rotate-90"
+                        }`}
+                      />
+                    </button>
+                  </span>
+                }
+                values={totalCOS}
+                bold
+                prominent
+                forceGray
+                negative
+                colorClass="text-white"
+                cellTitle={tooltipFor("totalCOS")}
+                cellPeriodTitle={periodTooltipFor("totalCOS")}
+              />
               {expandedCostOfSalesBreakdown && (
                 <>
                   <Row
@@ -2835,34 +2863,6 @@ export function PLTable({
                   />
                 </>
               )}
-              <Row
-                label="Total Cost of Sales"
-                labelNode={
-                  <span className="inline-flex items-center gap-2">
-                    <span>Total Cost of Sales</span>
-                    <button
-                      type="button"
-                      onClick={() => setExpandedCostOfSalesBreakdown((v) => !v)}
-                      className="p-0.5 text-white/70 hover:text-white"
-                      aria-label="Alternar desglose Total Cost of Sales"
-                    >
-                      <ChevronDown
-                        className={`h-4 w-4 transition-transform ${
-                          expandedCostOfSalesBreakdown ? "rotate-0" : "-rotate-90"
-                        }`}
-                      />
-                    </button>
-                  </span>
-                }
-                values={totalCOS}
-                bold
-                prominent
-                forceGray
-                negative
-                colorClass="text-white"
-                cellTitle={tooltipFor("totalCOS")}
-                cellPeriodTitle={periodTooltipFor("totalCOS")}
-              />
 
               {otherIncomeEnabled && (
                 <>
@@ -2930,14 +2930,7 @@ export function PLTable({
                 cellPeriodTitle={periodTooltipFor("grossProfit")}
               />
 
-              {/* ─ SG&A (sin título) ──────────────────────────────────── */}
-              {showSGAFields && (
-                <>
-                  {SGA_FIELDS.map(({ key, label }) => (
-                    <SGARow key={key} field={key} label={label} />
-                  ))}
-                </>
-              )}
+              {/* ─ SG&A (desglose debajo de la fila madre) ─────────────── */}
               <Row
                 label="SG&A"
                 labelNode={
@@ -2973,30 +2966,15 @@ export function PLTable({
                 }
                 formatValue={(v) => fmtSga(v)}
               />
-
-              {/* ─ Net Income: desglose IIBB / income tax arriba del total (mismo patrón que SG&A) ─ */}
-              {showTaxRows && (
+              {showSGAFields && (
                 <>
-                  <TaxConfigRow field="iibb_pct" label="IIBB — tasa (% sobre revenue)" />
-                  <Row
-                    label="IIBB (% sobre revenue)"
-                    values={iibbAmount}
-                    negative
-                    indent
-                    cellTitle={tooltipFor("iibbAmount")}
-                    cellPeriodTitle={periodTooltipFor("iibbAmount")}
-                  />
-                  <TaxConfigRow field="income_tax_pct" label="Income tax — tasa (% sobre ganancia)" />
-                  <Row
-                    label="Income tax (% sobre ganancia)"
-                    values={incomeTax}
-                    negative
-                    indent
-                    cellTitle={tooltipFor("incomeTax")}
-                    cellPeriodTitle={periodTooltipFor("incomeTax")}
-                  />
+                  {SGA_FIELDS.map(({ key, label }) => (
+                    <SGARow key={key} field={key} label={label} />
+                  ))}
                 </>
               )}
+
+              {/* ─ Net Income (desglose debajo de la fila madre) ───────── */}
               <Row
                 label="Net Income"
                 labelNode={
@@ -3035,6 +3013,28 @@ export function PLTable({
                 cellTitle={tooltipFor("netIncome")}
                 cellPeriodTitle={periodTooltipFor("netIncome")}
               />
+              {showTaxRows && (
+                <>
+                  <TaxConfigRow field="iibb_pct" label="IIBB — tasa (% sobre revenue)" />
+                  <Row
+                    label="IIBB (% sobre revenue)"
+                    values={iibbAmount}
+                    negative
+                    indent
+                    cellTitle={tooltipFor("iibbAmount")}
+                    cellPeriodTitle={periodTooltipFor("iibbAmount")}
+                  />
+                  <TaxConfigRow field="income_tax_pct" label="Income tax — tasa (% sobre ganancia)" />
+                  <Row
+                    label="Income tax (% sobre ganancia)"
+                    values={incomeTax}
+                    negative
+                    indent
+                    cellTitle={tooltipFor("incomeTax")}
+                    cellPeriodTitle={periodTooltipFor("incomeTax")}
+                  />
+                </>
+              )}
             </tbody>
           </table>
         </div>
