@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { fetchVentasAggregates, type VentasAggregateRow } from '@/lib/ventas-data';
 import Link from 'next/link';
 import { ArrowUp, ArrowDown, Minus, ChevronDown } from 'lucide-react';
 import { cn, displayProductLabelFromName, formatCurrency, formatNumber, formatUSDNumber } from '@/lib/utils';
@@ -215,33 +216,19 @@ export function ComparisonTable({ budgetName, months, countries, products }: Com
         return;
       }
 
-      // 2. Fetch Real 2025 - SIN FILTROS EN QUERY (aplicar después para mejor control)
-      let real2025Query = supabase
-        .from('ventas_mensuales_view')
-        .select('*')
-        .eq('año', 2025);
-
-      const { data: real2025Data, error: real2025Error } = await real2025Query;
-      if (real2025Error) {
-        console.error('❌ Error fetching real 2025 data:', real2025Error);
-        // No lanzar error, continuar con array vacío
+      // 2–3. Ventas reales agregadas (RPC rápido; evita timeout de ventas_mensuales_view)
+      let safeReal2025Data: VentasAggregateRow[] = [];
+      let safeReal2026Data: VentasAggregateRow[] = [];
+      try {
+        const [rows2025, rows2026] = await Promise.all([
+          fetchVentasAggregates({ years: [2025] }),
+          fetchVentasAggregates({ years: [2026] }),
+        ]);
+        safeReal2025Data = rows2025;
+        safeReal2026Data = rows2026;
+      } catch (salesError) {
+        console.error('❌ Error fetching real sales data:', salesError);
       }
-
-      // 3. Fetch Real 2026 - SIN FILTROS EN QUERY (aplicar después para mejor control)
-      let real2026Query = supabase
-        .from('ventas_mensuales_view')
-        .select('*')
-        .eq('año', 2026);
-
-      const { data: real2026Data, error: real2026Error } = await real2026Query;
-      if (real2026Error) {
-        console.error('❌ Error fetching real 2026 data:', real2026Error);
-        // No lanzar error, simplemente continuar sin datos de 2026
-      }
-      
-      // No requerir datos de ventas para continuar, pueden ser 0 o null
-      const safeReal2025Data = real2025Data || [];
-      const safeReal2026Data = real2026Data || [];
 
       console.log('📊 Budget Data:', budgetData?.length, 'registros');
       console.log('📈 Real Data (2025):', safeReal2025Data?.length, 'registros');

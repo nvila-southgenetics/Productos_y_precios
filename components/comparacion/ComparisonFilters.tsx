@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { getDistinctVentasProducts } from '@/lib/ventas-data';
 import { capitalizeFirstLetter, cn } from '@/lib/utils';
 import { ProductMultiSearchFilter } from '@/components/dashboard/ProductMultiSearchFilter';
 import { MonthRangeFilter } from "@/components/filters/MonthRangeFilter"
@@ -69,32 +70,17 @@ export function ComparisonFilters({
   const fetchProducts = async () => {
     try {
       // Obtener productos únicos de budget y ventas (2025 y 2026)
-      const [budgetData, sales2025Data, sales2026Data] = await Promise.all([
+      const [budgetData, salesProducts] = await Promise.all([
         supabase
           .from('budget')
           .select('product_name')
           .eq('year', 2026)
           .eq('budget_name', selectedBudgetName),
-        supabase
-          .from('ventas_mensuales_view')
-          .select('producto')
-          .eq('año', 2025),
-        supabase
-          .from('ventas_mensuales_view')
-          .select('producto')
-          .eq('año', 2026),
+        getDistinctVentasProducts([2025, 2026]),
       ]);
 
       const budgetProducts = budgetData.data?.map((b: any) => b.product_name) || [];
-      const sales2025Products = sales2025Data.data?.map((s: any) => s.producto) || [];
-      const sales2026Products = sales2026Data.data?.map((s: any) => s.producto) || [];
-      
-      // Manejar errores sin fallar
-      if (sales2026Data.error) {
-        console.warn('⚠️ Error al obtener productos de 2026:', sales2026Data.error);
-      }
-      
-      const uniqueProducts = [...new Set([...budgetProducts, ...sales2025Products, ...sales2026Products])].sort();
+      const uniqueProducts = [...new Set([...budgetProducts, ...salesProducts])].sort();
       setProducts(uniqueProducts);
     } catch (error) {
       console.error('Error fetching products:', error);

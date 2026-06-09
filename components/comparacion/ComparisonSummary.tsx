@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { fetchVentasAggregates, type VentasAggregateRow } from '@/lib/ventas-data';
 import { TrendingUp, TrendingDown, Equal } from 'lucide-react';
 import { getCountryForCompany } from '@/lib/auth-constants';
 import { formatNumber } from '@/lib/utils';
@@ -146,33 +147,18 @@ export function ComparisonSummary({ budgetName, months, countries, products }: C
       const { data: budgetData, error: budgetError } = await budgetQuery;
       if (budgetError) throw budgetError;
 
-      // 2. Fetch Real 2025 - SIN FILTROS PREVIOS (aplicar después)
-      let real2025Query = supabase
-        .from('ventas_mensuales_view')
-        .select('*')
-        .eq('año', 2025);
-
-      const { data: real2025Data, error: real2025Error } = await real2025Query;
-      if (real2025Error) {
-        console.error('❌ Error fetching real 2025 data:', real2025Error);
-        // No lanzar error, continuar con array vacío
+      let safeReal2025Data: VentasAggregateRow[] = [];
+      let safeReal2026Data: VentasAggregateRow[] = [];
+      try {
+        const [rows2025, rows2026] = await Promise.all([
+          fetchVentasAggregates({ years: [2025] }),
+          fetchVentasAggregates({ years: [2026] }),
+        ]);
+        safeReal2025Data = rows2025;
+        safeReal2026Data = rows2026;
+      } catch (salesError) {
+        console.error('❌ Error fetching real sales data:', salesError);
       }
-
-      // 3. Fetch Real 2026 - SIN FILTROS PREVIOS (aplicar después)
-      let real2026Query = supabase
-        .from('ventas_mensuales_view')
-        .select('*')
-        .eq('año', 2026);
-
-      const { data: real2026Data, error: real2026Error } = await real2026Query;
-      if (real2026Error) {
-        console.error('❌ Error fetching real 2026 data:', real2026Error);
-        // No lanzar error, simplemente continuar sin datos de 2026
-      }
-
-      // No requerir datos de ventas para continuar, pueden ser 0 o null
-      const safeReal2025Data = real2025Data || [];
-      const safeReal2026Data = real2026Data || [];
 
       if (process.env.NODE_ENV === 'development') {
         console.log('📊 Summary - Real Data 2025:', safeReal2025Data?.length, 'registros');

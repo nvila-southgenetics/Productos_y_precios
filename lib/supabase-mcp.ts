@@ -5,6 +5,12 @@
 
 import { supabase } from './supabase'
 import { productMatchesCategoryFilter } from './product-categories'
+import {
+  fetchVentasAggregates,
+  getDistinctVentasPeriods,
+  getDistinctVentasProducts,
+  getVentasCompanies,
+} from './ventas-data'
 
 export interface Product {
   id: string
@@ -1076,41 +1082,17 @@ export async function getTotalSalesByProductIds(
 }
 
 /**
- * Obtiene las compañías únicas de ventas mensuales.
- * En el navegador usa /api/companies (sesión servidor + service role) para evitar
- * fallos del cliente Supabase en Vercel.
+ * Obtiene las compañías únicas de ventas (RPC rápido vía API servidor).
  */
 export async function getCompanies(): Promise<string[]> {
-  if (typeof window !== "undefined") {
-    const res = await fetch("/api/companies", { credentials: "include" })
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}))
-      throw new Error(
-        typeof body.error === "string" ? body.error : `Error al cargar compañías (${res.status})`
-      )
-    }
-    return res.json()
-  }
-
-  const { fetchDistinctVentasCompanies } = await import("./ventas-companies")
-  const { createAdminClient } = await import("./supabase/admin")
-  return fetchDistinctVentasCompanies(createAdminClient())
+  return getVentasCompanies()
 }
 
 /**
- * Obtiene los productos únicos de ventas mensuales
+ * Obtiene los productos únicos de ventas
  */
 export async function getProductsFromSales(): Promise<string[]> {
-  const { data, error } = await supabase
-    .from('ventas_mensuales_view')
-    .select('producto')
-    .order('producto', { ascending: true })
-
-  if (error) throw error
-  if (!data) return []
-
-  const uniqueProducts: string[] = Array.from(new Set(data.map((item: { producto: string }) => item.producto)))
-  return uniqueProducts
+  return getDistinctVentasProducts()
 }
 
 /** Evolución mensual de ventas (para gráfico 2025 vs 2026) */
@@ -1128,28 +1110,27 @@ const MES_LABELS: Record<number, string> = {
   7: 'Jul', 8: 'Ago', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dic',
 }
 
-const VENTAS_MENSUALES_PAGE = 1000
-const VENTAS_MENSUALES_SELECT =
-  'producto, compañia, cantidad_ventas, monto_total, mes, año, periodo, precio_promedio'
-
-/** Pagina ventas_mensuales_view para evitar truncado silencioso a 1000 filas de PostgREST. */
-async function fetchAllVentasMensualesRows(
-  applyFilters: (q: ReturnType<typeof supabase.from>) => ReturnType<typeof supabase.from>,
-  columns = VENTAS_MENSUALES_SELECT
-): Promise<Record<string, unknown>[]> {
-  const all: Record<string, unknown>[] = []
-  let offset = 0
-  while (true) {
-    let q = supabase.from('ventas_mensuales_view').select(columns)
-    q = applyFilters(q)
-    const { data, error } = await q.range(offset, offset + VENTAS_MENSUALES_PAGE - 1)
-    if (error) throw error
-    const batch = (data || []) as Record<string, unknown>[]
-    all.push(...batch)
-    if (batch.length < VENTAS_MENSUALES_PAGE) break
-    offset += VENTAS_MENSUALES_PAGE
+function companiesFilterFromParam(company: string | string[]): string[] | undefined {
+  if (Array.isArray(company)) {
+    const list = company.map((c) => c.trim()).filter(Boolean)
+    if (list.length === 0) return undefined
+    if (list.length === 1 && isAllCompaniesLabel(list[0])) return undefined
+    return list
   }
-  return all
+  const normalized = company.trim()
+  if (!normalized || isAllCompaniesLabel(normalized)) return undefined
+  return [normalized]
+}
+
+function productsFilterFromParam(productName?: string | string[]): string[] | undefined {
+  if (Array.isArray(productName)) {
+    const list = productName.map((p) => p.trim()).filter(Boolean)
+    return list.length ? list : undefined
+  }
+  if (typeof productName === "string" && productName.trim() && productName !== "Todos") {
+    return [productName.trim()]
+  }
+  return undefined
 }
 
 function isAllCompaniesLabel(company: string): boolean {
@@ -1184,20 +1165,20 @@ export async function getMonthlySalesEvolution(
 
   let data: Record<string, unknown>[]
   try {
-    data = await fetchAllVentasMensualesRows((q) => {
-      let query = q.in('año', [2025, 2026])
-      if (companyList && companyList.length > 0) {
-        query = query.in('compañia', companyList)
-      } else if (normalizedCompany && !isAllCompaniesLabel(normalizedCompany)) {
-        query = query.eq('compañia', normalizedCompany)
-      }
-      if (normalizedProducts && normalizedProducts.length > 0) {
-        query = query.in('producto', normalizedProducts)
-      } else if (normalizedProduct && normalizedProduct !== 'Todos') {
-        query = query.eq('producto', normalizedProduct)
-      }
-      return query
-    }, 'año, mes, periodo, cantidad_ventas, monto_total, compañia, producto')
+    const companies =
+      companyList && companyList.length > 0
+        ? companyList
+        : normalizedCompany && !isAllCompaniesLabel(normalizedCompany)
+          ? [normalizedCompany]
+          : undefined
+    const products =
+      normalizedProducts && normalizedProducts.length > 0
+        ? normalizedProducts
+        : normalizedProduct && normalizedProduct !== "Todos"
+          ? [normalizedProduct]
+          : undefined
+    const rows = await fetchVentasAggregates({ years: [2025, 2026], companies, products })
+    data = rows as unknown as Record<string, unknown>[]
   } catch (error) {
     console.error('Error getMonthlySalesEvolution:', error)
     throw error
@@ -1288,28 +1269,15 @@ export async function getMonthlySales(
     normalizedCompany = company.trim()
   }
 
-  const sales = await fetchAllVentasMensualesRows((q) => {
-    let filtered = q.order('cantidad_ventas', { ascending: false })
-    if (Array.isArray(company)) {
-      const list = company.map((c) => c.trim()).filter(Boolean)
-      if (list.length === 1 && !isAllCompaniesLabel(list[0])) {
-        filtered = filtered.eq('compañia', list[0])
-      } else if (list.length > 1) {
-        filtered = filtered.in('compañia', list)
-      }
-    } else if (company.trim() && !isAllCompaniesLabel(company.trim())) {
-      filtered = filtered.eq('compañia', company.trim())
-    }
-    if (periodo) {
-      const formattedPeriodo = periodo.includes('-') ? periodo : `${periodo.slice(0, 4)}-${periodo.slice(4).padStart(2, '0')}`
-      filtered = filtered.eq('periodo', formattedPeriodo)
-    }
-    if (Array.isArray(productName) && productName.length > 0) {
-      filtered = filtered.in('producto', productName)
-    } else if (typeof productName === 'string' && productName !== 'Todos') {
-      filtered = filtered.eq('producto', productName)
-    }
-    return filtered
+  const formattedPeriodo = periodo
+    ? periodo.includes("-")
+      ? periodo
+      : `${periodo.slice(0, 4)}-${periodo.slice(4).padStart(2, "0")}`
+    : undefined
+  const sales = await fetchVentasAggregates({
+    companies: companiesFilterFromParam(company),
+    periodo: formattedPeriodo,
+    products: productsFilterFromParam(productName),
   })
 
   if (!sales) return []
@@ -1441,61 +1409,15 @@ export async function getMonthlySales(
  * Ordenados de forma ascendente (enero primero)
  */
 export async function getAvailablePeriods(company: string | string[]): Promise<string[]> {
-  let query = supabase
-    .from('ventas_mensuales_view')
-    .select('periodo')
-    .order('periodo', { ascending: true }) // ✅ Cambiado a true para orden ascendente
-
-  let logLabel = ""
-  if (Array.isArray(company)) {
-    const list = company.map((c) => c.trim()).filter(Boolean)
-    logLabel = list.join(", ")
-    if (list.length === 0) return []
-    if (list.length === 1) {
-      const only = list[0]
-      if (!isAllCompaniesLabel(only)) {
-        query = query.eq('compañia', only)
-      }
-    } else {
-      query = query.in('compañia', list)
-    }
-  } else {
-    const normalizedCompany = company.trim()
-    logLabel = normalizedCompany
-    if (!isAllCompaniesLabel(normalizedCompany)) {
-      query = query.eq('compañia', normalizedCompany)
-    }
-  }
-
-  const { data, error } = await query
-
-  if (error) {
-    console.error('Error en getAvailablePeriods:', { error, company: logLabel })
-    throw error
-  }
-  if (!data) {
-    console.warn(`⚠️ No se encontraron períodos para: ${logLabel}`)
+  const logLabel = Array.isArray(company) ? company.join(", ") : company.trim()
+  const companies = companiesFilterFromParam(company)
+  if (Array.isArray(company) && company.map((c) => c.trim()).filter(Boolean).length === 0) {
     return []
   }
 
-  const uniquePeriods: string[] = Array.from(
-    new Set(
-      (data as any[])
-        .map((item: any) => item?.periodo)
-        .filter((p: any) => typeof p === "string" && p.trim().length > 0)
-    )
-  )
-
-  console.log(`📅 Períodos encontrados para ${logLabel}:`, uniquePeriods)
-  
-  // Ordenar numéricamente para asegurar orden correcto (2025-01, 2025-02, etc.)
-  return uniquePeriods.sort((a, b) => {
-    const [yearA, monthA] = a.split('-').map(Number)
-    const [yearB, monthB] = b.split('-').map(Number)
-    
-    if (yearA !== yearB) return yearA - yearB
-    return monthA - monthB
-  })
+  const periods = await getDistinctVentasPeriods(companies)
+  console.log(`📅 Períodos encontrados para ${logLabel}:`, periods)
+  return periods
 }
 
 /**
@@ -1521,25 +1443,10 @@ export async function getAnnualTotal(
     normalizedCompany = company.trim()
   }
 
-  const sales = await fetchAllVentasMensualesRows((q) => {
-    let filtered = q
-    if (Array.isArray(company)) {
-      const list = company.map((c) => c.trim()).filter(Boolean)
-      if (list.length === 1 && !isAllCompaniesLabel(list[0])) {
-        filtered = filtered.eq('compañia', list[0])
-      } else if (list.length > 1) {
-        filtered = filtered.in('compañia', list)
-      }
-    } else if (company.trim() && !isAllCompaniesLabel(company.trim())) {
-      filtered = filtered.eq('compañia', company.trim())
-    }
-    if (Array.isArray(productName) && productName.length > 0) {
-      filtered = filtered.in('producto', productName)
-    } else if (typeof productName === 'string' && productName !== 'Todos') {
-      filtered = filtered.eq('producto', productName)
-    }
-    return filtered
-  }, 'producto, compañia, cantidad_ventas, monto_total, año')
+  const sales = await fetchVentasAggregates({
+    companies: companiesFilterFromParam(company),
+    products: productsFilterFromParam(productName),
+  })
 
   if (!sales) return []
 
@@ -1672,30 +1579,26 @@ async function getProductsWithMetrics(
     isAllCompanies = isAllCompaniesLabel(normalizedSingle)
   }
 
-  const sales = await fetchAllVentasMensualesRows((q) => {
-    let filtered = q
-    if (multiIn) {
-      filtered = filtered.in('compañia', multiIn)
-    } else if (normalizedSingle && !isAllCompanies) {
-      filtered = filtered.eq('compañia', normalizedSingle)
-    }
-    if (year && year !== "Todos") {
-      filtered = filtered.eq('año', parseInt(year))
-    }
-    if (monthRange && monthRange.from >= 1 && monthRange.to >= 1) {
-      const a = Math.min(monthRange.from, monthRange.to)
-      const b = Math.max(monthRange.from, monthRange.to)
-      filtered = filtered.gte('mes', a).lte('mes', b)
-    } else if (month && month !== "Todos") {
-      filtered = filtered.eq('mes', parseInt(month))
-    }
-    if (Array.isArray(productName) && productName.length > 0) {
-      filtered = filtered.in('producto', productName)
-    } else if (typeof productName === 'string' && productName !== 'Todos') {
-      filtered = filtered.eq('producto', productName)
-    }
-    return filtered
-  }, 'producto, compañia, cantidad_ventas, monto_total, mes, año, periodo')
+  const monthFrom =
+    monthRange && monthRange.from >= 1 && monthRange.to >= 1
+      ? Math.min(monthRange.from, monthRange.to)
+      : month && month !== "Todos"
+        ? parseInt(month)
+        : undefined
+  const monthTo =
+    monthRange && monthRange.from >= 1 && monthRange.to >= 1
+      ? Math.max(monthRange.from, monthRange.to)
+      : month && month !== "Todos"
+        ? parseInt(month)
+        : undefined
+
+  const sales = await fetchVentasAggregates({
+    companies: multiIn ?? (normalizedSingle && !isAllCompanies ? [normalizedSingle] : undefined),
+    years: year && year !== "Todos" ? [parseInt(year)] : undefined,
+    monthFrom,
+    monthTo,
+    products: productsFilterFromParam(productName),
+  })
 
   if (!sales) return []
   

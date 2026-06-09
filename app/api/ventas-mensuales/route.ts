@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server"
 import { getCurrentUserPermissions } from "@/lib/auth-permissions"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { getCountryForCompany } from "@/lib/auth-constants"
+import {
+  fetchVentasAggregatesServer,
+  filterRowsByAllowedCountries,
+} from "@/lib/ventas-data"
 import type { VentasMensualRow } from "@/lib/pl-ventas-fetch"
 
+/** Compat: delega a get_ventas_mensuales_agg. Preferir /api/ventas-data. */
 export async function GET(request: Request) {
   const perm = await getCurrentUserPermissions()
   if (!perm) {
@@ -20,24 +24,22 @@ export async function GET(request: Request) {
   const companies =
     companiesParam && companiesParam.trim()
       ? companiesParam.split(",").map((c) => c.trim()).filter(Boolean)
-      : null
+      : undefined
 
   try {
     const admin = createAdminClient()
-    const { data, error } = await admin.rpc("get_ventas_mensuales_pl", {
-      p_year: year,
-      p_companies: companies,
-    })
-    if (error) throw error
-
-    const rows = (data ?? []) as VentasMensualRow[]
-    if (perm.isAdmin) return NextResponse.json(rows)
-
-    const filtered = rows.filter((row) => {
-      const country = getCountryForCompany(row.compañia)
-      return !country || perm.allowedCountries.includes(country)
-    })
-    return NextResponse.json(filtered)
+    let rows = await fetchVentasAggregatesServer(admin, { years: [year], companies })
+    if (!perm.isAdmin) {
+      rows = filterRowsByAllowedCountries(rows, perm.allowedCountries)
+    }
+    const payload: VentasMensualRow[] = rows.map((r) => ({
+      producto: r.producto,
+      mes: r.mes,
+      cantidad_ventas: r.cantidad_ventas,
+      monto_total: r.monto_total,
+      compañia: r.compañia,
+    }))
+    return NextResponse.json(payload)
   } catch (e) {
     const message = e instanceof Error ? e.message : "Error al cargar ventas"
     return NextResponse.json({ error: message }, { status: 500 })
