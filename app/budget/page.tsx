@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { Upload, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { BudgetFilters } from "@/components/budget/BudgetFilters"
@@ -26,10 +26,17 @@ export default function BudgetPage() {
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [monthFrom, setMonthFrom] = useState<number>(1)
   const [monthTo, setMonthTo] = useState<number>(12)
-  const selectedMonths = monthsFromRange({ fromMonth: monthFrom, toMonth: monthTo })
   const [selectedChannels, setSelectedChannels] = useState<string[]>([])
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [products, setProducts] = useState<string[]>([])
+  const selectedMonths = useMemo(
+    () => monthsFromRange({ fromMonth: monthFrom, toMonth: monthTo }),
+    [monthFrom, monthTo]
+  )
+  const monthsKey = selectedMonths.join(",")
+  const countriesKey = selectedCountries.join(",")
+  const productsKey = selectedProducts.join(",")
+  const channelsKey = selectedChannels.join(",")
 
   const [tableRows, setTableRows] = useState<BudgetRow[]>([])
   const [summary, setSummary] = useState<BudgetSummaryData>({
@@ -41,20 +48,21 @@ export default function BudgetPage() {
   const [aliasByName, setAliasByName] = useState<Record<string, string>>({})
   const [budgetLoading, setBudgetLoading] = useState(true)
   const fetchRequestId = useRef(0)
+  const countriesInitialized = useRef(false)
 
   const allChannelValues = ["Paciente", "Pacientes desc", "Aseguradoras", "Instituciones SFL", "Gobierno", "Distribuidores"]
 
   useEffect(() => {
-    if (!permLoading && !isAdmin && allowedCountries.length > 0) {
-      setSelectedCountries(allowedCountries.length === 1 ? [allowedCountries[0]] : [...allowedCountries])
+    if (permLoading || countriesInitialized.current) return
+    countriesInitialized.current = true
+    if (isAdmin) {
+      setSelectedCountries(["AR", "CL", "CO", "MX", "UY", "VE", "PE", "BO", "TT", "BS", "BB", "BM", "KY"])
+    } else if (allowedCountries.length > 0) {
+      setSelectedCountries(
+        allowedCountries.length === 1 ? [allowedCountries[0]] : [...allowedCountries]
+      )
     }
   }, [permLoading, isAdmin, allowedCountries])
-
-  useEffect(() => {
-    if (!permLoading && isAdmin) {
-      setSelectedCountries(["AR", "CL", "CO", "MX", "UY", "VE", "PE", "BO", "TT", "BS", "BB", "BM", "KY"])
-    }
-  }, [permLoading, isAdmin])
 
   useEffect(() => {
     setSelectedChannels(allChannelValues)
@@ -128,15 +136,16 @@ export default function BudgetPage() {
   }, [
     selectedYear,
     selectedBudgetName,
-    selectedCountries,
-    selectedProducts,
-    selectedMonths,
-    selectedChannels,
+    countriesKey,
+    productsKey,
+    monthsKey,
+    channelsKey,
   ])
 
   useEffect(() => {
+    if (permLoading || !countriesInitialized.current) return
     reloadBudgetData()
-  }, [reloadBudgetData])
+  }, [reloadBudgetData, permLoading])
 
   return (
     <div className="min-h-screen bg-gradient-to-r from-blue-900 via-blue-950 to-slate-900">
