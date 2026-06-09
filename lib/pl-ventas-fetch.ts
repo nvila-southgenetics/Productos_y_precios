@@ -1,5 +1,3 @@
-import { supabase } from "@/lib/supabase"
-
 export type VentasMensualRow = {
   producto: string
   mes: number
@@ -8,31 +6,33 @@ export type VentasMensualRow = {
   compañia: string | null
 }
 
-const PAGE_SIZE = 1000
-
-/** Ventas mensuales paginadas (evita timeout y mejora respuesta en filtros del P&L). */
+/**
+ * Ventas mensuales agregadas para P&L.
+ * Usa RPC sobre `ventas` (rápido); ventas_mensuales_view hace timeout en producción.
+ */
 export async function fetchVentasMensualesPaginated(
   year: number,
   companies: string[] | null
 ): Promise<VentasMensualRow[]> {
-  const all: VentasMensualRow[] = []
-  let offset = 0
-
-  while (true) {
-    let q = supabase
-      .from("ventas_mensuales_view")
-      .select("producto, mes, cantidad_ventas, monto_total, compañia")
-      .eq("año", year)
-    if (companies?.length) q = q.in("compañia", companies)
-
-    const { data, error } = await q.range(offset, offset + PAGE_SIZE - 1)
-    if (error) throw error
-
-    const batch = (data || []) as VentasMensualRow[]
-    all.push(...batch)
-    if (batch.length < PAGE_SIZE) break
-    offset += PAGE_SIZE
+  if (typeof window !== "undefined") {
+    const params = new URLSearchParams({ year: String(year) })
+    if (companies?.length) params.set("companies", companies.join(","))
+    const res = await fetch(`/api/ventas-mensuales?${params}`, { credentials: "include" })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(
+        typeof body.error === "string" ? body.error : `Error al cargar ventas (${res.status})`
+      )
+    }
+    return res.json()
   }
 
-  return all
+  const { createAdminClient } = await import("./supabase/admin")
+  const admin = createAdminClient()
+  const { data, error } = await admin.rpc("get_ventas_mensuales_pl", {
+    p_year: year,
+    p_companies: companies,
+  })
+  if (error) throw error
+  return (data ?? []) as VentasMensualRow[]
 }
