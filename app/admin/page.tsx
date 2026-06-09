@@ -4,7 +4,12 @@ import { useEffect, useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { getAllCountryCodes } from "@/lib/auth-constants"
-import { UserPlus, Loader2, Shield, Globe, Pencil, Check, X, Users } from "lucide-react"
+import {
+  APP_PAGES,
+  formatAllowedPagesLabel,
+  type AppPageId,
+} from "@/lib/page-access"
+import { UserPlus, Loader2, Shield, Globe, Pencil, Check, X, Users, LayoutGrid } from "lucide-react"
 
 type UserRole = "admin" | "editor" | "viewer"
 
@@ -14,6 +19,7 @@ interface UserRow {
   created_at: string
   role?: string
   allowed_countries?: string[]
+  allowed_pages?: string[] | null
 }
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -46,12 +52,16 @@ export default function AdminPage() {
   const [inviteEmail, setInviteEmail] = useState("")
   const [inviteRole, setInviteRole] = useState<UserRole>("viewer")
   const [inviteCountries, setInviteCountries] = useState<string[]>([])
+  const [inviteRestrictPages, setInviteRestrictPages] = useState(false)
+  const [invitePages, setInvitePages] = useState<AppPageId[]>([])
   const [inviting, setInviting] = useState(false)
   const [inviteMessage, setInviteMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null)
 
   const [editingUserId, setEditingUserId] = useState<string | null>(null)
   const [editRole, setEditRole] = useState<UserRole>("viewer")
   const [editCountries, setEditCountries] = useState<string[]>([])
+  const [editRestrictPages, setEditRestrictPages] = useState(false)
+  const [editPages, setEditPages] = useState<AppPageId[]>([])
   const [saving, setSaving] = useState(false)
 
   const countries = getAllCountryCodes()
@@ -104,6 +114,8 @@ export default function AdminPage() {
           email: inviteEmail.trim(),
           role: inviteRole,
           allowed_countries: inviteRole === "admin" ? countries.slice() : inviteCountries,
+          allowed_pages:
+            inviteRole !== "admin" && inviteRestrictPages ? invitePages : null,
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -114,6 +126,8 @@ export default function AdminPage() {
       setInviteMessage({ type: "ok", text: data.message || "Invitación enviada" })
       setInviteEmail("")
       setInviteCountries([])
+      setInviteRestrictPages(false)
+      setInvitePages([])
       setInviteRole("viewer")
       await loadUsers()
     } finally {
@@ -131,6 +145,11 @@ export default function AdminPage() {
     setEditingUserId(user.id)
     setEditRole((user.role as UserRole) || "viewer")
     setEditCountries(user.allowed_countries ?? [])
+    const pages = (user.allowed_pages ?? []).filter((p): p is AppPageId =>
+      APP_PAGES.some((def) => def.id === p)
+    )
+    setEditRestrictPages(pages.length > 0)
+    setEditPages(pages)
   }
 
   function cancelEditing() {
@@ -147,6 +166,7 @@ export default function AdminPage() {
           user_id: userId,
           role: editRole,
           allowed_countries: editRole === "admin" ? countries.slice() : editCountries,
+          allowed_pages: editRole !== "admin" && editRestrictPages ? editPages : null,
         }),
       })
       if (res.ok) {
@@ -164,6 +184,22 @@ export default function AdminPage() {
     )
   }
 
+  function toggleInvitePage(pageId: AppPageId) {
+    setInvitePages((prev) =>
+      prev.includes(pageId) ? prev.filter((p) => p !== pageId) : [...prev, pageId]
+    )
+  }
+
+  function toggleEditPage(pageId: AppPageId) {
+    setEditPages((prev) =>
+      prev.includes(pageId) ? prev.filter((p) => p !== pageId) : [...prev, pageId]
+    )
+  }
+
+  const invitePagesInvalid =
+    inviteRole !== "admin" && inviteRestrictPages && invitePages.length === 0
+  const editPagesInvalid = editRole !== "admin" && editRestrictPages && editPages.length === 0
+
   return (
     <div className="min-h-screen bg-gradient-to-r from-blue-900 via-blue-950 to-slate-900">
       <div className="container mx-auto py-8 px-4 max-w-5xl">
@@ -172,7 +208,7 @@ export default function AdminPage() {
           <h1 className="text-3xl font-bold text-white">Panel de Administración</h1>
         </div>
         <p className="text-white/70 mb-8">
-          Invitá usuarios, asigná roles (lectura/escritura) y restringí el acceso por país.
+          Invitá usuarios, asigná roles, países y opcionalmente limitá el acceso a ciertas hojas.
         </p>
 
         {error && (
@@ -233,38 +269,92 @@ export default function AdminPage() {
                 </div>
 
                 {inviteRole !== "admin" && (
-                  <div>
-                    <label className="block text-sm font-medium text-white/90 mb-2">
-                      <Globe className="h-4 w-4 inline mr-1" />
-                      Países permitidos
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {countries.map((code) => (
-                        <button
-                          key={code}
-                          type="button"
-                          onClick={() => toggleInviteCountry(code)}
-                          className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
-                            inviteCountries.includes(code)
-                              ? "bg-blue-500/30 border-blue-400/50 text-white"
-                              : "bg-white/5 border-white/15 text-white/60 hover:bg-white/10"
-                          }`}
-                        >
-                          {COUNTRY_FLAGS[code]} {code}
-                        </button>
-                      ))}
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-white/90 mb-2">
+                        <Globe className="h-4 w-4 inline mr-1" />
+                        Países permitidos
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {countries.map((code) => (
+                          <button
+                            key={code}
+                            type="button"
+                            onClick={() => toggleInviteCountry(code)}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                              inviteCountries.includes(code)
+                                ? "bg-blue-500/30 border-blue-400/50 text-white"
+                                : "bg-white/5 border-white/15 text-white/60 hover:bg-white/10"
+                            }`}
+                          >
+                            {COUNTRY_FLAGS[code]} {code}
+                          </button>
+                        ))}
+                      </div>
+                      {inviteCountries.length === 0 && (
+                        <p className="text-xs text-amber-300/80 mt-1.5">
+                          Seleccioná al menos un país para que el usuario pueda ver datos.
+                        </p>
+                      )}
                     </div>
-                    {inviteCountries.length === 0 && (
-                      <p className="text-xs text-amber-300/80 mt-1.5">
-                        Seleccioná al menos un país para que el usuario pueda ver datos.
-                      </p>
-                    )}
-                  </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-white/90 mb-2">
+                        <LayoutGrid className="h-4 w-4 inline mr-1" />
+                        Hojas permitidas
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-white/80 mb-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!inviteRestrictPages}
+                          onChange={() => setInviteRestrictPages(false)}
+                          className="rounded border-white/30"
+                        />
+                        Acceso a todas las hojas
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-white/80 mb-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={inviteRestrictPages}
+                          onChange={() => setInviteRestrictPages(true)}
+                          className="rounded border-white/30"
+                        />
+                        Solo hojas seleccionadas
+                      </label>
+                      {inviteRestrictPages && (
+                        <div className="flex flex-wrap gap-2">
+                          {APP_PAGES.map((page) => (
+                            <button
+                              key={page.id}
+                              type="button"
+                              onClick={() => toggleInvitePage(page.id)}
+                              className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                                invitePages.includes(page.id)
+                                  ? "bg-violet-500/30 border-violet-400/50 text-white"
+                                  : "bg-white/5 border-white/15 text-white/60 hover:bg-white/10"
+                              }`}
+                            >
+                              {page.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {invitePagesInvalid && (
+                        <p className="text-xs text-amber-300/80 mt-1.5">
+                          Seleccioná al menos una hoja (ej. Médicos y Comparación).
+                        </p>
+                      )}
+                    </div>
+                  </>
                 )}
 
                 <Button
                   type="submit"
-                  disabled={inviting || (inviteRole !== "admin" && inviteCountries.length === 0)}
+                  disabled={
+                    inviting ||
+                    (inviteRole !== "admin" && inviteCountries.length === 0) ||
+                    invitePagesInvalid
+                  }
                   className="bg-blue-600 hover:bg-blue-700 text-white border-0"
                 >
                   {inviting ? (
@@ -309,7 +399,7 @@ export default function AdminPage() {
                             <div className="flex items-center gap-2">
                               <Button
                                 size="sm"
-                                disabled={saving}
+                                disabled={saving || editPagesInvalid}
                                 onClick={() => savePermissions(u.id)}
                                 className="bg-emerald-600 hover:bg-emerald-700 text-white border-0 h-8"
                               >
@@ -345,25 +435,75 @@ export default function AdminPage() {
                               </select>
                             </div>
                             {editRole !== "admin" && (
-                              <div>
-                                <label className="block text-xs font-medium text-white/70 mb-1">Países</label>
-                                <div className="flex flex-wrap gap-1.5">
-                                  {countries.map((code) => (
-                                    <button
-                                      key={code}
-                                      type="button"
-                                      onClick={() => toggleEditCountry(code)}
-                                      className={`px-2 py-1 rounded text-xs font-medium border transition-all ${
-                                        editCountries.includes(code)
-                                          ? "bg-blue-500/30 border-blue-400/50 text-white"
-                                          : "bg-white/5 border-white/15 text-white/50 hover:bg-white/10"
-                                      }`}
-                                    >
-                                      {COUNTRY_FLAGS[code]} {code}
-                                    </button>
-                                  ))}
+                              <>
+                                <div>
+                                  <label className="block text-xs font-medium text-white/70 mb-1">Países</label>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {countries.map((code) => (
+                                      <button
+                                        key={code}
+                                        type="button"
+                                        onClick={() => toggleEditCountry(code)}
+                                        className={`px-2 py-1 rounded text-xs font-medium border transition-all ${
+                                          editCountries.includes(code)
+                                            ? "bg-blue-500/30 border-blue-400/50 text-white"
+                                            : "bg-white/5 border-white/15 text-white/50 hover:bg-white/10"
+                                        }`}
+                                      >
+                                        {COUNTRY_FLAGS[code]} {code}
+                                      </button>
+                                    ))}
+                                  </div>
                                 </div>
-                              </div>
+                                <div className="md:col-span-2">
+                                  <label className="block text-xs font-medium text-white/70 mb-1">
+                                    Hojas permitidas
+                                  </label>
+                                  <div className="flex flex-wrap gap-3 mb-2 text-xs text-white/70">
+                                    <label className="flex items-center gap-1.5 cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        checked={!editRestrictPages}
+                                        onChange={() => setEditRestrictPages(false)}
+                                        className="rounded border-white/30"
+                                      />
+                                      Todas
+                                    </label>
+                                    <label className="flex items-center gap-1.5 cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        checked={editRestrictPages}
+                                        onChange={() => setEditRestrictPages(true)}
+                                        className="rounded border-white/30"
+                                      />
+                                      Solo seleccionadas
+                                    </label>
+                                  </div>
+                                  {editRestrictPages && (
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {APP_PAGES.map((page) => (
+                                        <button
+                                          key={page.id}
+                                          type="button"
+                                          onClick={() => toggleEditPage(page.id)}
+                                          className={`px-2 py-1 rounded text-xs font-medium border transition-all ${
+                                            editPages.includes(page.id)
+                                              ? "bg-violet-500/30 border-violet-400/50 text-white"
+                                              : "bg-white/5 border-white/15 text-white/50 hover:bg-white/10"
+                                          }`}
+                                        >
+                                          {page.label}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {editPagesInvalid && (
+                                    <p className="text-xs text-amber-300/80 mt-1">
+                                      Seleccioná al menos una hoja.
+                                    </p>
+                                  )}
+                                </div>
+                              </>
                             )}
                           </div>
                         </div>
@@ -385,25 +525,31 @@ export default function AdminPage() {
                             >
                               {ROLE_LABELS[role] || role}
                             </span>
-                            <div className="flex items-center gap-1">
-                              {(u.allowed_countries?.length
-                                ? u.allowed_countries
-                                : []
-                              ).map((c) => (
-                                <span
-                                  key={c}
-                                  className="text-sm"
-                                  title={c}
-                                >
-                                  {COUNTRY_FLAGS[c] || c}
-                                </span>
-                              ))}
-                              {(!u.allowed_countries || u.allowed_countries.length === 0) &&
-                                role !== "admin" && (
-                                  <span className="text-xs text-white/40">Sin países</span>
+                            <div className="flex flex-col items-end gap-0.5">
+                              <div className="flex items-center gap-1">
+                                {(u.allowed_countries?.length
+                                  ? u.allowed_countries
+                                  : []
+                                ).map((c) => (
+                                  <span key={c} className="text-sm" title={c}>
+                                    {COUNTRY_FLAGS[c] || c}
+                                  </span>
+                                ))}
+                                {(!u.allowed_countries || u.allowed_countries.length === 0) &&
+                                  role !== "admin" && (
+                                    <span className="text-xs text-white/40">Sin países</span>
+                                  )}
+                                {role === "admin" && (
+                                  <span className="text-xs text-amber-300/70">Todos</span>
                                 )}
-                              {role === "admin" && (
-                                <span className="text-xs text-amber-300/70">Todos</span>
+                              </div>
+                              {role !== "admin" && (
+                                <span
+                                  className="text-xs text-violet-200/70 max-w-[200px] truncate"
+                                  title={formatAllowedPagesLabel(u.allowed_pages)}
+                                >
+                                  {formatAllowedPagesLabel(u.allowed_pages)}
+                                </span>
                               )}
                             </div>
                             <Button

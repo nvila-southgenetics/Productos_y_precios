@@ -1,5 +1,7 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
+import { canAccessPath, resolveHomePath } from "@/lib/page-access"
+import { fetchUserPageAccess } from "@/lib/fetch-user-page-access"
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request })
@@ -42,10 +44,28 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (user && isAuthRoute) {
-    const url = request.nextUrl.clone()
-    url.pathname = "/productos"
-    return NextResponse.redirect(url)
+  if (user) {
+    let isAdmin = false
+    let allowedPages: string[] | null = null
+    try {
+      const access = await fetchUserPageAccess(user.id)
+      isAdmin = access.isAdmin
+      allowedPages = access.allowedPages
+    } catch {
+      // Sin service role en edge: solo auth básica
+    }
+
+    if (isAuthRoute) {
+      const url = request.nextUrl.clone()
+      url.pathname = resolveHomePath(isAdmin, allowedPages)
+      return NextResponse.redirect(url)
+    }
+
+    if (!canAccessPath(pathname, isAdmin, allowedPages)) {
+      const url = request.nextUrl.clone()
+      url.pathname = resolveHomePath(isAdmin, allowedPages)
+      return NextResponse.redirect(url)
+    }
   }
 
   return response

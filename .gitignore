@@ -27,6 +27,9 @@ yarn-error.log*
 # local env files
 .env*.local
 .env
+
+# MCP secrets (copy from mcp.json.example)
+.cursor/mcp.json
 .env.local
 .env.development.local
 .env.test.local
@@ -38,4 +41,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# DB snapshots before n8n import (JSON can be large)
+/exports/backups/
 

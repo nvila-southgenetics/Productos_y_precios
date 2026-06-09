@@ -52,6 +52,7 @@ function ProductosContent() {
   const [companies, setCompanies] = useState<string[]>([])
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("")
   const [selectedTipo, setSelectedTipo] = useState("")
   const [reviewFilter, setReviewFilter] = useState<"all" | "reviewed" | "not_reviewed">("all")
@@ -174,7 +175,7 @@ function ProductosContent() {
     ) {
       params.set("companies", selectedCompanies.join(","))
     }
-    if (searchQuery) params.set("q", searchQuery)
+    if (debouncedSearch) params.set("q", debouncedSearch)
     if (selectedCategory) params.set("category", selectedCategory)
     if (selectedTipo) params.set("tipo", selectedTipo)
     if (reviewFilter !== "all") params.set("review", reviewFilter)
@@ -184,14 +185,20 @@ function ProductosContent() {
   }, [
     selectedCompanies,
     companies.length,
-    searchQuery,
+    debouncedSearch,
     selectedCategory,
     selectedTipo,
     reviewFilter,
     sortBy,
   ])
 
-  // Mantener la URL en sync (solo después de hidratar desde URL, para no borrar ?companies= al volver)
+  // Debounce búsqueda: evita router.replace y refiltrado en cada tecla.
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 400)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  // Mantener la URL en sync
   useEffect(() => {
     if (!filtersReady || !companies.length) return
 
@@ -231,13 +238,16 @@ function ProductosContent() {
       const productIds = dataAll.map((p) => p.id)
       const MONTH_KEYS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"] as const
 
-      const salesByCountry: Record<string, Record<string, number>> = {}
-      for (const cc of activeCountryCodes) {
-        const companiesForCountry = selectedCompanies.filter((c) => getCountryForCompany(c) === cc)
-        salesByCountry[cc] = await getTotalSalesByProductIds(productIds, {
-          companies: companiesForCountry,
+      const salesEntries = await Promise.all(
+        activeCountryCodes.map(async (cc) => {
+          const companiesForCountry = selectedCompanies.filter((c) => getCountryForCompany(c) === cc)
+          const counts = await getTotalSalesByProductIds(productIds, {
+            companies: companiesForCountry,
+          })
+          return [cc, counts] as const
         })
-      }
+      )
+      const salesByCountry: Record<string, Record<string, number>> = Object.fromEntries(salesEntries)
 
       const displaySales: Record<string, number> = {}
       for (const id of productIds) {
@@ -331,8 +341,8 @@ function ProductosContent() {
   useEffect(() => {
     let filtered = [...products]
 
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase()
+    if (debouncedSearch) {
+      const query = debouncedSearch.toLowerCase()
       filtered = filtered.filter(
         (p) =>
           p.name.toLowerCase().includes(query) ||
@@ -373,7 +383,7 @@ function ProductosContent() {
     }
 
     setFilteredProducts(filtered)
-  }, [products, searchQuery, selectedCategory, selectedTipo, reviewFilter, sortBy, selectedCountry, salesCountByProductId])
+  }, [products, debouncedSearch, selectedCategory, selectedTipo, reviewFilter, sortBy, selectedCountry, salesCountByProductId])
 
   const handleDeleteProduct = async (product: ProductWithOverrides, scope: ProductDeleteScope) => {
     try {
@@ -395,12 +405,20 @@ function ProductosContent() {
     }
   }
 
-  const handleReviewToggle = async (_productId: string, _countryCode: string, _checked: boolean) => {
-    try {
-      await reloadProducts()
-    } catch (error) {
-      console.error("Error reloading products after review toggle:", error)
-    }
+  const handleReviewToggle = async (productId: string, countryCode: string, checked: boolean) => {
+    setProducts((prev) =>
+      prev.map((p) => {
+        if (p.id !== productId) return p
+        return {
+          ...p,
+          country_overrides: (p.country_overrides || []).map((o) =>
+            o.country_code === countryCode
+              ? { ...o, overrides: { ...o.overrides, reviewed: checked } }
+              : o
+          ),
+        }
+      })
+    )
   }
 
   const handleRequestMerge = (productsToMergeInput: ProductWithOverrides[]) => {

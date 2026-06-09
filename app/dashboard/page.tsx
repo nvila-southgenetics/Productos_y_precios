@@ -16,10 +16,7 @@ import {
   getCompanies,
   getProductsFromSales,
   getAvailablePeriods,
-  getTopSellingProducts,
-  getTopMarginProducts,
-  getBottomMarginProducts,
-  getMostExpensiveProducts,
+  getDashboardProductRankings,
   getMonthlySalesEvolution,
   type DashboardProduct,
   type MonthlyEvolutionPoint,
@@ -114,49 +111,19 @@ export default function DashboardPage() {
         const channelParam =
           selectedChannel && selectedChannel !== "Todos los canales" ? selectedChannel : undefined
 
-        const [selling, topMarginData, bottomMarginData, expensive] =
-          await Promise.all([
-            getTopSellingProducts(
-              companyParam,
-              selectedYear !== "Todos" ? selectedYear : undefined,
-              undefined,
-              selectedProducts.length ? selectedProducts : undefined,
-              channelParam,
-              10,
-              monthRange
-            ),
-            getTopMarginProducts(
-              companyParam,
-              selectedYear !== "Todos" ? selectedYear : undefined,
-              undefined,
-              selectedProducts.length ? selectedProducts : undefined,
-              channelParam,
-              10,
-              monthRange
-            ),
-            getBottomMarginProducts(
-              companyParam,
-              selectedYear !== "Todos" ? selectedYear : undefined,
-              undefined,
-              selectedProducts.length ? selectedProducts : undefined,
-              channelParam,
-              10,
-              monthRange
-            ),
-            getMostExpensiveProducts(
-              companyParam,
-              selectedYear !== "Todos" ? selectedYear : undefined,
-              undefined,
-              selectedProducts.length ? selectedProducts : undefined,
-              channelParam,
-              10,
-              monthRange
-            ),
-          ])
-        setTopSelling(selling)
-        setTopMargin(topMarginData)
-        setBottomMargin(bottomMarginData)
-        setMostExpensive(expensive)
+        const rankings = await getDashboardProductRankings(
+          companyParam,
+          selectedYear !== "Todos" ? selectedYear : undefined,
+          undefined,
+          selectedProducts.length ? selectedProducts : undefined,
+          channelParam,
+          10,
+          monthRange
+        )
+        setTopSelling(rankings.topSelling)
+        setTopMargin(rankings.topMargin)
+        setBottomMargin(rankings.bottomMargin)
+        setMostExpensive(rankings.mostExpensive)
       } catch (error) {
         console.error("Error loading dashboard data:", error)
       } finally {

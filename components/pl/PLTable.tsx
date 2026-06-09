@@ -962,12 +962,7 @@ export function PLTable({
         if (missing.length > 0) setCombineError(`No se pudieron cargar: ${missing.join(", ")}`)
         if (failures.length > 0 && missing.length === 0) setCombineError(`Fallaron: ${failures.join(", ")}`)
 
-        // Mantener la UI base cargada para el detalle (no se usa en combinar, pero evita flashes raros).
-        if (modelo === "budget") {
-          await Promise.all([fetchQuantities(), fetchBudgetOverrides(), fetchSGA()])
-        } else {
-          await Promise.all([fetchQuantities(), fetchOverrides(), fetchSGA()])
-        }
+        // Snapshots ya incluyen qty/overrides/SGA por modelo; omitir segundo fetch (evita duplicar ventas/overrides).
         return
       }
 
@@ -1471,9 +1466,7 @@ export function PLTable({
 
   const fetchSGA = async () => {
     const sgaArr: SGAData[] = Array.from({ length: 12 }, emptySGA)
-    await fetchTaxes()
 
-    // Fetch SGA amounts
     let sgaQuery = supabase
       .from("pl_sga")
       .select("month, salaries_wages, professional_fees, contracted_services, travel_lodging_meals, rent_expenses, advertising_promotion, financial_expenses, other_expenses, product_name, channel, country_code")
@@ -1483,16 +1476,14 @@ export function PLTable({
     if (channels.length) sgaQuery = sgaQuery.in("channel", channels)
 
     if (products.length === 1 && channels.length === 1) {
-      // Specific product+channel → load that specific row
       const canonical = resolveToCatalogName(product)
       const candidates = Array.from(new Set([product, canonical].filter(Boolean)))
       sgaQuery = sgaQuery.in("product_name", candidates).eq("channel", channels[0])
     } else {
-      // Aggregate all product/channel rows (exclude the tax-only country-level row)
       sgaQuery = sgaQuery.neq("product_name", "").neq("channel", "")
     }
 
-    const { data: sgaData } = await sgaQuery
+    const [, { data: sgaData }] = await Promise.all([fetchTaxes(), sgaQuery])
 
     // SG&A depende de producto; si filtramos por categoría, traducimos categoría -> nombres de producto permitidos.
     let allowedProductsByCategory: Set<string> | null = null
@@ -1921,9 +1912,134 @@ export function PLTable({
     return out as Record<string, (ReturnType<typeof computeNetIncomeChain> & any)>
   }
 
+  const plMetrics = useMemo(() => {
+    if ((!hasInitialLoad && loading) || (combineEnabled && !combineReady)) {
+      return null
+    }
+
+    const modelLines = computeAllModelLines()
+    const zeros12 = Array(12).fill(0)
+    const grossSales = diferenciaOnlyView
+      ? zeros12
+      : mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.grossSales])) as Record<string, number[]>)
+    const commercialDiscount = diferenciaOnlyView
+      ? zeros12
+      : mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.commercialDiscount])) as Record<string, number[]>)
+    const salesRevenue = diferenciaOnlyView
+      ? zeros12
+      : mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.salesRevenue])) as Record<string, number[]>)
+
+    const productCost = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.productCost])) as Record<string, number[]>)
+    const carrierCost = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.carrierCost])) as Record<string, number[]>)
+    const kitCost = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.kitCost])) as Record<string, number[]>)
+    const paymentFee = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.paymentFee])) as Record<string, number[]>)
+    const bloodDraw = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.bloodDraw])) as Record<string, number[]>)
+    const sanitary = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.sanitary])) as Record<string, number[]>)
+    const extCourier = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.extCourier])) as Record<string, number[]>)
+    const intCourier = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.intCourier])) as Record<string, number[]>)
+    const physiciansFees = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.physiciansFees])) as Record<string, number[]>)
+    const salesCommission = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.salesCommission])) as Record<string, number[]>)
+
+    const totalSGA = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.totalSGA])) as Record<string, number[]>)
+    const iibbAmount = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.iibbAmount])) as Record<string, number[]>)
+
+    const otherIncomeAccountNames = Object.keys(otherIncomeByAccount).sort((a, b) =>
+      a.localeCompare(b, "es", { sensitivity: "base" })
+    )
+    const totalOtherIncome = Array.from({ length: 12 }, (_, mIdx) =>
+      otherIncomeAccountNames.reduce((s, name) => s + (otherIncomeByAccount[name]?.[mIdx] ?? 0), 0)
+    )
+
+    const totalCOSFull = Array.from({ length: 12 }, (_, i) =>
+      productCost[i] + carrierCost[i] + kitCost[i] + paymentFee[i] + bloodDraw[i] + sanitary[i] +
+      extCourier[i] + intCourier[i] + physiciansFees[i] + salesCommission[i]
+    )
+    const odooContableByMonth = reconcileCosEnabled
+      ? sumOdooContableByMonth(companyMonthlyCos, year, resolveSalesCompanies())
+      : Array(12).fill(0)
+    const diferenciaMonthlyTotal = sumDiferenciaMonthlyAllLines(cosReconciliation)
+    const totalCOS = diferenciaOnlyView
+      ? diferenciaMonthlyTotal
+      : Array.from({ length: 12 }, (_, i) =>
+          reconcileCosEnabled && odooContableByMonth[i] !== 0
+            ? odooContableByMonth[i]
+            : totalCOSFull[i]
+        )
+    const grossProfit = salesRevenue.map((v, i) => v - totalCOS[i] + totalOtherIncome[i])
+    const incomeTaxBase = grossProfit.map((v, i) => v - totalSGA[i])
+    const incomeTax = incomeTaxBase.map((v, i) =>
+      Math.max(0, v) * ((taxRates[i]?.income_tax_pct ?? 0) / 100)
+    )
+    const netIncome = grossProfit.map(
+      (v, i) => v - totalSGA[i] - iibbAmount[i] - incomeTax[i]
+    )
+
+    const sgaMonthly: Record<keyof SGAData, number[]> = Object.fromEntries(
+      SGA_FIELDS.map(({ key }) => [key, sga.map((x) => x[key])])
+    ) as Record<keyof SGAData, number[]>
+
+    return {
+      modelLines,
+      grossSales,
+      commercialDiscount,
+      salesRevenue,
+      productCost,
+      carrierCost,
+      kitCost,
+      paymentFee,
+      bloodDraw,
+      sanitary,
+      extCourier,
+      intCourier,
+      physiciansFees,
+      salesCommission,
+      totalSGA,
+      iibbAmount,
+      totalCOS,
+      grossProfit,
+      incomeTax,
+      netIncome,
+      sgaMonthly,
+      totalOtherIncome,
+      otherIncomeAccountNames,
+      odooContableByMonth,
+    }
+  }, [
+    hasInitialLoad,
+    loading,
+    combineEnabled,
+    combineReady,
+    combineError,
+    quantities,
+    odooAmounts,
+    overrides,
+    budgetRows,
+    budgetOverrides,
+    sga,
+    taxRates,
+    combinedSnapshots,
+    hybridRealSnapshot,
+    cosReconciliation,
+    companyMonthlyCos,
+    otherIncomeByAccount,
+    diferenciaOnlyView,
+    reconcileCosEnabled,
+    year,
+    salesCompanies,
+    effectiveMonthModels.join("|"),
+    categoriesKey,
+    productsFilter.join("|"),
+    channels.join("|"),
+    testMode,
+    budgetName,
+    modelo,
+    monthFrom,
+    monthTo,
+  ])
+
   // Importante: no calcular líneas ni helpers de tabla hasta tener datos en modo combinar
   // (si no, el primer render después de togglear puede crashear con snapshots vacíos).
-  if ((!hasInitialLoad && loading) || (combineEnabled && !combineReady)) {
+  if ((!hasInitialLoad && loading) || (combineEnabled && !combineReady) || !plMetrics) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-20 text-white/60 text-sm">
         <Loader2 className="h-8 w-8 animate-spin text-blue-300/80" aria-hidden />
@@ -1932,69 +2048,32 @@ export function PLTable({
     )
   }
 
-  const otherIncomeAccountNames = Object.keys(otherIncomeByAccount).sort((a, b) =>
-    a.localeCompare(b, "es", { sensitivity: "base" })
-  )
-  const totalOtherIncome = Array.from({ length: 12 }, (_, mIdx) =>
-    otherIncomeAccountNames.reduce((s, name) => s + (otherIncomeByAccount[name]?.[mIdx] ?? 0), 0)
-  )
-
-  const modelLines = computeAllModelLines()
-
-  const zeros12 = Array(12).fill(0)
-  const grossSales = diferenciaOnlyView
-    ? zeros12
-    : mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.grossSales])) as Record<string, number[]>)
-  const commercialDiscount = diferenciaOnlyView
-    ? zeros12
-    : mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.commercialDiscount])) as Record<string, number[]>)
-  const salesRevenue = diferenciaOnlyView
-    ? zeros12
-    : mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.salesRevenue])) as Record<string, number[]>)
-
-  const productCost = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.productCost])) as Record<string, number[]>)
-  const carrierCost = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.carrierCost])) as Record<string, number[]>)
-  const kitCost = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.kitCost])) as Record<string, number[]>)
-  const paymentFee = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.paymentFee])) as Record<string, number[]>)
-  const bloodDraw = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.bloodDraw])) as Record<string, number[]>)
-  const sanitary = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.sanitary])) as Record<string, number[]>)
-  const extCourier = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.extCourier])) as Record<string, number[]>)
-  const intCourier = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.intCourier])) as Record<string, number[]>)
-  const physiciansFees = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.physiciansFees])) as Record<string, number[]>)
-  const salesCommission = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.salesCommission])) as Record<string, number[]>)
-
-  const totalSGA = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.totalSGA])) as Record<string, number[]>)
-  const iibbAmount = mergeMonthlyMetric(Object.fromEntries(Object.entries(modelLines).map(([k, v]) => [k, v.iibbAmount])) as Record<string, number[]>)
-
-  const totalCOSFull = Array.from({ length: 12 }, (_, i) =>
-    productCost[i] + carrierCost[i] + kitCost[i] + paymentFee[i] + bloodDraw[i] + sanitary[i] +
-    extCourier[i] + intCourier[i] + physiciansFees[i] + salesCommission[i]
-  )
-  const odooContableByMonth = reconcileCosEnabled
-    ? sumOdooContableByMonth(companyMonthlyCos, year, resolveSalesCompanies())
-    : Array(12).fill(0)
-  const diferenciaMonthlyTotal = sumDiferenciaMonthlyAllLines(cosReconciliation)
-  /** Fila Total COS: vista Diferencia = suma ajustes; sin filtro = contable Odoo; si no = 10 líneas. */
-  const totalCOS = diferenciaOnlyView
-    ? diferenciaMonthlyTotal
-    : Array.from({ length: 12 }, (_, i) =>
-        reconcileCosEnabled && odooContableByMonth[i] !== 0
-          ? odooContableByMonth[i]
-          : totalCOSFull[i]
-      )
-  const grossProfit = salesRevenue.map((v, i) => v - totalCOS[i] + totalOtherIncome[i])
-  const incomeTaxBase = grossProfit.map((v, i) => v - totalSGA[i])
-  const incomeTax = incomeTaxBase.map((v, i) =>
-    Math.max(0, v) * ((taxRates[i]?.income_tax_pct ?? 0) / 100)
-  )
-  const netIncome = grossProfit.map(
-    (v, i) => v - totalSGA[i] - iibbAmount[i] - incomeTax[i]
-  )
-
-  // Solo se usa para mostrar el detalle por campo cuando no estamos combinando.
-  const sgaMonthly: Record<keyof SGAData, number[]> = Object.fromEntries(
-    SGA_FIELDS.map(({ key }) => [key, sga.map((x) => x[key])])
-  ) as Record<keyof SGAData, number[]>
+  const {
+    modelLines,
+    grossSales,
+    commercialDiscount,
+    salesRevenue,
+    productCost,
+    carrierCost,
+    kitCost,
+    paymentFee,
+    bloodDraw,
+    sanitary,
+    extCourier,
+    intCourier,
+    physiciansFees,
+    salesCommission,
+    totalSGA,
+    iibbAmount,
+    totalCOS,
+    grossProfit,
+    incomeTax,
+    netIncome,
+    sgaMonthly,
+    totalOtherIncome,
+    otherIncomeAccountNames,
+    odooContableByMonth,
+  } = plMetrics
 
   const periodSum = (arr: number[]) => monthIndices.reduce((s, i) => s + (arr[i] || 0), 0)
   const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0)

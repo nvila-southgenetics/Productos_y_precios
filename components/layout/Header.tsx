@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { supabase } from "@/lib/supabase"
 import { usePermissions } from "@/lib/use-permissions"
+import { getNavItems, resolveHomePath } from "@/lib/page-access"
 import type { User, AuthChangeEvent, Session } from "@supabase/supabase-js"
 import { LogIn, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -14,7 +15,7 @@ export function Header() {
   const pathname = usePathname()
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
-  const { isAdmin } = usePermissions()
+  const { isAdmin, allowedPages } = usePermissions()
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }: { data: { user: User | null } }) => setUser(data.user))
@@ -30,17 +31,8 @@ export function Header() {
     router.refresh()
   }
 
-  const navItems = [
-    { href: "/dashboard", label: "Dashboard" },
-    { href: "/productos", label: "Productos" },
-    { href: "/pl-import", label: "Real Import" },
-    { href: "/budget", label: "Budget" },
-    { href: "/comparacion", label: "Comparación" },
-    { href: "/medicos", label: "Médicos" },
-    { href: "/pl", label: "P&L" },
-    { href: "/invoices", label: "Cobranza" },
-    ...(isAdmin ? [{ href: "/admin", label: "Admin" }] : []),
-  ]
+  const navItems = getNavItems(isAdmin, allowedPages)
+  const homeHref = resolveHomePath(isAdmin, allowedPages)
 
   return (
     <header
@@ -51,7 +43,7 @@ export function Header() {
     >
       <div className="container mx-auto max-w-7xl flex h-16 items-center justify-between px-4">
         <div className="flex items-center gap-8">
-          <Link href="/" className="flex items-center space-x-2 group">
+          <Link href={homeHref} className="flex items-center space-x-2 group">
             <div className="h-8 w-1 rounded-full bg-gradient-to-b from-blue-400 to-blue-500"></div>
             <span className="text-xl font-bold bg-gradient-to-r from-blue-300 to-blue-400 bg-clip-text text-transparent">
               SouthGenetics P&L

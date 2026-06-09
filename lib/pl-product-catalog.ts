@@ -14,12 +14,13 @@ export async function fetchPlProductCatalog(force = false): Promise<PlProductCat
   const { data, error } = await supabase.from("products").select("name, category, alias")
   if (error) throw error
 
-  catalogCache = (data || []).map((p) => ({
-    name: String((p as { name?: string }).name || ""),
-    category: String((p as { category?: string | null }).category || ""),
-    alias: String((p as { alias?: string | null }).alias || ""),
+  const rows = (data || []).map((p: { name?: string; category?: string | null; alias?: string | null }) => ({
+    name: String(p.name || ""),
+    category: String(p.category || ""),
+    alias: String(p.alias || ""),
   }))
-  return catalogCache
+  catalogCache = rows
+  return rows
 }
 
 export function allowedProductNamesForCategories(

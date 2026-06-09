@@ -9,6 +9,7 @@ export interface UserPermission {
   user_id: string
   role: UserRole
   allowed_countries: string[]
+  allowed_pages: string[] | null
   invited_by: string | null
   created_at: string
 }
@@ -25,6 +26,7 @@ export async function getCurrentUserPermissions(): Promise<{
   isAdmin: boolean
   canEdit: boolean
   allowedCountries: string[]
+  allowedPages: string[] | null
 } | null> {
   const supabase = await createClient()
   const {
@@ -45,7 +47,7 @@ export async function getCurrentUserPermissions(): Promise<{
 
   const { data: permission } = await admin
     .from("user_permissions")
-    .select("user_id, role, allowed_countries, invited_by, created_at")
+    .select("user_id, role, allowed_countries, allowed_pages, invited_by, created_at")
     .eq("user_id", user.id)
     .single()
 
@@ -53,6 +55,11 @@ export async function getCurrentUserPermissions(): Promise<{
   const canEdit = isAdmin || perm?.role === "editor"
   const allowedCountries =
     isAdmin ? [...COUNTRY_CODES_LIST] : (perm?.allowed_countries ?? [])
+  const rawPages = perm?.allowed_pages
+  const allowedPages =
+    isAdmin || !Array.isArray(rawPages) || rawPages.length === 0
+      ? null
+      : rawPages
 
   return {
     userId: user.id,
@@ -61,5 +68,6 @@ export async function getCurrentUserPermissions(): Promise<{
     isAdmin,
     canEdit,
     allowedCountries,
+    allowedPages,
   }
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type { UserRole } from "@/lib/auth-constants"
+import { sanitizeAllowedPages } from "@/lib/page-access"
 
 const ROLES: UserRole[] = ["admin", "editor", "viewer"]
 const COUNTRY_CODES = ["UY", "AR", "MX", "CL", "VE", "CO"]
@@ -17,14 +18,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Solo un administrador puede invitar usuarios" }, { status: 403 })
   }
 
-  let body: { email: string; role: UserRole; allowed_countries: string[] }
+  let body: {
+    email: string
+    role: UserRole
+    allowed_countries: string[]
+    allowed_pages?: string[] | null
+  }
   try {
     body = await request.json()
   } catch {
     return NextResponse.json({ error: "Body JSON inválido" }, { status: 400 })
   }
 
-  const { email, role, allowed_countries } = body
+  const { email, role, allowed_countries, allowed_pages } = body
   if (!email || typeof email !== "string" || !email.includes("@")) {
     return NextResponse.json({ error: "Email inválido" }, { status: 400 })
   }
@@ -34,6 +40,12 @@ export async function POST(request: Request) {
   const countries = Array.isArray(allowed_countries)
     ? allowed_countries.filter((c) => COUNTRY_CODES.includes(c))
     : []
+  const pages =
+    role === "admin"
+      ? null
+      : sanitizeAllowedPages(allowed_pages).length > 0
+        ? sanitizeAllowedPages(allowed_pages)
+        : null
 
   const { data: inviteData, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
     redirectTo: `${request.headers.get("origin") ?? ""}/reset-password`,
@@ -55,6 +67,7 @@ export async function POST(request: Request) {
     user_id: invitedUserId,
     role,
     allowed_countries: role === "admin" ? COUNTRY_CODES : countries,
+    allowed_pages: pages,
     invited_by: user.id,
   })
   if (permError) return NextResponse.json({ error: permError.message }, { status: 500 })

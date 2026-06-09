@@ -195,19 +195,29 @@ async function fetchProductIdMapFromVentasTable(productNames: string[]): Promise
   if (unique.length === 0) return merged
 
   const chunkSize = 100
+  const chunks: string[][] = []
   for (let i = 0; i < unique.length; i += chunkSize) {
-    const chunk = unique.slice(i, i + chunkSize)
-    const { data, error } = await supabase
-      .from("ventas")
-      .select("test, id_producto")
-      .in("test", chunk)
-      .not("id_producto", "is", null)
+    chunks.push(unique.slice(i, i + chunkSize))
+  }
 
-    if (error) {
-      console.warn("fetchProductIdMapFromVentasTable:", error)
-      continue
-    }
-    tallyProductIdByTest(data || []).forEach((id, test) => merged.set(test, id))
+  // Chunks en paralelo: reduce latencia en enrichment de ventas/pl-import.
+  const chunkResults = await Promise.all(
+    chunks.map(async (chunk) => {
+      const { data, error } = await supabase
+        .from("ventas")
+        .select("test, id_producto")
+        .in("test", chunk)
+        .not("id_producto", "is", null)
+      if (error) {
+        console.warn("fetchProductIdMapFromVentasTable:", error)
+        return []
+      }
+      return data || []
+    })
+  )
+
+  for (const data of chunkResults) {
+    tallyProductIdByTest(data).forEach((id, test) => merged.set(test, id))
   }
   return merged
 }
@@ -243,24 +253,33 @@ function collectProductIdsFromSaleRows(
  * PostgREST/Supabase limita por defecto a 1000 filas; con ~1100+ overrides el `select('*')` trunca resultados.
  * Solo cargamos filas de los productos que aparecen en las ventas (o en el catálogo dado).
  */
+const OVERRIDE_SELECT_COLUMNS =
+  "id, product_id, country_code, channel, overrides, cl_config_type, mx_config_type, col_config_type"
+
 async function fetchOverridesForProductIds(productIds: string[]): Promise<ProductCountryOverride[]> {
   const unique = [...new Set(productIds.filter(Boolean))]
   if (unique.length === 0) return []
   const chunkSize = 100
-  const out: ProductCountryOverride[] = []
+  const chunks: string[][] = []
   for (let i = 0; i < unique.length; i += chunkSize) {
-    const chunk = unique.slice(i, i + chunkSize)
-    const { data, error } = await supabase
-      .from("product_country_overrides")
-      .select("*")
-      .in("product_id", chunk)
-    if (error) {
-      console.warn("fetchOverridesForProductIds:", error)
-      continue
-    }
-    out.push(...(data || []))
+    chunks.push(unique.slice(i, i + chunkSize))
   }
-  return out
+
+  const results = await Promise.all(
+    chunks.map(async (chunk) => {
+      const { data, error } = await supabase
+        .from("product_country_overrides")
+        .select(OVERRIDE_SELECT_COLUMNS)
+        .in("product_id", chunk)
+      if (error) {
+        console.warn("fetchOverridesForProductIds:", error)
+        return [] as ProductCountryOverride[]
+      }
+      return (data || []) as ProductCountryOverride[]
+    })
+  )
+
+  return results.flat()
 }
 
 /** Venta de la tabla ventas (por fecha) */
@@ -581,12 +600,12 @@ export async function getMedicoInstitucionSales(
         .filter((t): t is string => Boolean(t))
     ),
   ]
-  const { data: productsData, error: productsError } = await supabase
-    .from('products')
-    .select('*')
-  if (productsError) throw productsError
-  const products = (productsData || []) as Product[]
-  const ventasTestToProductId = await fetchProductIdMapFromVentasTable(productNames)
+  const [productsData, ventasTestToProductId] = await Promise.all([
+    supabase.from('products').select('id, name, alias, category, tipo'),
+    fetchProductIdMapFromVentasTable(productNames),
+  ])
+  if (productsData.error) throw productsData.error
+  const products = (productsData.data || []) as Product[]
 
   const productFilter = params.products?.length
     ? new Set(params.products)
@@ -648,13 +667,10 @@ export async function getMedicoInstitucionSales(
  * Obtiene todos los productos con sus overrides por país
  */
 export async function getProductsWithOverrides(countryCode?: string): Promise<ProductWithOverrides[]> {
-  // Obtener productos
-  let productsQuery = supabase
+  const { data: products, error: productsError } = await supabase
     .from('products')
-    .select('*')
+    .select('id, name, alias, description, category, tipo, created_at, user_id')
     .order('created_at', { ascending: false })
-
-  const { data: products, error: productsError } = await productsQuery
 
   if (productsError) throw productsError
   if (!products) return []
@@ -1108,6 +1124,30 @@ const MES_LABELS: Record<number, string> = {
   7: 'Jul', 8: 'Ago', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dic',
 }
 
+const VENTAS_MENSUALES_PAGE = 1000
+const VENTAS_MENSUALES_SELECT =
+  'producto, compañia, cantidad_ventas, monto_total, mes, año, periodo, precio_promedio'
+
+/** Pagina ventas_mensuales_view para evitar truncado silencioso a 1000 filas de PostgREST. */
+async function fetchAllVentasMensualesRows(
+  applyFilters: (q: ReturnType<typeof supabase.from>) => ReturnType<typeof supabase.from>,
+  columns = VENTAS_MENSUALES_SELECT
+): Promise<Record<string, unknown>[]> {
+  const all: Record<string, unknown>[] = []
+  let offset = 0
+  while (true) {
+    let q = supabase.from('ventas_mensuales_view').select(columns)
+    q = applyFilters(q)
+    const { data, error } = await q.range(offset, offset + VENTAS_MENSUALES_PAGE - 1)
+    if (error) throw error
+    const batch = (data || []) as Record<string, unknown>[]
+    all.push(...batch)
+    if (batch.length < VENTAS_MENSUALES_PAGE) break
+    offset += VENTAS_MENSUALES_PAGE
+  }
+  return all
+}
+
 function isAllCompaniesLabel(company: string): boolean {
   // Normaliza para que el "modo todas las compañías" sea robusto ante acentos/espaciado.
   const normalized = (company ?? "")
@@ -1129,16 +1169,36 @@ export async function getMonthlySalesEvolution(
   company?: string | string[],
   productName?: string | string[]
 ): Promise<{ year2025: MonthlyEvolutionPoint[]; year2026: MonthlyEvolutionPoint[] }> {
-  let query = supabase
-    .from('ventas_mensuales_view')
-    .select('año, mes, periodo, cantidad_ventas, monto_total, compañia, producto')
+  const normalizedCompany = typeof company === 'string' ? company.trim() : undefined
+  const companyList = Array.isArray(company)
+    ? company.map((c) => c.trim()).filter(Boolean)
+    : null
+  const normalizedProduct =
+    typeof productName === 'string' ? productName.trim() : undefined
+  const normalizedProducts =
+    Array.isArray(productName) ? productName.map((p) => p.trim()).filter(Boolean) : undefined
 
-  const { data, error } = await query
-
-  if (error) {
+  let data: Record<string, unknown>[]
+  try {
+    data = await fetchAllVentasMensualesRows((q) => {
+      let query = q.in('año', [2025, 2026])
+      if (companyList && companyList.length > 0) {
+        query = query.in('compañia', companyList)
+      } else if (normalizedCompany && !isAllCompaniesLabel(normalizedCompany)) {
+        query = query.eq('compañia', normalizedCompany)
+      }
+      if (normalizedProducts && normalizedProducts.length > 0) {
+        query = query.in('producto', normalizedProducts)
+      } else if (normalizedProduct && normalizedProduct !== 'Todos') {
+        query = query.eq('producto', normalizedProduct)
+      }
+      return query
+    }, 'año, mes, periodo, cantidad_ventas, monto_total, compañia, producto')
+  } catch (error) {
     console.error('Error getMonthlySalesEvolution:', error)
     throw error
   }
+
   if (!data || data.length === 0) {
     const emptyMonth = (mes: number) => ({
       mes,
@@ -1154,23 +1214,14 @@ export async function getMonthlySalesEvolution(
     }
   }
 
-  const normalizedCompany = typeof company === 'string' ? company.trim() : undefined
-  const companyList = Array.isArray(company)
-    ? company.map((c) => c.trim()).filter(Boolean)
-    : null
-  const normalizedProduct =
-    typeof productName === 'string' ? productName.trim() : undefined
-  const normalizedProducts =
-    Array.isArray(productName) ? productName.map((p) => p.trim()).filter(Boolean) : undefined
-
-  const filtered = (data as any[]).filter((row) => {
+  const filtered = data.filter((row) => {
     if (companyList && companyList.length > 0) {
-      if (!companyList.includes(row.compañia)) return false
+      if (!companyList.includes(row.compañia as string)) return false
     } else if (normalizedCompany && !isAllCompaniesLabel(normalizedCompany) && row.compañia !== normalizedCompany) {
       return false
     }
     if (normalizedProducts && normalizedProducts.length > 0) {
-      if (!normalizedProducts.includes(row.producto)) return false
+      if (!normalizedProducts.includes(row.producto as string)) return false
     } else if (normalizedProduct && normalizedProduct !== 'Todos' && row.producto !== normalizedProduct) {
       return false
     }
@@ -1178,9 +1229,11 @@ export async function getMonthlySalesEvolution(
   })
 
   const agg = new Map<string, { año: number; mes: number; cantidad_ventas: number; monto_total: number }>()
-  filtered.forEach((row: any) => {
-    const key = `${row.año}-${row.mes}`
-    const current = agg.get(key) || { año: row.año, mes: row.mes, cantidad_ventas: 0, monto_total: 0 }
+  filtered.forEach((row) => {
+    const año = Number(row.año)
+    const mes = Number(row.mes)
+    const key = `${año}-${mes}`
+    const current = agg.get(key) || { año, mes, cantidad_ventas: 0, monto_total: 0 }
     current.cantidad_ventas += Number(row.cantidad_ventas) || 0
     current.monto_total += Number(row.monto_total) || 0
     agg.set(key, current)
@@ -1218,50 +1271,43 @@ export async function getMonthlySales(
   let normalizedCompany = ""
   let aggregateMultiCompanies = false
 
-  let query = supabase
-    .from('ventas_mensuales_view')
-    .select('*')
-    .order('cantidad_ventas', { ascending: false })
-
   if (Array.isArray(company)) {
     const list = company.map((c) => c.trim()).filter(Boolean)
     if (list.length === 0) return []
     if (list.length === 1) {
       normalizedCompany = list[0]
-      if (!isAllCompaniesLabel(normalizedCompany)) {
-        query = query.eq('compañia', normalizedCompany)
-      }
     } else {
       aggregateMultiCompanies = true
-      query = query.in('compañia', list)
       normalizedCompany = list.join(", ")
     }
   } else {
     normalizedCompany = company.trim()
-    if (!isAllCompaniesLabel(normalizedCompany)) {
-      query = query.eq('compañia', normalizedCompany)
+  }
+
+  const sales = await fetchAllVentasMensualesRows((q) => {
+    let filtered = q.order('cantidad_ventas', { ascending: false })
+    if (Array.isArray(company)) {
+      const list = company.map((c) => c.trim()).filter(Boolean)
+      if (list.length === 1 && !isAllCompaniesLabel(list[0])) {
+        filtered = filtered.eq('compañia', list[0])
+      } else if (list.length > 1) {
+        filtered = filtered.in('compañia', list)
+      }
+    } else if (company.trim() && !isAllCompaniesLabel(company.trim())) {
+      filtered = filtered.eq('compañia', company.trim())
     }
-  }
+    if (periodo) {
+      const formattedPeriodo = periodo.includes('-') ? periodo : `${periodo.slice(0, 4)}-${periodo.slice(4).padStart(2, '0')}`
+      filtered = filtered.eq('periodo', formattedPeriodo)
+    }
+    if (Array.isArray(productName) && productName.length > 0) {
+      filtered = filtered.in('producto', productName)
+    } else if (typeof productName === 'string' && productName !== 'Todos') {
+      filtered = filtered.eq('producto', productName)
+    }
+    return filtered
+  })
 
-  // ✅ Filtro por período es OBLIGATORIO si se proporciona
-  if (periodo) {
-    // Asegurar formato correcto YYYY-MM
-    const formattedPeriodo = periodo.includes('-') ? periodo : `${periodo.slice(0, 4)}-${periodo.slice(4).padStart(2, '0')}`
-    query = query.eq('periodo', formattedPeriodo)
-  }
-
-  if (Array.isArray(productName) && productName.length > 0) {
-    query = query.in('producto', productName)
-  } else if (typeof productName === 'string' && productName !== 'Todos') {
-    query = query.eq('producto', productName)
-  }
-
-  const { data: sales, error } = await query
-
-  if (error) {
-    console.error('Error en getMonthlySales:', { error, company: normalizedCompany, periodo, productName })
-    throw error
-  }
   if (!sales) return []
 
   // Normalizar tipos: en Postgres `numeric` puede llegar como string.
@@ -1276,15 +1322,14 @@ export async function getMonthlySales(
   }))
 
   const saleProductNames = [...new Set((normalizedSales as { producto: string }[]).map((s) => s.producto).filter(Boolean))]
-  const ventasTestToProductId = await fetchProductIdMapFromVentasTable(saleProductNames)
+
+  const [{ data: products }, ventasTestToProductId] = await Promise.all([
+    supabase.from('products').select('id, name, alias, category, tipo'),
+    fetchProductIdMapFromVentasTable(saleProductNames),
+  ])
   
   // Debug: verificar resultados
   console.log(`📊 getMonthlySales: ${normalizedSales.length} ventas para ${normalizedCompany} - ${periodo || 'todos los períodos'}`)
-
-  // Obtener productos para hacer join
-  const { data: products } = await supabase
-    .from('products')
-    .select('id, name, alias, category, tipo')
 
   const productIdsForOverrides = collectProductIdsFromSaleRows(
     normalizedSales as { producto: string }[],
@@ -1459,39 +1504,39 @@ export async function getAnnualTotal(
   let normalizedCompany = ""
   let aggregateMultiCompanies = false
 
-  let query = supabase
-    .from('ventas_mensuales_view')
-    .select('producto, compañia, cantidad_ventas, monto_total, año')
-
   if (Array.isArray(company)) {
     const list = company.map((c) => c.trim()).filter(Boolean)
     if (list.length === 0) return []
     if (list.length === 1) {
       normalizedCompany = list[0]
-      if (!isAllCompaniesLabel(normalizedCompany)) {
-        query = query.eq('compañia', normalizedCompany)
-      }
     } else {
       aggregateMultiCompanies = true
-      query = query.in('compañia', list)
       normalizedCompany = list.join(", ")
     }
   } else {
     normalizedCompany = company.trim()
-    if (!isAllCompaniesLabel(normalizedCompany)) {
-      query = query.eq('compañia', normalizedCompany)
+  }
+
+  const sales = await fetchAllVentasMensualesRows((q) => {
+    let filtered = q
+    if (Array.isArray(company)) {
+      const list = company.map((c) => c.trim()).filter(Boolean)
+      if (list.length === 1 && !isAllCompaniesLabel(list[0])) {
+        filtered = filtered.eq('compañia', list[0])
+      } else if (list.length > 1) {
+        filtered = filtered.in('compañia', list)
+      }
+    } else if (company.trim() && !isAllCompaniesLabel(company.trim())) {
+      filtered = filtered.eq('compañia', company.trim())
     }
-  }
+    if (Array.isArray(productName) && productName.length > 0) {
+      filtered = filtered.in('producto', productName)
+    } else if (typeof productName === 'string' && productName !== 'Todos') {
+      filtered = filtered.eq('producto', productName)
+    }
+    return filtered
+  }, 'producto, compañia, cantidad_ventas, monto_total, año')
 
-  if (Array.isArray(productName) && productName.length > 0) {
-    query = query.in('producto', productName)
-  } else if (typeof productName === 'string' && productName !== 'Todos') {
-    query = query.eq('producto', productName)
-  }
-
-  const { data: sales, error } = await query
-
-  if (error) throw error
   if (!sales) return []
 
   const normalizedSales = (sales as any[]).map((row) => ({
@@ -1550,12 +1595,10 @@ export async function getAnnualTotal(
         .filter((name: string) => name.length > 0)
     )
   )
-  const ventasTestToProductId = await fetchProductIdMapFromVentasTable(annualProductNames)
-
-  // Obtener productos para join
-  const { data: products } = await supabase
-    .from('products')
-    .select('id, name, category, tipo')
+  const [{ data: products }, ventasTestToProductId] = await Promise.all([
+    supabase.from('products').select('id, name, category, tipo'),
+    fetchProductIdMapFromVentasTable(annualProductNames),
+  ])
 
   const productIdsForOverrides = collectProductIdsFromSaleRows(
     aggregated as { producto: string }[],
@@ -1611,59 +1654,52 @@ async function getProductsWithMetrics(
   let multiIn: string[] | null = null
   let isAllCompanies = false
 
-  let query = supabase
-    .from('ventas_mensuales_view')
-    .select('producto, compañia, cantidad_ventas, monto_total, mes, año, periodo')
-
   if (Array.isArray(company)) {
     const list = company.map((c) => c.trim()).filter(Boolean)
     if (list.length === 0) return []
     if (list.length === 1) {
       normalizedSingle = list[0]
       isAllCompanies = isAllCompaniesLabel(normalizedSingle)
-      if (!isAllCompanies) {
-        query = query.eq('compañia', normalizedSingle)
-      }
     } else {
       multiIn = list
-      query = query.in('compañia', list)
     }
   } else {
     normalizedSingle = company.trim()
     isAllCompanies = isAllCompaniesLabel(normalizedSingle)
-    if (!isAllCompanies) {
-      query = query.eq('compañia', normalizedSingle)
+  }
+
+  const sales = await fetchAllVentasMensualesRows((q) => {
+    let filtered = q
+    if (multiIn) {
+      filtered = filtered.in('compañia', multiIn)
+    } else if (normalizedSingle && !isAllCompanies) {
+      filtered = filtered.eq('compañia', normalizedSingle)
     }
-  }
+    if (year && year !== "Todos") {
+      filtered = filtered.eq('año', parseInt(year))
+    }
+    if (monthRange && monthRange.from >= 1 && monthRange.to >= 1) {
+      const a = Math.min(monthRange.from, monthRange.to)
+      const b = Math.max(monthRange.from, monthRange.to)
+      filtered = filtered.gte('mes', a).lte('mes', b)
+    } else if (month && month !== "Todos") {
+      filtered = filtered.eq('mes', parseInt(month))
+    }
+    if (Array.isArray(productName) && productName.length > 0) {
+      filtered = filtered.in('producto', productName)
+    } else if (typeof productName === 'string' && productName !== 'Todos') {
+      filtered = filtered.eq('producto', productName)
+    }
+    return filtered
+  }, 'producto, compañia, cantidad_ventas, monto_total, mes, año, periodo')
 
-  if (year && year !== "Todos") {
-    query = query.eq('año', parseInt(year))
-  }
-
-  if (monthRange && monthRange.from >= 1 && monthRange.to >= 1) {
-    const a = Math.min(monthRange.from, monthRange.to)
-    const b = Math.max(monthRange.from, monthRange.to)
-    query = query.gte('mes', a).lte('mes', b)
-  } else if (month && month !== "Todos") {
-    query = query.eq('mes', parseInt(month))
-  }
-
-  if (Array.isArray(productName) && productName.length > 0) {
-    query = query.in('producto', productName)
-  } else if (typeof productName === 'string' && productName !== 'Todos') {
-    query = query.eq('producto', productName)
-  }
-  
-  const { data: sales, error } = await query
-  
-  if (error) throw error
   if (!sales) return []
   
   // Agrupar por producto
   type ProductAgg = { producto: string; cantidad_ventas: number; monto_total: number }
   const productMap = new Map<string, ProductAgg>()
   
-  sales.forEach((sale: { producto: string; cantidad_ventas: number; monto_total: number | null }) => {
+  for (const sale of sales as { producto: string; cantidad_ventas: number; monto_total: number | null }[]) {
     const key = sale.producto
     if (!productMap.has(key)) {
       productMap.set(key, {
@@ -1673,16 +1709,14 @@ async function getProductsWithMetrics(
       })
     }
     const product = productMap.get(key)!
-    product.cantidad_ventas += sale.cantidad_ventas
-    product.monto_total = (product.monto_total || 0) + (sale.monto_total || 0)
-  })
+    product.cantidad_ventas += Number(sale.cantidad_ventas) || 0
+    product.monto_total = (product.monto_total || 0) + (Number(sale.monto_total) || 0)
+  }
 
-  const ventasTestToProductId = await fetchProductIdMapFromVentasTable([...productMap.keys()])
-  
-  // Obtener productos y overrides
-  const { data: products } = await supabase
-    .from('products')
-    .select('id, name, category, tipo')
+  const [{ data: products }, ventasTestToProductId] = await Promise.all([
+    supabase.from('products').select('id, name, category, tipo'),
+    fetchProductIdMapFromVentasTable([...productMap.keys()]),
+  ])
 
   const productIdsForOverrides = collectProductIdsFromSaleRows(
     Array.from(productMap.values()) as { producto: string }[],
@@ -1860,4 +1894,45 @@ export async function getMostExpensiveProducts(
       return priceB - priceA
     })
     .slice(0, limit)
+}
+
+export interface DashboardProductRankings {
+  topSelling: DashboardProduct[]
+  topMargin: DashboardProduct[]
+  bottomMargin: DashboardProduct[]
+  mostExpensive: DashboardProduct[]
+}
+
+/** Una sola lectura de ventas para los 4 rankings del dashboard (evita 4× getProductsWithMetrics). */
+export async function getDashboardProductRankings(
+  company: string | string[],
+  year?: string,
+  month?: string,
+  productName?: string | string[],
+  channel?: string,
+  limit: number = 10,
+  monthRange?: { from: number; to: number }
+): Promise<DashboardProductRankings> {
+  const products = await getProductsWithMetrics(company, year, month, productName, channel, monthRange)
+
+  return {
+    topSelling: products
+      .sort((a, b) => b.cantidad_ventas - a.cantidad_ventas)
+      .slice(0, limit),
+    topMargin: products
+      .filter((p) => p.gross_margin_percent > 0)
+      .sort((a, b) => b.gross_margin_percent - a.gross_margin_percent)
+      .slice(0, limit),
+    bottomMargin: products
+      .filter((p) => p.gross_margin_percent > 0)
+      .sort((a, b) => a.gross_margin_percent - b.gross_margin_percent)
+      .slice(0, limit),
+    mostExpensive: products
+      .sort((a, b) => {
+        const priceA = a.overrides?.grossSalesUSD || 0
+        const priceB = b.overrides?.grossSalesUSD || 0
+        return priceB - priceA
+      })
+      .slice(0, limit),
+  }
 }

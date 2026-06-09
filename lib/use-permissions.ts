@@ -8,6 +8,8 @@ export interface PermissionsState {
   isAdmin: boolean
   canEdit: boolean
   allowedCountries: string[]
+  /** null = todas las hojas */
+  allowedPages: string[] | null
   loading: boolean
   error: string | null
 }
@@ -19,6 +21,7 @@ export function usePermissions(): PermissionsState {
     isAdmin: false,
     canEdit: false,
     allowedCountries: [],
+    allowedPages: null,
     loading: true,
     error: null,
   })
@@ -46,6 +49,7 @@ export function usePermissions(): PermissionsState {
           isAdmin: data.isAdmin ?? false,
           canEdit: data.canEdit ?? false,
           allowedCountries: Array.isArray(data.allowedCountries) ? data.allowedCountries : [],
+          allowedPages: Array.isArray(data.allowedPages) ? data.allowedPages : null,
           loading: false,
           error: null,
         })

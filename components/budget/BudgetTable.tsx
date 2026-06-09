@@ -1,52 +1,22 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { ChevronDown, ChevronRight, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
-import { formatCurrency, formatNumber, productNameSortKey, displayProductLabelFromName } from "@/lib/utils"
+import { formatCurrency, formatNumber, displayProductLabelFromName } from "@/lib/utils"
 import { useProductCreateDialog } from "@/components/products/ProductCreateDialogProvider"
-
-interface BudgetRow {
-  id: string
-  country: string
-  country_code: string
-  product_name: string
-  product_id: string | null
-  channel?: string
-  jan: number
-  feb: number
-  mar: number
-  apr: number
-  may: number
-  jun: number
-  jul: number
-  aug: number
-  sep: number
-  oct: number
-  nov: number
-  dec: number
-  total_units: number
-  total_gross_sale: number
-  total_gross_profit: number
-  monthly_units?: number
-  monthly_gross_sale?: number
-  monthly_gross_profit?: number
-  commercial_discount?: number
-  monthly_commercial_discount?: number
-}
+import { BUDGET_MONTH_KEYS, type BudgetRow } from "@/lib/budget-data"
 
 interface BudgetTableProps {
+  data: BudgetRow[]
+  aliasByName: Record<string, string>
+  loading: boolean
   year: number
-  budgetName: string
-  countries: string[]
-  /** Array vacío = todos. */
-  products: string[]
   months: string[]
-  channels: string[]
-  /** Permite crear productos desde el budget cuando no existen. */
   canEdit?: boolean
+  onProductLinked?: () => void
 }
 
 const MONTH_NAMES = [
@@ -64,43 +34,7 @@ const MONTH_NAMES = [
   "Diciembre",
 ]
 
-const MONTH_KEYS: (keyof BudgetRow)[] = [
-  "jan",
-  "feb",
-  "mar",
-  "apr",
-  "may",
-  "jun",
-  "jul",
-  "aug",
-  "sep",
-  "oct",
-  "nov",
-  "dec",
-]
-
-function calculateGrossProfit(overrides: any): number {
-  const grossSalesUSD = overrides?.grossSalesUSD || 0
-  const commercialDiscountUSD = overrides?.commercialDiscountUSD || 0
-  const salesRevenueUSD = grossSalesUSD - commercialDiscountUSD
-
-  const totalCosts =
-    (overrides?.productCostUSD || 0) +
-    (overrides?.carrierCostUSD || 0) +
-    (overrides?.kitCostUSD || 0) +
-    (overrides?.paymentFeeUSD || 0) +
-    (overrides?.bloodDrawSampleUSD || 0) +
-    (overrides?.sanitaryPermitsUSD || 0) +
-    (overrides?.externalCourierUSD || 0) +
-    (overrides?.internalCourierUSD || 0) +
-    (overrides?.physiciansFeesUSD || 0) +
-    (overrides?.salesCommissionUSD || 0)
-
-  return salesRevenueUSD - totalCosts
-}
-
 function calculateMargin(grossSale: number, grossProfit: number, commercialDiscount: number = 0): number {
-  // El margen se calcula sobre Sales Revenue (Gross Sales - Commercial Discount), no sobre Gross Sales
   const salesRevenue = grossSale - commercialDiscount
   if (salesRevenue === 0) return 0
   return (grossProfit / salesRevenue) * 100
@@ -119,284 +53,19 @@ function getMarginColor(margin: number): string {
   return "text-red-300"
 }
 
-export function BudgetTable({ year, budgetName, countries, products, months, channels, canEdit }: BudgetTableProps) {
-  const [data, setData] = useState<BudgetRow[]>([])
-  const [loading, setLoading] = useState(true)
+export function BudgetTable({
+  data,
+  aliasByName,
+  loading,
+  year,
+  months,
+  canEdit,
+  onProductLinked,
+}: BudgetTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [creatingProductFor, setCreatingProductFor] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
-  const [aliasByName, setAliasByName] = useState<Record<string, string>>({})
   const { openCreateProductDialog } = useProductCreateDialog()
-
-  useEffect(() => {
-    fetchBudgetData()
-  }, [year, budgetName, countries, products, months, channels])
-
-  const fetchBudgetData = async () => {
-    setLoading(true)
-    try {
-      const { data: prods } = await supabase.from("products").select("name, alias")
-      const map: Record<string, string> = {}
-      for (const p of (prods || []) as any[]) map[p.name] = p.alias || ""
-      setAliasByName(map)
-
-      let query = supabase.from("budget").select("*").eq("year", year)
-        .eq("budget_name", budgetName)
-
-      if (countries.length > 0) {
-        query = query.in("country_code", countries)
-      }
-
-      if (products.length > 0) {
-        query = query.in("product_name", products)
-      }
-
-      if (channels.length > 0) {
-        query = query.in("channel", channels)
-      }
-
-      const { data: budgetData, error } = await query
-
-      if (error) throw error
-      if (!budgetData || budgetData.length === 0) {
-        setData([])
-        setLoading(false)
-        return
-      }
-
-      // Obtener productos únicos para hacer join con overrides
-      type RawBudgetRow = { product_id: string | null; product_name: string; channel: string }
-      const productIds = budgetData
-        .map((b: RawBudgetRow) => b.product_id)
-        .filter((id: string | null): id is string => id !== null)
-
-      // Obtener productos
-      const { data: productRows } = await supabase
-        .from("products")
-        .select("id, name")
-        .in("id", productIds.length > 0 ? productIds : [null])
-
-      // Mapear productos por nombre e ID
-      const productMap = new Map<string, string>()
-      productRows?.forEach((p: { name: string; id: string }) => {
-        productMap.set(p.name, p.id)
-      })
-
-      // Meses seleccionados: permitir 1/varios/todos.
-      const allMonthsSelected = months.length === 12
-      const isMonthFiltered = !allMonthsSelected
-      const monthIndices = Array.from(
-        new Set(months.map((m) => parseInt(m, 10) - 1).filter((i) => i >= 0 && i < 12))
-      )
-      const monthKeysSelected = isMonthFiltered ? monthIndices.map((i) => MONTH_KEYS[i]) : []
-
-      type RawRow = { id: string; country: string; country_code: string; product_id: string | null; product_name: string; channel: string; total_units?: number } & Record<string, unknown>
-
-      // Agrupar/deduplicar por (country_code, product_name) para que cada producto
-      // aparezca una sola vez en la tabla, incluso si existen múltiples filas en `budget`.
-      // - Para selección multi-canal, el detalle financiero se recalcula por canal dentro del bloque `multiChannelMode`.
-      // - Para selección single-canal, alcanza con agrupar por producto para eliminar duplicados.
-      const multiChannelMode = channels.length > 1
-      const grouped = new Map<string, RawRow>()
-      for (const row of budgetData as RawRow[]) {
-        const key = `${row.country_code}|${row.product_name}`
-        if (!grouped.has(key)) {
-          grouped.set(key, { ...row })
-        } else {
-          const existing = grouped.get(key)!
-          for (const mk of MONTH_KEYS) {
-            ;(existing as Record<string, unknown>)[mk as string] =
-              Number(existing[mk as string] ?? 0) + Number(row[mk as string] ?? 0)
-          }
-        }
-      }
-      const rowsToProcess: RawRow[] = Array.from(grouped.values())
-
-      // Procesar datos y calcular financieros
-      const processedData: BudgetRow[] = await Promise.all(
-        rowsToProcess.map(async (row: RawRow) => {
-          const productId = row.product_id || productMap.get(row.product_name) || null
-
-          let totalGrossSale = 0
-          let totalGrossProfit = 0
-          let monthlyUnits = 0
-          let monthlyGrossSale = 0
-          let monthlyGrossProfit = 0
-          let rowTotalUnits = MONTH_KEYS.reduce((sum, mk) => sum + Number(row[mk as string] ?? 0), 0)
-
-          if (isMonthFiltered) {
-            monthlyUnits = monthKeysSelected.reduce(
-              (sum, mk) => sum + Number((row as Record<string, unknown>)[mk as string] ?? 0),
-              0
-            )
-          } else {
-            monthlyUnits = rowTotalUnits
-          }
-
-            if (productId) {
-            // Buscar override para este producto, país y canal específico (o Paciente como fallback)
-            const primaryChannel = channels[0] || "Paciente"
-            const channelToQuery = primaryChannel
-            let overrideQuery = supabase
-              .from("product_country_overrides")
-              .select("overrides, channel")
-              .eq("product_id", productId)
-              .eq("country_code", row.country_code)
-
-            // Intentar canal específico primero, si no hay fallback a cualquiera
-            const { data: channelOverride } = await overrideQuery
-              .eq("channel", channelToQuery)
-              .maybeSingle()
-
-            let overrideDataObj: Record<string, number> = {}
-            if (channelOverride?.overrides) {
-              overrideDataObj = channelOverride.overrides
-            } else {
-              // Fallback: tomar el primero disponible para este país
-              const { data: fallbackOverride } = await supabase
-                .from("product_country_overrides")
-                .select("overrides")
-                .eq("product_id", productId)
-                .eq("country_code", row.country_code)
-                .order("cl_config_type", { ascending: true })
-                .order("mx_config_type", { ascending: true })
-                .order("col_config_type", { ascending: true })
-                .limit(1)
-                .maybeSingle()
-              overrideDataObj = fallbackOverride?.overrides || {}
-            }
-
-            const grossSaleUSD = overrideDataObj.grossSalesUSD || 0
-            const commercialDiscountUSDPerUnit = overrideDataObj.commercialDiscountUSD || 0
-            const grossProfitUSD = calculateGrossProfit(overrideDataObj)
-
-            if (multiChannelMode) {
-              // Para "todos los canales", calcular la contribución de cada canal por separado
-              // Buscamos todos los registros de budget para este producto/país y multiplicamos por sus overrides
-              const channelRows = (budgetData as RawRow[]).filter(
-                r => r.country_code === row.country_code && r.product_name === row.product_name
-              )
-              let sumGrossSale = 0
-              let sumGrossProfit = 0
-              let sumCommercialDiscount = 0
-
-              await Promise.all(channelRows.map(async (cr) => {
-                const crProductId = cr.product_id || productMap.get(cr.product_name) || null
-                if (!crProductId) return
-                const crUnits = isMonthFiltered
-                  ? monthKeysSelected.reduce(
-                      (s, mk) => s + Number((cr as Record<string, unknown>)[mk as string] ?? 0),
-                      0
-                    )
-                  : MONTH_KEYS.reduce((s, mk) => s + Number((cr as Record<string, unknown>)[mk as string] ?? 0), 0)
-
-                const { data: crOverride } = await supabase
-                  .from("product_country_overrides")
-                  .select("overrides")
-                  .eq("product_id", crProductId)
-                  .eq("country_code", cr.country_code)
-                  .eq("channel", cr.channel)
-                  .maybeSingle()
-
-                const crOverrideObj = crOverride?.overrides || overrideDataObj
-                sumGrossSale += (crOverrideObj.grossSalesUSD || 0) * crUnits
-                sumGrossProfit += calculateGrossProfit(crOverrideObj) * crUnits
-                sumCommercialDiscount += (crOverrideObj.commercialDiscountUSD || 0) * crUnits
-              }))
-
-              totalGrossSale = sumGrossSale
-              totalGrossProfit = sumGrossProfit
-              if (isMonthFiltered) {
-                monthlyGrossSale = sumGrossSale
-                monthlyGrossProfit = sumGrossProfit
-              }
-              return {
-                id: row.id,
-                country: row.country as string,
-                country_code: row.country_code,
-                product_name: row.product_name,
-                product_id: productId,
-                jan: Number(row.jan ?? 0), feb: Number(row.feb ?? 0), mar: Number(row.mar ?? 0),
-                apr: Number(row.apr ?? 0), may: Number(row.may ?? 0), jun: Number(row.jun ?? 0),
-                jul: Number(row.jul ?? 0), aug: Number(row.aug ?? 0), sep: Number(row.sep ?? 0),
-                oct: Number(row.oct ?? 0), nov: Number(row.nov ?? 0), dec: Number(row.dec ?? 0),
-                total_units: rowTotalUnits,
-                total_gross_sale: totalGrossSale,
-                total_gross_profit: totalGrossProfit,
-                monthly_units: monthlyUnits,
-                monthly_gross_sale: monthlyGrossSale,
-                monthly_gross_profit: monthlyGrossProfit,
-                commercial_discount: sumCommercialDiscount,
-                monthly_commercial_discount: isMonthFiltered ? sumCommercialDiscount : 0,
-              }
-            }
-
-            totalGrossSale = grossSaleUSD * rowTotalUnits
-            totalGrossProfit = grossProfitUSD * rowTotalUnits
-
-            if (isMonthFiltered) {
-              monthlyGrossSale = grossSaleUSD * monthlyUnits
-              monthlyGrossProfit = grossProfitUSD * monthlyUnits
-            }
-
-            return {
-              id: row.id,
-              country: row.country as string,
-              country_code: row.country_code,
-              product_name: row.product_name,
-              product_id: productId,
-              jan: Number(row.jan ?? 0), feb: Number(row.feb ?? 0), mar: Number(row.mar ?? 0),
-              apr: Number(row.apr ?? 0), may: Number(row.may ?? 0), jun: Number(row.jun ?? 0),
-              jul: Number(row.jul ?? 0), aug: Number(row.aug ?? 0), sep: Number(row.sep ?? 0),
-              oct: Number(row.oct ?? 0), nov: Number(row.nov ?? 0), dec: Number(row.dec ?? 0),
-              total_units: rowTotalUnits,
-              total_gross_sale: totalGrossSale,
-              total_gross_profit: totalGrossProfit,
-              monthly_units: monthlyUnits,
-              monthly_gross_sale: monthlyGrossSale,
-              monthly_gross_profit: monthlyGrossProfit,
-              commercial_discount: commercialDiscountUSDPerUnit * rowTotalUnits,
-              monthly_commercial_discount: isMonthFiltered ? commercialDiscountUSDPerUnit * monthlyUnits : 0,
-            }
-          }
-
-          return {
-            id: row.id,
-            country: row.country as string,
-            country_code: row.country_code,
-            product_name: row.product_name,
-            product_id: null,
-            jan: Number(row.jan ?? 0), feb: Number(row.feb ?? 0), mar: Number(row.mar ?? 0),
-            apr: Number(row.apr ?? 0), may: Number(row.may ?? 0), jun: Number(row.jun ?? 0),
-            jul: Number(row.jul ?? 0), aug: Number(row.aug ?? 0), sep: Number(row.sep ?? 0),
-            oct: Number(row.oct ?? 0), nov: Number(row.nov ?? 0), dec: Number(row.dec ?? 0),
-            total_units: rowTotalUnits,
-            total_gross_sale: 0,
-            total_gross_profit: 0,
-            monthly_units: monthlyUnits,
-            monthly_gross_sale: 0,
-            monthly_gross_profit: 0,
-            commercial_discount: 0,
-            monthly_commercial_discount: 0,
-          }
-        })
-      )
-
-      // Ordenar por país y luego por producto (ignorar "[" al inicio del nombre)
-      processedData.sort((a, b) => {
-        if (a.country !== b.country) {
-          return a.country.localeCompare(b.country)
-        }
-        return productNameSortKey(a.product_name).localeCompare(productNameSortKey(b.product_name), "es", { sensitivity: "base" })
-      })
-
-      setData(processedData)
-    } catch (error) {
-      console.error("Error fetching budget data:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const toggleRow = (id: string) => {
     const newExpanded = new Set(expandedRows)
@@ -422,7 +91,7 @@ export function BudgetTable({ year, budgetName, countries, products, months, cha
             .update({ product_id: product.id })
             .eq("year", year)
             .eq("product_name", row.product_name)
-          await fetchBudgetData()
+          onProductLinked?.()
         } catch (error) {
           console.error("Error al vincular producto creado a budget:", error)
           alert("No se pudo vincular el producto al budget. Intenta nuevamente.")
@@ -465,7 +134,6 @@ export function BudgetTable({ year, budgetName, countries, products, months, cha
 
   return (
     <div className="border border-white/20 rounded-lg overflow-hidden bg-white/10 backdrop-blur-sm shadow-sm">
-      {/* Indicador de mes filtrado */}
       {isMonthFiltered && (
         <div className="bg-white/10 px-4 py-2 border-b border-white/20">
           <p className="text-sm text-white/90">
@@ -492,13 +160,8 @@ export function BudgetTable({ year, budgetName, countries, products, months, cha
         </thead>
         <tbody className="divide-y divide-white/10">
           {data.map((row) => {
-            // Calcular margen según si hay filtro de mes o no
-            const grossSale = isMonthFiltered
-              ? row.monthly_gross_sale || 0
-              : row.total_gross_sale
-            const grossProfit = isMonthFiltered
-              ? row.monthly_gross_profit || 0
-              : row.total_gross_profit
+            const grossSale = isMonthFiltered ? row.monthly_gross_sale || 0 : row.total_gross_sale
+            const grossProfit = isMonthFiltered ? row.monthly_gross_profit || 0 : row.total_gross_profit
             const commercialDiscount = isMonthFiltered
               ? row.monthly_commercial_discount || 0
               : row.commercial_discount || 0
@@ -570,34 +233,33 @@ export function BudgetTable({ year, budgetName, countries, products, months, cha
                   )}
                 </tr>
 
-              {/* Fila expandida con detalle mensual - SOLO si no hay filtro de mes */}
-              {!isMonthFiltered && expandedRows.has(row.id) && (
-                <tr>
-                  <td colSpan={7} className="px-3 py-3 bg-white/5">
-                    <div className="space-y-2">
-                      <h4 className="text-xs font-semibold text-white/70">
-                        Proyección Mensual {year}
-                      </h4>
-                      <div className="grid grid-cols-12 gap-1">
-                        {monthLabels.map((month, idx) => {
-                          const monthKey = MONTH_KEYS[idx]
-                          const units = row[monthKey] || 0
+                {!isMonthFiltered && expandedRows.has(row.id) && (
+                  <tr key={`${row.id}-detail`}>
+                    <td colSpan={7} className="px-3 py-3 bg-white/5">
+                      <div className="space-y-2">
+                        <h4 className="text-xs font-semibold text-white/70">
+                          Proyección Mensual {year}
+                        </h4>
+                        <div className="grid grid-cols-12 gap-1">
+                          {monthLabels.map((month, idx) => {
+                            const monthKey = BUDGET_MONTH_KEYS[idx]
+                            const units = row[monthKey] || 0
 
-                          return (
-                            <div
-                              key={month}
-                              className="text-center p-2 bg-white/10 rounded border border-white/20"
-                            >
-                              <div className="text-xs text-white/60">{month}</div>
-                              <div className="text-sm font-semibold text-white">{units}</div>
-                            </div>
-                          )
-                        })}
+                            return (
+                              <div
+                                key={month}
+                                className="text-center p-2 bg-white/10 rounded border border-white/20"
+                              >
+                                <div className="text-xs text-white/60">{month}</div>
+                                <div className="text-sm font-semibold text-white">{units}</div>
+                              </div>
+                            )
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                </tr>
-              )}
+                    </td>
+                  </tr>
+                )}
               </>
             )
           })}
@@ -606,4 +268,3 @@ export function BudgetTable({ year, budgetName, countries, products, months, cha
     </div>
   )
 }
-

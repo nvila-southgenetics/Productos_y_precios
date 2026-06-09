@@ -117,9 +117,9 @@ export default function PLPage() {
   }, [salesCompanies, allowedCountryCodes.join("|")])
 
   useEffect(() => {
-    fetchBudgetNames()
-    fetchProducts()
-    setProductsSelected([])
+    void Promise.all([fetchBudgetNames(), fetchProducts()]).then(() => {
+      setProductsSelected([])
+    })
   }, [countriesFromCompanies.join("|"), selectedCategories, modelKey, year, selectedBudgetName])
 
   // Inicializar el mapeo por mes cuando se activa "Combinar"

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type { UserRole } from "@/lib/auth-constants"
+import { sanitizeAllowedPages } from "@/lib/page-access"
 
 const ROLES: UserRole[] = ["admin", "editor", "viewer"]
 const COUNTRY_CODES = ["UY", "AR", "MX", "CL", "VE", "CO"]
@@ -26,13 +27,24 @@ export async function GET() {
 
   const { data: permissions } = await admin
     .from("user_permissions")
-    .select("user_id, role, allowed_countries")
+    .select("user_id, role, allowed_countries, allowed_pages")
 
   const permByUser = new Map(
-    (permissions ?? []).map((p: { user_id: string; role: string; allowed_countries: string[] }) => [
-      p.user_id,
-      { role: p.role, allowed_countries: p.allowed_countries ?? [] },
-    ])
+    (permissions ?? []).map(
+      (p: {
+        user_id: string
+        role: string
+        allowed_countries: string[]
+        allowed_pages: string[] | null
+      }) => [
+        p.user_id,
+        {
+          role: p.role,
+          allowed_countries: p.allowed_countries ?? [],
+          allowed_pages: p.allowed_pages ?? null,
+        },
+      ]
+    )
   )
 
   const result = users.map((u) => ({
@@ -53,25 +65,41 @@ export async function PATCH(request: Request) {
   const role = await getCallerRole(user.id)
   if (role !== "admin") return NextResponse.json({ error: "Solo administradores" }, { status: 403 })
 
-  let body: { user_id: string; role: UserRole; allowed_countries: string[] }
+  let body: {
+    user_id: string
+    role: UserRole
+    allowed_countries: string[]
+    allowed_pages?: string[] | null
+  }
   try {
     body = await request.json()
   } catch {
     return NextResponse.json({ error: "Body JSON inválido" }, { status: 400 })
   }
 
-  const { user_id, role: newRole, allowed_countries } = body
+  const { user_id, role: newRole, allowed_countries, allowed_pages } = body
   if (!user_id) return NextResponse.json({ error: "user_id requerido" }, { status: 400 })
   if (!ROLES.includes(newRole)) return NextResponse.json({ error: "Rol inválido" }, { status: 400 })
 
   const countries = Array.isArray(allowed_countries)
     ? allowed_countries.filter((c) => COUNTRY_CODES.includes(c))
     : []
+  const pages =
+    newRole === "admin"
+      ? null
+      : sanitizeAllowedPages(allowed_pages).length > 0
+        ? sanitizeAllowedPages(allowed_pages)
+        : null
 
   const admin = createAdminClient()
 
   const { error: permError } = await admin.from("user_permissions").upsert(
-    { user_id, role: newRole, allowed_countries: newRole === "admin" ? COUNTRY_CODES : countries },
+    {
+      user_id,
+      role: newRole,
+      allowed_countries: newRole === "admin" ? COUNTRY_CODES : countries,
+      allowed_pages: pages,
+    },
     { onConflict: "user_id" }
   )
   if (permError) return NextResponse.json({ error: permError.message }, { status: 500 })

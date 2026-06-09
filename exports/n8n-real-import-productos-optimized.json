@@ -1,0 +1,1404 @@
+{
+  "name": "Real Import Productos (Optimized)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -272,
+        224
+      ],
+      "id": "aaf45a30-0f0f-4042-8fa7-4e8b18b8c806",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://southgenetics.odoo.com/jsonrpc",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\n  \"Content-Type\": \"application/json\"\n}\n",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"common\",\n    \"method\": \"authenticate\",\n    \"args\": [\"zanello1234-southgeneticsv17-main-10564043\", \"azabaleta@southgenetics.com\", \"@ALFON2004so\", {}]\n  },\n  \"id\": 1\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -48,
+        224
+      ],
+      "id": "46b47afa-b5c8-4462-811b-bc6d40c2d1d5",
+      "name": "login1"
+    },
+    {
+      "parameters": {
+        "url": "https://southgenetics.odoo.com/jsonrpc",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"object\",\n    \"method\": \"execute_kw\",\n    \"args\": [\n      \"zanello1234-southgeneticsv17-main-10564043\",\n      193,\n      \"@ALFON2004so\",\n      \"account.invoice.report\",\n      \"read_group\",\n      [\n        [\n          [\"move_type\", \"in\", [\"out_invoice\", \"out_refund\"]],\n          [\"state\", \"not in\", [\"draft\", \"cancel\"]],\n          [\"invoice_date\", \">=\", \"2025-01-01\"],\n          [\"invoice_date\", \"<=\", \"2026-12-31\"],\n          [\"partner_id\", \"!=\", 43633], \n          [\"partner_id\", \"!=\", 80637]\n        ],\n        [\n          \"quantity:sum\",\n          \"price_subtotal:sum\"\n        ],\n        [\n          \"invoice_date:day\",\n          \"company_id\",\n          \"product_id\",\n          \"partner_id\",\n          \"move_id\",\n          \"account_id\",\n          \"referrer_id\",\n          \"product_categ_id\"\n        ]\n      ],\n      {\n        \"lazy\": false\n      }\n    ]\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        176,
+        224
+      ],
+      "id": "212195ce-7888-48e8-9c65-5e03493e5dff",
+      "name": "HTTP Request3"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =========================\n// CONFIG - productos a excluir por ID\n// =========================\nconst PRODUCTOS_EXCLUIDOS = new Set([]);\n\n// =========================\n// INPUT\n// =========================\nconst rows = $input.first().json.result ?? [];\n\n// =========================\n// Helpers\n// =========================\nconst normalize = (s) =>\n  String(s ?? \"\").replace(/\\s+/g, \" \").trim().toLowerCase();\n\nconst tieneValor = (v) =>\n  v !== null && v !== undefined && String(v).trim() !== \"\";\n\nconst empresasPermitidas = [\n  \"southgenetics llc argentina\",\n  \"southgenetics llc méxico\",\n  \"southgenetics llc uruguay\",\n  \"southgenetics llc colombia\",\n  \"southgenetics llc chile\",\n  \"southgenetics llc venezuela\",\n  \"southgenetics llc\"\n];\n\nconst esEmpresaValida = (empresa) =>\n  empresasPermitidas.includes(normalize(empresa));\n\n// =========================\n// Validación\n// =========================\nif (rows.length > 0) {\n  if (!Object.prototype.hasOwnProperty.call(rows[0], \"company_id\"))\n    throw new Error(\"La respuesta no trae company_id. Revisá el read_group.\");\n\n  if (!Object.prototype.hasOwnProperty.call(rows[0], \"partner_id\"))\n    throw new Error(\"La respuesta no trae partner_id. Revisá el read_group.\");\n\n  if (!Object.prototype.hasOwnProperty.call(rows[0], \"referrer_id\"))\n    throw new Error(\"La respuesta no trae referrer_id. Revisá el read_group.\");\n\n  if (!Object.prototype.hasOwnProperty.call(rows[0], \"product_id\"))\n    throw new Error(\"La respuesta no trae product_id. Revisá el read_group.\");\n\n  if (!Object.prototype.hasOwnProperty.call(rows[0], \"product_categ_id\"))\n    throw new Error(\"La respuesta no trae product_categ_id. Revisá el read_group.\");\n\n  if (!Object.prototype.hasOwnProperty.call(rows[0], \"move_id\"))\n    throw new Error(\"La respuesta no trae move_id. Revisá el read_group.\");\n}\n\n// =========================\n// Limpieza, filtrado y salida\n// =========================\nconst resultado = [];\n\nfor (const r of rows) {\n  const empresa = Array.isArray(r.company_id)\n    ? String(r.company_id[1] ?? \"\").trim()\n    : \"\";\n\n  const empresa_id = Array.isArray(r.company_id)\n    ? r.company_id[0]\n    : null;\n\n  const producto = Array.isArray(r.product_id)\n    ? String(r.product_id[1] ?? \"\").trim()\n    : \"\";\n\n  const producto_id = Array.isArray(r.product_id)\n    ? r.product_id[0]\n    : null;\n\n  const product_categ = Array.isArray(r.product_categ_id)\n    ? String(r.product_categ_id[1] ?? \"\").trim()\n    : \"\";\n\n  const product_categ_id = Array.isArray(r.product_categ_id)\n    ? r.product_categ_id[0]\n    : null;\n\n  const partner = Array.isArray(r.partner_id)\n    ? String(r.partner_id[1] ?? \"\").trim()\n    : \"\";\n\n  const partner_id = Array.isArray(r.partner_id)\n    ? r.partner_id[0]\n    : null;\n\n  const referrer = Array.isArray(r.referrer_id)\n    ? String(r.referrer_id[1] ?? \"\").trim()\n    : \"\";\n\n  const referrer_id = Array.isArray(r.referrer_id)\n    ? r.referrer_id[0]\n    : null;\n\n  const move_id = Array.isArray(r.move_id)\n    ? r.move_id[0]\n    : null;\n\n  const move_nombre = Array.isArray(r.move_id)\n    ? String(r.move_id[1] ?? \"\").trim()\n    : \"\";\n\n  const fecha_dia = String(r[\"invoice_date:day\"] ?? \"\").trim();\n\n  const fecha_dia_inicio =\n    String(r.__range?.[\"invoice_date:day\"]?.from ?? \"\").trim();\n\n  const cantidad = Number(r.quantity ?? 0);\n\n  const precio_total = Number(r.price_subtotal ?? 0);\n\n  // =========================\n  // Filtros\n  // =========================\n  const fechaValida =\n    tieneValor(fecha_dia_inicio) || tieneValor(fecha_dia);\n\n  if (\n    !fechaValida ||\n    !tieneValor(empresa) ||\n    !tieneValor(partner) ||\n    !tieneValor(producto) ||\n    !esEmpresaValida(empresa) ||\n    PRODUCTOS_EXCLUIDOS.has(producto_id)\n  ) continue;\n\n  resultado.push({\n    fecha_dia,\n    fecha_dia_inicio,\n\n    move_id,\n    move_nombre,\n\n    empresa_id,\n    empresa,\n\n    partner_id,\n    partner,\n\n    referrer_id,\n    referrer,\n\n    product_categ_id,\n    product_categ,\n\n    producto_id,\n    producto,\n\n    cantidad,\n\n    precio_unitario:\n      cantidad !== 0\n        ? precio_total / cantidad\n        : 0,\n\n    precio_total,\n  });\n}\n\n// =========================\n// Ordenar\n// =========================\nresultado.sort((a, b) => {\n  if ((a.fecha_dia_inicio || \"\") < (b.fecha_dia_inicio || \"\")) return -1;\n  if ((a.fecha_dia_inicio || \"\") > (b.fecha_dia_inicio || \"\")) return 1;\n\n  if ((a.empresa || \"\") < (b.empresa || \"\")) return -1;\n  if ((a.empresa || \"\") > (b.empresa || \"\")) return 1;\n\n  if ((a.partner || \"\") < (b.partner || \"\")) return -1;\n  if ((a.partner || \"\") > (b.partner || \"\")) return 1;\n\n  if ((a.producto || \"\") < (b.producto || \"\")) return -1;\n  if ((a.producto || \"\") > (b.producto || \"\")) return 1;\n\n  return 0;\n});\n\n// =========================\n// Salida final\n// =========================\nreturn resultado.map((r) => ({\n  json: r\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        224
+      ],
+      "id": "78bc9a5a-67be-4115-a776-a3173c1e50c0",
+      "name": "Code in JavaScript9"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "61923bb3-1c92-412e-8f42-dc7abb71ed28",
+              "name": "AFIRMA- Oncología",
+              "value": "Afirma GSC",
+              "type": "string"
+            },
+            {
+              "id": "d53dec9d-ac48-4426-bc9e-172006587709",
+              "name": "Carrier",
+              "value": "Unity Carrier",
+              "type": "string"
+            },
+            {
+              "id": "352bd32f-2242-431e-9f03-bffdd36bda2f",
+              "name": "Decision",
+              "value": "Decision DX: Add On",
+              "type": "string"
+            },
+            {
+              "id": "cee527dd-45cc-43b5-ab33-43094bbd1a9d",
+              "name": "4KSCORE",
+              "value": "4Kscore",
+              "type": "string"
+            },
+            {
+              "id": "d24cdfaa-609a-4b48-ac8a-f9b590aebd45",
+              "name": "Confirm MDx",
+              "value": "Confirm MDX",
+              "type": "string"
+            },
+            {
+              "id": "95aa90c0-e3b4-404e-8106-10669e345cd0",
+              "name": "MATERNIT GENOME",
+              "value": "MaterniT Genome",
+              "type": "string"
+            },
+            {
+              "id": "1ccd7e11-4708-40be-aedf-c214a8360ea5",
+              "name": "MATERNIT 21 + SCA",
+              "value": "MaterniT21",
+              "type": "string"
+            },
+            {
+              "id": "b427500e-d8cc-40a7-9e8e-42c7fc02542a",
+              "name": "MATERNIT 21 + SCA + ESS",
+              "value": "MaterniT21 Plus",
+              "type": "string"
+            },
+            {
+              "id": "265bbeea-bb40-4bc0-9c82-d62c61bd69e2",
+              "name": "PANEL CA HEREDITARIO EXTENDIDO",
+              "value": "Invitae Multi-Cancer Panel",
+              "type": "string"
+            },
+            {
+              "id": "5cb60632-d78b-48d4-bab0-615ae3039765",
+              "name": "PANEL GENETICO INVITAE",
+              "value": "Panel Genetico Invitae",
+              "type": "string"
+            },
+            {
+              "id": "d4e66d8c-58b5-49f0-98b9-887852b593db",
+              "name": "PATERNIDAD PRE",
+              "value": "Paternidad Prenatal BGI",
+              "type": "string"
+            },
+            {
+              "id": "dc3d206e-c8d3-4859-b744-7574f010d249",
+              "name": "SENTIS™ Lung Cancer Medication Guidance (tissue, 50 genes)",
+              "value": "SENTIS™ Panel Gástrico (Tissue, 20 genes)",
+              "type": "string"
+            },
+            {
+              "id": "2e93d807-5395-4fd3-bd19-4d7eab47335b",
+              "name": "SENTIS™ Lung Cancer Panel (Tissue, 20 genes)",
+              "value": "SENTIS™ Lung Cancer Panel (Tissue)",
+              "type": "string"
+            },
+            {
+              "id": "6964e2d3-6c0a-442a-a871-37ecdd714ee1",
+              "name": "SENTIS™ Non-invasive Lung Cancer Panel (ctDNA, 13 genes)",
+              "value": "SENTIS™ Non-invasive Lung Cancer Panel (ctDNA)",
+              "type": "string"
+            },
+            {
+              "id": "4245a566-7491-481f-8ea0-89a716a1a33a",
+              "name": "Sentis Discovery CTDNA",
+              "value": "Sentis Cancer + Discovery (B)",
+              "type": "string"
+            },
+            {
+              "id": "3da5fff0-806f-47fa-91a0-bd4cf7d221a5",
+              "name": "Sentis Discovery Tissue",
+              "value": "Sentis Cancer + Discovery (T)",
+              "type": "string"
+            },
+            {
+              "id": "202d3430-8d9a-4fa9-a667-66de9e0f612e",
+              "name": "Sentis: Multi-Cancer Precision Medication Guidance",
+              "value": "Sentis: Multi-Cancer Precision Medication Guidance (ctDNA)",
+              "type": "string"
+            },
+            {
+              "id": "6e637c5b-42f9-456b-a7c3-ca98068f692a",
+              "name": "Unity Básico",
+              "value": "Unity",
+              "type": "string"
+            },
+            {
+              "id": "8187f253-e0cb-48ee-81d9-bd9508925b28",
+              "name": "[CellSearch CTC] CellSearch CTC",
+              "value": "CellSearch CTC",
+              "type": "string"
+            },
+            {
+              "id": "66834070-c0c7-452c-903a-87b54c19b13e",
+              "name": "[Genomic Prostate Score (GPS)] ONCOTYPE DX GPS (Próstata)",
+              "value": "Genomic Prostate Score",
+              "type": "string"
+            },
+            {
+              "id": "9ebc05b1-38b7-47c9-a176-9013713ffdf8",
+              "name": "[Genomind Professional PGx] Genomind Profesional PGx",
+              "value": "Genomind Profesional PGx",
+              "type": "string"
+            },
+            {
+              "id": "05350eca-9b10-419b-854e-cea387c92523",
+              "name": "[Oncotype Dx Mama] ONCOTYPE DX MAMA",
+              "value": "Oncotype Dx Mama",
+              "type": "string"
+            },
+            {
+              "id": "b0e96ff2-6c34-447c-bcbe-ee9071a099c5",
+              "name": "[Tempus xF +] Tempus xF + biopsia liquida",
+              "value": "Tempus xF + biopsia liquida",
+              "type": "string"
+            },
+            {
+              "id": "468e1336-4ca3-419d-b701-42d737e07767",
+              "name": "[XT + XR] Tempus XT + XR Tejido",
+              "value": "Tempus XT + XR Tejido",
+              "type": "string"
+            },
+            {
+              "id": "12e98e58-fa5a-4625-b910-ba3a58b3c1ef",
+              "name": "[mirTHYpe FULL] Mir-THYpe(R)",
+              "value": "mirTHYpe FULL",
+              "type": "string"
+            },
+            {
+              "id": "8448634f-9639-4e9a-bce7-a40ca99567d9",
+              "name": "[mirTHYpe preOp] mirTHYpe preOp",
+              "value": "mirTHYpe preOp",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -272,
+        -272
+      ],
+      "id": "4ca2e04a-ea33-4c10-8863-886fb8274381",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(item => item.json);\n\nconst cantidadesPorEmpresa = new Map();\n\nfor (const row of rows) {\n  const empresa = row.empresa || \"Sin empresa\";\n  const cantidad = Number(row.cantidad || 0);\n\n  cantidadesPorEmpresa.set(\n    empresa,\n    (cantidadesPorEmpresa.get(empresa) || 0) + cantidad\n  );\n}\n\nreturn [...cantidadesPorEmpresa.entries()].map(([empresa, total_cantidad]) => ({\n  json: {\n    empresa,\n    total_cantidad\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        32
+      ],
+      "id": "a0ba8bdb-9e90-4975-912e-c1776698f724",
+      "name": "Code in JavaScript8"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// =========================\n// Acumular cantidades por empresa\n// =========================\nconst cantidadesPorEmpresa = {};\n\nfor (const item of items) {\n  const empresa = item.json.empresa || \"Sin empresa\";\n  const cantidad = Number(item.json.cantidad) || 0;\n\n  if (!cantidadesPorEmpresa[empresa]) {\n    cantidadesPorEmpresa[empresa] = 0;\n  }\n\n  cantidadesPorEmpresa[empresa] += cantidad;\n}\n\n// =========================\n// Salida\n// =========================\nreturn Object.entries(cantidadesPorEmpresa).map(([empresa, cantidad_total]) => ({\n  json: {\n    empresa,\n    cantidad_total\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        416
+      ],
+      "id": "ddf9e093-3309-41c2-9749-8607e9a102a9",
+      "name": "Code in JavaScript10"
+    },
+    {
+      "parameters": {
+        "jsCode": "const ventas = $('Code in JavaScript9').all().map((i) => i.json);\nconst partner_ids = [...new Set(ventas.map((v) => v.partner_id).filter((id) => id != null && id !== false))];\nconst referrer_ids = [...new Set(ventas.map((v) => v.referrer_id).filter((id) => id != null && id !== false))];\nconst producto_ids = [...new Set(ventas.map((v) => v.producto_id).filter((id) => id != null))];\nconst producto_names = [...new Set(ventas.map((v) => v.producto).filter((n) => n))];\n\nconst quote = (s) => '\"' + String(s).replace(/\"/g, '\\\\\"') + '\"';\nconst parts = [];\nif (producto_ids.length) parts.push(`id_odoo.in.(${producto_ids.join(\",\")})`);\nif (producto_names.length) parts.push(`name.in.(${producto_names.map(quote).join(\",\")})`);\nconst products_filter =\n  parts.length > 1 ? `or=(${parts.join(\",\")})` : parts[0] ?? \"id_odoo=eq.-1\";\n\nreturn [{ json: { partner_ids, referrer_ids, producto_ids, producto_names, products_filter } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        224
+      ],
+      "id": "18648aa3-22fa-44d3-9749-1075b1d49f54",
+      "name": "Code Extract Unique IDs"
+    },
+    {
+      "parameters": {
+        "url": "https://southgenetics.odoo.com/jsonrpc",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"object\",\n    \"method\": \"execute_kw\",\n    \"args\": [\n      \"zanello1234-southgeneticsv17-main-10564043\",\n      193,\n      \"@ALFON2004so\",\n      \"res.partner\",\n      \"read\",\n      [{{ JSON.stringify($json.partner_ids) }}],\n      { \"fields\": [\"id\",\"name\",\"country_id\",\"parent_id\",\"commercial_partner_id\",\"company_name\",\"is_company\",\"institucion_id\"] }\n    ]\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1104,
+        160
+      ],
+      "id": "49e31071-2291-44f4-8936-5377846b0220",
+      "name": "HTTP Batch Partners"
+    },
+    {
+      "parameters": {
+        "url": "https://southgenetics.odoo.com/jsonrpc",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"object\",\n    \"method\": \"execute_kw\",\n    \"args\": [\n      \"zanello1234-southgeneticsv17-main-10564043\",\n      193,\n      \"@ALFON2004so\",\n      \"res.partner\",\n      \"read\",\n      [{{ JSON.stringify($json.referrer_ids) }}],\n      {\n        \"fields\": [\"id\",\"name\",\"country_id\",\"parent_id\",\"commercial_partner_id\",\"company_name\",\"is_company\",\"institucion_id\"]\n      }\n    ]\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1104,
+        288
+      ],
+      "id": "597c38b0-f99b-4f6d-8868-00c9594657df",
+      "name": "HTTP Batch Referrers"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://cdrmxjcdgxjyakrcpxnp.supabase.co/rest/v1/products?select=id,id_odoo,name,alias&limit=1000",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1104,
+        416
+      ],
+      "id": "837411e8-4803-4bc2-8f58-dd63cf23ee1f",
+      "name": "HTTP Batch Products Supabase",
+      "credentials": {
+        "supabaseApi": {
+          "id": "XHcaljVEAHxnAcxd",
+          "name": "P&L"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1328,
+        288
+      ],
+      "id": "d062a2a1-28d9-40df-9007-d86520c69cb4",
+      "name": "Merge Batch Fetches"
+    },
+    {
+      "parameters": {
+        "jsCode": "function parseSupabaseRows(raw) {\n  if (Array.isArray(raw)) return raw;\n  if (!raw || typeof raw !== 'object') return [];\n  if (Array.isArray(raw.body)) return raw.body;\n  if (Array.isArray(raw.data)) return raw.data;\n  if (raw.id) return [raw];\n  return [];\n}\n\n/** n8n HTTP suele emitir 1 item por fila del JSON array; .first() solo ve 1 producto. */\nfunction loadAllProductsFromHttp(nodeName) {\n  const items = $(nodeName).all();\n  const products = [];\n  for (const item of items) {\n    const rows = parseSupabaseRows(item.json);\n    if (rows.length > 1) {\n      products.push(...rows);\n    } else if (rows.length === 1) {\n      products.push(rows[0]);\n    } else if (item.json?.id) {\n      products.push(item.json);\n    }\n  }\n  return products;\n}\nconst extract = $('Code Extract Unique IDs').first().json;\nconst partnerRows = $('HTTP Batch Partners').first().json.result ?? [];\nconst referrerRows = $('HTTP Batch Referrers').first().json.result ?? [];\n\nconst products = loadAllProductsFromHttp('HTTP Batch Products Supabase');\n\nreturn [{ json: { ...extract, partnerRows, referrerRows, products, products_loaded: products.length } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1552,
+        288
+      ],
+      "id": "c87c8744-1b72-4491-9f19-a9a6ebd4b2bd",
+      "name": "Code After Batch Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "function parseSupabaseRows(raw) {\n  if (Array.isArray(raw)) return raw;\n  if (!raw || typeof raw !== 'object') return [];\n  if (Array.isArray(raw.body)) return raw.body;\n  if (Array.isArray(raw.data)) return raw.data;\n  if (raw.id) return [raw];\n  return [];\n}\n\n/** n8n HTTP suele emitir 1 item por fila del JSON array; .first() solo ve 1 producto. */\nfunction loadAllProductsFromHttp(nodeName) {\n  const items = $(nodeName).all();\n  const products = [];\n  for (const item of items) {\n    const rows = parseSupabaseRows(item.json);\n    if (rows.length > 1) {\n      products.push(...rows);\n    } else if (rows.length === 1) {\n      products.push(rows[0]);\n    } else if (item.json?.id) {\n      products.push(item.json);\n    }\n  }\n  return products;\n}\nconst ventas = $('Code in JavaScript9').all().map((i) => i.json);\nconst batch = $input.first().json;\nconst partnerRows = batch.partnerRows ?? [];\nconst referrerRows = batch.referrerRows ?? [];\nconst productRows = parseSupabaseRows(batch.products);\n\nfunction mapPartner(r) {\n  return {\n    id: r.id ?? null,\n    nombre: r.name ?? \"\",\n    institucion_id: Array.isArray(r.institucion_id) ? r.institucion_id[0] : null,\n    institucion: Array.isArray(r.institucion_id) ? r.institucion_id[1] : \"\",\n    parent_id: Array.isArray(r.parent_id) ? r.parent_id[0] : null,\n    parent_nombre: Array.isArray(r.parent_id) ? r.parent_id[1] : \"\",\n    commercial_partner_id: Array.isArray(r.commercial_partner_id) ? r.commercial_partner_id[0] : null,\n    commercial_partner: Array.isArray(r.commercial_partner_id) ? r.commercial_partner_id[1] : \"\",\n    country_id: Array.isArray(r.country_id) ? r.country_id[0] : null,\n    country: Array.isArray(r.country_id) ? r.country_id[1] : \"\",\n    company_name: r.company_name || \"\",\n    is_company: r.is_company ?? false,\n  };\n}\n\nconst partnersById = Object.fromEntries(partnerRows.map((r) => [r.id, mapPartner(r)]));\nconst referrersById = Object.fromEntries(referrerRows.map((r) => [r.id, mapPartner(r)]));\n\nconst odooKey = (id) => (id == null || id === \"\" ? null : Number(id));\n\nconst productsByOdoo = {};\nconst productsByName = {};\nconst productsByAlias = {};\nfor (const p of productRows) {\n  const k = odooKey(p.id_odoo);\n  if (k != null && !Number.isNaN(k)) productsByOdoo[k] = p;\n  if (p.name) productsByName[p.name] = p;\n  if (p.alias) productsByAlias[p.alias] = p;\n}\n\nconst missingByOdoo = new Map();\nfor (const v of ventas) {\n  const pid = odooKey(v.producto_id);\n  if (pid == null || Number.isNaN(pid)) continue;\n  if (productsByOdoo[pid]) continue;\n  const byName = productsByName[v.producto];\n  if (byName) continue;\n  if (!missingByOdoo.has(pid)) {\n    missingByOdoo.set(pid, { producto_id: pid, producto: v.producto });\n  }\n}\n\nconst patchIdOdoo = [];\nfor (const v of ventas) {\n  const pid = odooKey(v.producto_id);\n  if (pid == null || Number.isNaN(pid)) continue;\n  if (productsByOdoo[pid]) continue;\n  const byName = productsByName[v.producto];\n  if (byName && (byName.id_odoo == null || byName.id_odoo === \"\")) {\n    patchIdOdoo.push({ id: byName.id, id_odoo: pid });\n  }\n}\n\nreturn [\n  {\n    json: {\n      ventas,\n      partnersById,\n      referrersById,\n      products: productRows,\n      productsByOdoo,\n      productsByName,\n      productsByAlias,\n      patchIdOdoo,\n      missing_products: [...missingByOdoo.values()],\n      products_loaded: productRows.length,\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1776,
+        288
+      ],
+      "id": "255f98c9-f8aa-4301-a560-7ea065172dd1",
+      "name": "Code Build Caches"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "47c5dd6b-f7e8-4d20-8966-464ce2aab140",
+              "leftValue": "={{ ($json.missing_products ?? []).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2000,
+        288
+      ],
+      "id": "955ecd8b-b97f-4c8e-b4f8-6d82d3c8d48e",
+      "name": "If Missing Products"
+    },
+    {
+      "parameters": {
+        "jsCode": "const { missing_products } = $input.first().json;\nreturn (missing_products ?? []).map((m) => ({ json: m }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2224,
+        208
+      ],
+      "id": "6f5742ec-5ded-4de3-82ba-4ae2a1eee655",
+      "name": "Code Split Missing Products"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        2448,
+        208
+      ],
+      "id": "d745d06f-07b8-481c-8cb7-ad052eb232c1",
+      "name": "Loop Missing Products"
+    },
+    {
+      "parameters": {
+        "jsCode": "function buildRuntimeCache() {\n  const cache = $('Code Build Caches').first().json;\n  const productsByOdoo = { ...cache.productsByOdoo };\n  const productsByName = { ...cache.productsByName };\n  const productsByAlias = { ...(cache.productsByAlias ?? {}) };\n\n  function register(row) {\n    if (!row?.id) return;\n    const k = row.id_odoo == null || row.id_odoo === \"\" ? null : Number(row.id_odoo);\n    if (k != null && !Number.isNaN(k)) productsByOdoo[k] = row;\n    if (row.name) productsByName[row.name] = row;\n    if (row.alias) productsByAlias[row.alias] = row;\n  }\n\n  for (const item of $('Loop Missing Products').all()) {\n    register(item.json);\n  }\n  return { productsByOdoo, productsByName, productsByAlias };\n}\n\nfunction findByLabel(maps, label) {\n  if (!label) return null;\n  return maps.productsByName[label] || maps.productsByAlias[label] || null;\n}\n\nfunction resolveProductAction(odooId, label, maps) {\n  const k = odooId == null || odooId === \"\" ? null : Number(odooId);\n  const byOdoo = k != null && !Number.isNaN(k) ? maps.productsByOdoo[k] : null;\n  if (byOdoo) {\n    return { action: 'use_existing', existing_product: byOdoo };\n  }\n  const byName = findByLabel(maps, label);\n  if (byName) {\n    if (byName.id_odoo != null && byName.id_odoo !== '') {\n      return { action: 'use_existing', existing_product: byName };\n    }\n    return {\n      action: 'link_only',\n      supabase_id: byName.id,\n      id_odoo: odooId,\n      existing_product: byName,\n    };\n  }\n  return { action: 'create' };\n}\nfunction parseSupabaseRows(raw) {\n  if (Array.isArray(raw)) return raw;\n  if (!raw || typeof raw !== 'object') return [];\n  if (Array.isArray(raw.body)) return raw.body;\n  if (Array.isArray(raw.data)) return raw.data;\n  if (raw.id) return [raw];\n  return [];\n}\n\n/** n8n HTTP suele emitir 1 item por fila del JSON array; .first() solo ve 1 producto. */\nfunction loadAllProductsFromHttp(nodeName) {\n  const items = $(nodeName).all();\n  const products = [];\n  for (const item of items) {\n    const rows = parseSupabaseRows(item.json);\n    if (rows.length > 1) {\n      products.push(...rows);\n    } else if (rows.length === 1) {\n      products.push(rows[0]);\n    } else if (item.json?.id) {\n      products.push(item.json);\n    }\n  }\n  return products;\n}\n\nfunction mapsFromCache(cache) {\n  const productsByOdoo = { ...(cache.productsByOdoo || {}) };\n  const productsByName = { ...(cache.productsByName || {}) };\n  const productsByAlias = { ...(cache.productsByAlias || {}) };\n  for (const p of parseSupabaseRows(cache.products)) {\n    const k = p.id_odoo == null || p.id_odoo === '' ? null : Number(p.id_odoo);\n    if (k != null && !Number.isNaN(k)) productsByOdoo[k] = p;\n    if (p.name) productsByName[p.name] = p;\n    if (p.alias) productsByAlias[p.alias] = p;\n  }\n  return { productsByOdoo, productsByName, productsByAlias };\n}\n\nconst item = $('Loop Missing Products').item.json;\nconst cache = $('Code Build Caches').first().json;\nconst maps = buildRuntimeCache();\nconst base = mapsFromCache(cache);\nfor (const k of Object.keys(base.productsByOdoo)) maps.productsByOdoo[k] = base.productsByOdoo[k];\nfor (const k of Object.keys(base.productsByName)) maps.productsByName[k] = base.productsByName[k];\nfor (const k of Object.keys(base.productsByAlias)) maps.productsByAlias[k] = base.productsByAlias[k];\n\nconst odooId = item.producto_id;\nconst resolved = resolveProductAction(odooId, item.producto, maps);\n\nif (resolved.action === 'create') {\n  return [{ json: { action: 'needs_odoo', ...item, _debug_products_loaded: cache.products_loaded } }];\n}\nreturn [{ json: resolved }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2448,
+        208
+      ],
+      "id": "c52cfdde-932d-4a68-bdb4-0d443506f48b",
+      "name": "Code PreCheck Product"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "770fc4e6-41d8-4079-80ed-be013b92297b",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "needs_odoo",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2672,
+        208
+      ],
+      "id": "6c9c8724-752c-40af-a383-2f93192b5157",
+      "name": "If Needs Odoo"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "9c4020eb-855f-424c-b52b-83a584ebd249",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "link_only",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2896,
+        320
+      ],
+      "id": "e21c889f-af69-40a1-baa6-84aa0ae0d7d7",
+      "name": "If Link Only PreCheck"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://cdrmxjcdgxjyakrcpxnp.supabase.co/rest/v1/rpc/patch_product_id_odoo",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"p_id\": \"{{ $json.supabase_id }}\", \"p_id_odoo\": {{ $json.id_odoo }} }",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3120,
+        128
+      ],
+      "id": "7b31c494-7db0-4e78-b2d1-d8187dbb47a4",
+      "name": "HTTP Link Product id_odoo",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "XHcaljVEAHxnAcxd",
+          "name": "P&L"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "custom",
+        "customResource": "product.product",
+        "operation": "get",
+        "customResourceId": "={{ $json.producto_id }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.odoo",
+      "typeVersion": 1,
+      "position": [
+        2896,
+        288
+      ],
+      "id": "10d9127c-b158-40a4-a5db-f17fd471acfb",
+      "name": "Get Odoo Product",
+      "credentials": {
+        "odooApi": {
+          "id": "h3Ow1x6KQ08bMDHt",
+          "name": "Conexion Alfonso Produccion"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function buildRuntimeCache() {\n  const cache = $('Code Build Caches').first().json;\n  const productsByOdoo = { ...cache.productsByOdoo };\n  const productsByName = { ...cache.productsByName };\n  const productsByAlias = { ...(cache.productsByAlias ?? {}) };\n\n  function register(row) {\n    if (!row?.id) return;\n    const k = row.id_odoo == null || row.id_odoo === \"\" ? null : Number(row.id_odoo);\n    if (k != null && !Number.isNaN(k)) productsByOdoo[k] = row;\n    if (row.name) productsByName[row.name] = row;\n    if (row.alias) productsByAlias[row.alias] = row;\n  }\n\n  for (const item of $('Loop Missing Products').all()) {\n    register(item.json);\n  }\n  return { productsByOdoo, productsByName, productsByAlias };\n}\n\nfunction findByLabel(maps, label) {\n  if (!label) return null;\n  return maps.productsByName[label] || maps.productsByAlias[label] || null;\n}\n\nfunction resolveProductAction(odooId, label, maps) {\n  const k = odooId == null || odooId === \"\" ? null : Number(odooId);\n  const byOdoo = k != null && !Number.isNaN(k) ? maps.productsByOdoo[k] : null;\n  if (byOdoo) {\n    return { action: 'use_existing', existing_product: byOdoo };\n  }\n  const byName = findByLabel(maps, label);\n  if (byName) {\n    if (byName.id_odoo != null && byName.id_odoo !== '') {\n      return { action: 'use_existing', existing_product: byName };\n    }\n    return {\n      action: 'link_only',\n      supabase_id: byName.id,\n      id_odoo: odooId,\n      existing_product: byName,\n    };\n  }\n  return { action: 'create' };\n}\nfunction parseSupabaseRows(raw) {\n  if (Array.isArray(raw)) return raw;\n  if (!raw || typeof raw !== 'object') return [];\n  if (Array.isArray(raw.body)) return raw.body;\n  if (Array.isArray(raw.data)) return raw.data;\n  if (raw.id) return [raw];\n  return [];\n}\n\n/** n8n HTTP suele emitir 1 item por fila del JSON array; .first() solo ve 1 producto. */\nfunction loadAllProductsFromHttp(nodeName) {\n  const items = $(nodeName).all();\n  const products = [];\n  for (const item of items) {\n    const rows = parseSupabaseRows(item.json);\n    if (rows.length > 1) {\n      products.push(...rows);\n    } else if (rows.length === 1) {\n      products.push(rows[0]);\n    } else if (item.json?.id) {\n      products.push(item.json);\n    }\n  }\n  return products;\n}\n\nfunction mapsFromCache(cache) {\n  const productsByOdoo = { ...(cache.productsByOdoo || {}) };\n  const productsByName = { ...(cache.productsByName || {}) };\n  const productsByAlias = { ...(cache.productsByAlias || {}) };\n  for (const p of parseSupabaseRows(cache.products)) {\n    const k = p.id_odoo == null || p.id_odoo === '' ? null : Number(p.id_odoo);\n    if (k != null && !Number.isNaN(k)) productsByOdoo[k] = p;\n    if (p.name) productsByName[p.name] = p;\n    if (p.alias) productsByAlias[p.alias] = p;\n  }\n  return { productsByOdoo, productsByName, productsByAlias };\n}\n\nconst odoo = $input.first().json;\nconst item = $('Code PreCheck Product').item.json;\nconst cache = $('Code Build Caches').first().json;\nconst maps = buildRuntimeCache();\nconst base = mapsFromCache(cache);\nfor (const k of Object.keys(base.productsByOdoo)) maps.productsByOdoo[k] = base.productsByOdoo[k];\nfor (const k of Object.keys(base.productsByName)) maps.productsByName[k] = base.productsByName[k];\nfor (const k of Object.keys(base.productsByAlias)) maps.productsByAlias[k] = base.productsByAlias[k];\n\nconst odooId = odoo.id;\nconst ref = odoo.partner_ref || odoo.name || '';\n\nlet out = resolveProductAction(odooId, item.producto, maps);\nif (out.action === 'create') out = resolveProductAction(odooId, ref, maps);\n\nif (out.action === 'create') {\n  return [{ json: { action: 'create', odoo } }];\n}\nreturn [{ json: out }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3120,
+        288
+      ],
+      "id": "d19acc1c-7a15-43da-81cb-e5d1a7c845b1",
+      "name": "Code After Odoo Route"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6716c238-67b3-4dd2-a5f7-7bbc5d636dee",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "create",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3344,
+        288
+      ],
+      "id": "2fd1378e-4a7e-4fe5-8bf1-9f77524567bd",
+      "name": "If Product Create"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5de779bb-d0c6-4060-af66-ed2c080da227",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "link_only",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3568,
+        368
+      ],
+      "id": "73caf2e5-e3c2-43fe-a013-a73e711217e6",
+      "name": "If Link Only After Odoo"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://cdrmxjcdgxjyakrcpxnp.supabase.co/rest/v1/products?on_conflict=id_odoo",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=ignore-duplicates,return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=[{\n  \"name\": {{ JSON.stringify($json.odoo.partner_ref) }},\n  \"base_price\": {{ $json.odoo.sale_avg_price ?? 0 }},\n  \"currency\": {{ JSON.stringify(Array.isArray($json.odoo.company_currency_id) ? $json.odoo.company_currency_id[1] : \"\") }},\n  \"user_id\": \"6d02200b-5a44-4883-a392-34ca35ce0b6d\",\n  \"category\": {{ JSON.stringify(Array.isArray($json.odoo.categ_id) ? $json.odoo.categ_id[1] : \"\") }},\n  \"alias\": {{ JSON.stringify($json.odoo.partner_ref) }},\n  \"id_odoo\": {{ $json.odoo.id }}\n}]",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3568,
+        208
+      ],
+      "id": "80c7bb8e-f392-4612-88c7-2c642194e5eb",
+      "name": "HTTP Insert Product",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "XHcaljVEAHxnAcxd",
+          "name": "P&L"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://cdrmxjcdgxjyakrcpxnp.supabase.co/rest/v1/products?select=id,id_odoo,name,alias,base_price,currency,category,user_id,description,tipo&id_odoo=eq.{{ $('Code After Odoo Route').first().json.odoo.id }}&limit=1",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3792,
+        208
+      ],
+      "id": "60250ad0-05dc-4653-b591-5053edb58627",
+      "name": "HTTP Get Product by id_odoo",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "XHcaljVEAHxnAcxd",
+          "name": "P&L"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://cdrmxjcdgxjyakrcpxnp.supabase.co/rest/v1/rpc/patch_product_id_odoo",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"p_id\": \"{{ $json.supabase_id }}\", \"p_id_odoo\": {{ $json.id_odoo }} }",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3568,
+        368
+      ],
+      "id": "2d5bf2ac-3368-4f37-9a1f-3e9fe493166a",
+      "name": "HTTP Link After Odoo",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "XHcaljVEAHxnAcxd",
+          "name": "P&L"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function buildRuntimeCache() {\n  const cache = $('Code Build Caches').first().json;\n  const productsByOdoo = { ...cache.productsByOdoo };\n  const productsByName = { ...cache.productsByName };\n  const productsByAlias = { ...(cache.productsByAlias ?? {}) };\n\n  function register(row) {\n    if (!row?.id) return;\n    const k = row.id_odoo == null || row.id_odoo === \"\" ? null : Number(row.id_odoo);\n    if (k != null && !Number.isNaN(k)) productsByOdoo[k] = row;\n    if (row.name) productsByName[row.name] = row;\n    if (row.alias) productsByAlias[row.alias] = row;\n  }\n\n  for (const item of $('Loop Missing Products').all()) {\n    register(item.json);\n  }\n  return { productsByOdoo, productsByName, productsByAlias };\n}\n\nfunction findByLabel(maps, label) {\n  if (!label) return null;\n  return maps.productsByName[label] || maps.productsByAlias[label] || null;\n}\n\nfunction resolveProductAction(odooId, label, maps) {\n  const k = odooId == null || odooId === \"\" ? null : Number(odooId);\n  const byOdoo = k != null && !Number.isNaN(k) ? maps.productsByOdoo[k] : null;\n  if (byOdoo) {\n    return { action: 'use_existing', existing_product: byOdoo };\n  }\n  const byName = findByLabel(maps, label);\n  if (byName) {\n    if (byName.id_odoo != null && byName.id_odoo !== '') {\n      return { action: 'use_existing', existing_product: byName };\n    }\n    return {\n      action: 'link_only',\n      supabase_id: byName.id,\n      id_odoo: odooId,\n      existing_product: byName,\n    };\n  }\n  return { action: 'create' };\n}\nfunction pickRow(data) {\n  if (!data) return null;\n  if (data.existing_product?.id) {\n    return {\n      ...data.existing_product,\n      id_odoo: data.id_odoo ?? data.existing_product.id_odoo,\n    };\n  }\n  const row = Array.isArray(data) ? data[0] : data;\n  if (row?.id) return row;\n  return null;\n}\n\nfor (const item of $input.all()) {\n  const row = pickRow(item.json);\n  if (row) return [{ json: row }];\n}\n\nconst maps = buildRuntimeCache();\nconst route = $('Code After Odoo Route').first()?.json;\nconst pre = $('Code PreCheck Product').first()?.json;\nconst odooId =\n  route?.odoo?.id ??\n  route?.id_odoo ??\n  pre?.id_odoo ??\n  pre?.producto_id ??\n  null;\n\nif (route?.existing_product?.id) {\n  return [{\n    json: {\n      ...route.existing_product,\n      id_odoo: odooId ?? route.existing_product.id_odoo,\n    },\n  }];\n}\nif (pre?.existing_product?.id) {\n  return [{\n    json: {\n      ...pre.existing_product,\n      id_odoo: odooId ?? pre.existing_product.id_odoo,\n    },\n  }];\n}\nif (odooId != null && maps.productsByOdoo[odooId]) {\n  return [{ json: maps.productsByOdoo[odooId] }];\n}\n\nconst fetched = $('HTTP Get Product by id_odoo').first()?.json;\nconst fromFetch = pickRow(fetched);\nif (fromFetch) return [{ json: fromFetch }];\n\nthrow new Error(\n  'Normalize product: no existe en Supabase producto con id_odoo=' + odooId\n);"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4016,
+        288
+      ],
+      "id": "17da5973-5c9f-4ee8-856b-b3a73123d6db",
+      "name": "Code Normalize Product",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $('Code Build Caches').first().json;\nconst productsByOdoo = { ...base.productsByOdoo };\nconst productsByName = { ...base.productsByName };\nconst productsByAlias = { ...(base.productsByAlias ?? {}) };\n\nconst loopItems = $('Loop Missing Products').all();\nfor (const item of loopItems) {\n  const p = item.json;\n  const row = p.existing_product || p;\n  const idOdoo = p.id_odoo ?? row.id_odoo;\n  if (row?.id && idOdoo != null) {\n    const merged = { ...row, id_odoo: idOdoo };\n    productsByOdoo[idOdoo] = merged;\n    if (merged.name) productsByName[merged.name] = merged;\n    if (merged.alias) productsByAlias[merged.alias] = merged;\n  }\n}\n\nreturn [\n  {\n    json: {\n      ventas: base.ventas,\n      partnersById: base.partnersById,\n      referrersById: base.referrersById,\n      productsByOdoo,\n      productsByName,\n      productsByAlias: base.productsByAlias ?? {},\n      patchIdOdoo: base.patchIdOdoo,\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2224,
+        400
+      ],
+      "id": "f4d4d77b-df29-4add-a21f-b96dcdf7015e",
+      "name": "Code Merge Product Cache"
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $('Code Build Caches').first().json;\nconst productsByOdoo = { ...base.productsByOdoo };\nconst productsByName = { ...base.productsByName };\nconst productsByAlias = { ...(base.productsByAlias ?? {}) };\n\nconst loopItems = [];\nfor (const item of loopItems) {\n  const p = item.json;\n  const row = p.existing_product || p;\n  const idOdoo = p.id_odoo ?? row.id_odoo;\n  if (row?.id && idOdoo != null) {\n    const merged = { ...row, id_odoo: idOdoo };\n    productsByOdoo[idOdoo] = merged;\n    if (merged.name) productsByName[merged.name] = merged;\n    if (merged.alias) productsByAlias[merged.alias] = merged;\n  }\n}\n\nreturn [\n  {\n    json: {\n      ventas: base.ventas,\n      partnersById: base.partnersById,\n      referrersById: base.referrersById,\n      productsByOdoo,\n      productsByName,\n      productsByAlias: base.productsByAlias ?? {},\n      patchIdOdoo: base.patchIdOdoo,\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2224,
+        520
+      ],
+      "id": "c119a4f8-ebb9-42b8-a54c-53d8a674e938",
+      "name": "Code Merge Cache No Loop"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "041bd58c-9192-40b4-9b02-137358791c65",
+              "leftValue": "={{ ($json.patchIdOdoo ?? []).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2448,
+        400
+      ],
+      "id": "29a06ccd-736c-4bc1-bac9-9ed536bf7050",
+      "name": "If Patch Products"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://cdrmxjcdgxjyakrcpxnp.supabase.co/rest/v1/rpc/bulk_patch_products_id_odoo",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"payload\": {{ JSON.stringify($json.patchIdOdoo) }} }",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2672,
+        352
+      ],
+      "id": "117b3c32-6e64-4f4c-99b2-4fdb20e07b02",
+      "name": "HTTP Patch Products id_odoo",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "XHcaljVEAHxnAcxd",
+          "name": "P&L"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "/** HTTP Patch devuelve un entero; no usar $input como cache. */\nfunction loadImportCache() {\n  const tryNode = (name) => {\n    try {\n      if (!$(name).isExecuted) return null;\n      return $(name).first().json;\n    } catch {\n      return null;\n    }\n  };\n  for (const name of [\n    \"Code Merge Product Cache\",\n    \"Code Merge Cache No Loop\",\n    \"Code Build Caches\",\n  ]) {\n    const j = tryNode(name);\n    if (j && Array.isArray(j.ventas)) return j;\n  }\n  throw new Error(\"No se encontró cache de import con ventas[]\");\n}\n\nconst {\n  ventas,\n  partnersById,\n  referrersById,\n  productsByOdoo,\n  productsByName,\n  productsByAlias,\n  patchIdOdoo,\n} = loadImportCache();\n\nfunction resolvePartnerContext(v) {\n  const partner = partnersById[v.partner_id] ?? {};\n  const referrer = v.referrer_id ? referrersById[v.referrer_id] ?? {} : {};\n  const country = partner.country || referrer.country || \"\";\n  const institucion = referrer.institucion || null;\n  return { country, institucion };\n}\n\nfunction resolveProduct(v) {\n  const pid = v.producto_id == null ? null : Number(v.producto_id);\n  if (pid != null && !Number.isNaN(pid) && productsByOdoo[pid]) return productsByOdoo[pid];\n  const byName =\n    productsByName[v.producto] || (productsByAlias && productsByAlias[v.producto]);\n  if (byName) return byName;\n  throw new Error(\n    `Producto no resuelto: odoo=${pid} nombre=${v.producto} partner=${v.partner}`\n  );\n}\n\nconst ventaRows = [];\nlet skippedZeroQty = 0;\nfor (const v of ventas) {\n  const qty = Number(v.cantidad);\n  if (!Number.isFinite(qty) || qty === 0) {\n    skippedZeroQty++;\n    continue;\n  }\n  const product = resolveProduct(v);\n  const { country, institucion } = resolvePartnerContext(v);\n  ventaRows.push({\n    fecha: v.fecha_dia_inicio,\n    test: product.alias || product.name,\n    amount: v.precio_total,\n    company: v.empresa,\n    id_producto: product.id,\n    partner: v.partner,\n    quantity: qty,\n    move_id: v.move_id,\n    move_nombre: v.move_nombre,\n    medico: v.referrer || null,\n    institucion,\n    pais: country || null,\n  });\n}\n\nreturn [\n  {\n    json: {\n      ventaRows,\n      patchIdOdoo: patchIdOdoo ?? [],\n      total: ventaRows.length,\n      skipped_zero_qty: skippedZeroQty,\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2896,
+        400
+      ],
+      "id": "40b9042d-8c28-462f-a559-184424595116",
+      "name": "Code Build Ventas Rows"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://cdrmxjcdgxjyakrcpxnp.supabase.co/rest/v1/ventas?on_conflict=company,fecha,move_id,id_producto,partner",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.ventaRows) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3120,
+        400
+      ],
+      "id": "e58cc006-737d-4b37-aca0-fb49a83afdc3",
+      "name": "HTTP Bulk Upsert Ventas",
+      "credentials": {
+        "supabaseApi": {
+          "id": "XHcaljVEAHxnAcxd",
+          "name": "P&L"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const bulk = $('HTTP Bulk Upsert Ventas').first().json;\nconst built = $('Code Build Ventas Rows').first().json;\nreturn [\n  {\n    json: {\n      total_ventas: built.total ?? 0,\n      bulk_status: bulk?.status ?? bulk?.length ?? \"ok\",\n      mensaje: \"Import optimizado finalizado\",\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3344,
+        400
+      ],
+      "id": "f77a73b0-bbc8-4d7f-b39c-ace1c84e0aa9",
+      "name": "Code Summary"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "login1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "login1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request3": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript9": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript8",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code in JavaScript10",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code Extract Unique IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code Extract Unique IDs": {
+      "main": [
+        [
+          {
+            "node": "HTTP Batch Partners",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Batch Referrers",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Batch Products Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Batch Partners": {
+      "main": [
+        [
+          {
+            "node": "Merge Batch Fetches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Batch Referrers": {
+      "main": [
+        [
+          {
+            "node": "Merge Batch Fetches",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "HTTP Batch Products Supabase": {
+      "main": [
+        [
+          {
+            "node": "Merge Batch Fetches",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge Batch Fetches": {
+      "main": [
+        [
+          {
+            "node": "Code After Batch Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code After Batch Merge": {
+      "main": [
+        [
+          {
+            "node": "Code Build Caches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code Build Caches": {
+      "main": [
+        [
+          {
+            "node": "If Missing Products",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Missing Products": {
+      "main": [
+        [
+          {
+            "node": "Code Split Missing Products",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code Merge Cache No Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code Split Missing Products": {
+      "main": [
+        [
+          {
+            "node": "Loop Missing Products",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code Merge Cache No Loop": {
+      "main": [
+        [
+          {
+            "node": "If Patch Products",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Missing Products": {
+      "main": [
+        [
+          {
+            "node": "Code Merge Product Cache",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code PreCheck Product",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code PreCheck Product": {
+      "main": [
+        [
+          {
+            "node": "If Needs Odoo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Needs Odoo": {
+      "main": [
+        [
+          {
+            "node": "Get Odoo Product",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If Link Only PreCheck",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Link Only PreCheck": {
+      "main": [
+        [
+          {
+            "node": "HTTP Link Product id_odoo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code Normalize Product",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Link Product id_odoo": {
+      "main": [
+        [
+          {
+            "node": "Code Normalize Product",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Odoo Product": {
+      "main": [
+        [
+          {
+            "node": "Code After Odoo Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code After Odoo Route": {
+      "main": [
+        [
+          {
+            "node": "If Product Create",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Product Create": {
+      "main": [
+        [
+          {
+            "node": "HTTP Insert Product",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If Link Only After Odoo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Link Only After Odoo": {
+      "main": [
+        [
+          {
+            "node": "HTTP Link After Odoo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code Normalize Product",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Insert Product": {
+      "main": [
+        [
+          {
+            "node": "HTTP Get Product by id_odoo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Get Product by id_odoo": {
+      "main": [
+        [
+          {
+            "node": "Code Normalize Product",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Link After Odoo": {
+      "main": [
+        [
+          {
+            "node": "Code Normalize Product",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code Normalize Product": {
+      "main": [
+        [
+          {
+            "node": "Loop Missing Products",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code Merge Product Cache": {
+      "main": [
+        [
+          {
+            "node": "If Patch Products",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Patch Products": {
+      "main": [
+        [
+          {
+            "node": "HTTP Patch Products id_odoo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code Build Ventas Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Patch Products id_odoo": {
+      "main": [
+        [
+          {
+            "node": "Code Build Ventas Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code Build Ventas Rows": {
+      "main": [
+        [
+          {
+            "node": "HTTP Bulk Upsert Ventas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Bulk Upsert Ventas": {
+      "main": [
+        [
+          {
+            "node": "Code Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null
+}
