@@ -195,7 +195,9 @@ export function MedicosFilters({
   }))
 
   return (
-    <div className="relative z-40 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+    <div className="relative z-40 rounded-lg border border-white/20 bg-white/10 p-4 shadow-sm backdrop-blur-sm">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5 xl:items-start">
+      <div className="min-w-0">
       <MultiCheckboxDropdown
         label="Compañía"
         options={companyOptions}
@@ -205,7 +207,9 @@ export function MedicosFilters({
         onOptionSelectOnly={handleCompanySelectOnly}
         allLabel={showAllCompanies ? "Todas las compañías" : "Todas (mis compañías)"}
       />
+      </div>
 
+      <div className="min-w-0">
       <MultiCheckboxDropdown
         label="Categoría"
         options={categoryOptions}
@@ -215,7 +219,9 @@ export function MedicosFilters({
         onSelectedValuesChange={onCategoriesChange}
         allLabel="Todas las categorías"
       />
+      </div>
 
+      <div className="min-w-0">
       <ProductMultiSearchFilter
         products={products}
         selectedProducts={selectedProducts}
@@ -223,7 +229,9 @@ export function MedicosFilters({
         disabled={products.length === 0}
         allLabel="Todos los productos"
       />
+      </div>
 
+      <div className="min-w-0">
       <MedicoMultiSearchFilter
         medicos={medicos}
         selectedMedicos={selectedMedicos}
@@ -231,7 +239,9 @@ export function MedicosFilters({
         disabled={medicos.length === 0}
         allLabel="Todos los médicos"
       />
+      </div>
 
+      <div className="min-w-0 sm:col-span-2 xl:col-span-1">
       <DateRangeFilter
         label="Período"
         fechaDesde={fechaDesde}
@@ -240,7 +250,10 @@ export function MedicosFilters({
         maxDate={fechaMax}
         presets={datePresets}
         onChange={onDateRangeChange}
+        className="w-full"
       />
+      </div>
+      </div>
     </div>
   )
 }

@@ -294,7 +294,7 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-4 rounded-lg border border-white/20 bg-white/5 p-4">
+      <div className="flex flex-wrap items-end justify-center gap-x-6 gap-y-3 rounded-lg border border-white/20 bg-white/5 p-4 text-center sm:text-left">
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-white/70">Orden de filas</label>
           <Select
@@ -332,7 +332,7 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
           </Select>
         </div>
         {(rowSortMode === "institution_sales" || rowSortMode === "institution_name") && (
-          <p className="text-xs text-white/50 pb-1">
+          <p className="w-full basis-full text-center text-xs text-white/50 sm:w-auto sm:basis-auto sm:pb-1">
             Clic en una fila de institución para ver el desglose por médico.
           </p>
         )}
