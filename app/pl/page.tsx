@@ -69,7 +69,10 @@ export default function PLPage() {
   // Cargar lista de compañías de ventas (mismo origen que Real Import)
   useEffect(() => {
     async function loadCompanies() {
-      if (permLoading) return
+      if (permLoading) {
+        setCompaniesLoading(true)
+        return
+      }
       if (!userId) {
         setCompanies([])
         setSelectedCompanies([])
@@ -250,7 +253,10 @@ export default function PLPage() {
   const countriesForPL = countriesFromCompanies
   const filtersStillLoading = permLoading || (Boolean(userId) && companiesLoading)
   const plDataReady =
-    !filtersStillLoading && Boolean(userId) && countriesForPL.length > 0 && companies.length > 0
+    !filtersStillLoading &&
+    Boolean(userId) &&
+    countriesForPL.length > 0 &&
+    (companies.length > 0 || isAdmin)
 
   return (
     <div className="min-h-screen bg-gradient-to-r from-blue-900 via-blue-950 to-slate-900">
@@ -435,8 +441,8 @@ export default function PLPage() {
           </div>
         ) : (
           <div className="rounded-lg border border-amber-500/35 bg-amber-950/25 px-6 py-10 text-center text-amber-100/95 text-sm max-w-lg mx-auto">
-            No hay compañías disponibles para tu usuario (o la sesión no pudo cargarse). Iniciá sesión con una cuenta
-            autorizada o pedí en administración que te asignen al menos una compañía.
+            No hay compañías disponibles para tu usuario. Pedí en administración que te asignen al menos un país con
+            ventas, o recargá la página si acabás de actualizar permisos.
           </div>
         )}
       </div>

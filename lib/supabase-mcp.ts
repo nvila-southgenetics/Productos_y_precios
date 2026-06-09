@@ -1076,21 +1076,25 @@ export async function getTotalSalesByProductIds(
 }
 
 /**
- * Obtiene las compañías únicas de ventas mensuales
+ * Obtiene las compañías únicas de ventas mensuales.
+ * En el navegador usa /api/companies (sesión servidor + service role) para evitar
+ * fallos del cliente Supabase en Vercel.
  */
 export async function getCompanies(): Promise<string[]> {
-  const { data, error } = await supabase
-    .from('ventas_mensuales_view')
-    .select('compañia')
-    .order('compañia', { ascending: true })
+  if (typeof window !== "undefined") {
+    const res = await fetch("/api/companies", { credentials: "include" })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(
+        typeof body.error === "string" ? body.error : `Error al cargar compañías (${res.status})`
+      )
+    }
+    return res.json()
+  }
 
-  if (error) throw error
-  if (!data) return []
-
-  const uniqueCompanies: string[] = Array.from(
-    new Set(data.map((item: { compañia: string }) => item.compañia))
-  )
-  return uniqueCompanies
+  const { fetchDistinctVentasCompanies } = await import("./ventas-companies")
+  const { createAdminClient } = await import("./supabase/admin")
+  return fetchDistinctVentasCompanies(createAdminClient())
 }
 
 /**
