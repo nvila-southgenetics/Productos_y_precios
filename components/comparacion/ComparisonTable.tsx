@@ -366,6 +366,26 @@ export function ComparisonTable({ budgetName, months, countries, products }: Com
         return Number(fallback?.overrides?.grossSalesUSD || 0);
       };
 
+      const consumedRealKeys = new Set<string>();
+
+      const findMatchingRealKeys = (
+        budgetRow: { country_code: string; product_name: string },
+        grouped: Record<string, number>
+      ): string[] =>
+        Object.keys(grouped).filter((k) => {
+          const [countryCode, normalizedProductFromKey] = k.split('-');
+          if (countryCode !== budgetRow.country_code) return false;
+          const normalizedBudgetName = normalizeProductName(budgetRow.product_name);
+          if (normalizedBudgetName === normalizedProductFromKey) return true;
+          if (normalizedBudgetName.length >= 5 && normalizedProductFromKey.includes(normalizedBudgetName)) {
+            return true;
+          }
+          if (normalizedProductFromKey.length >= 5 && normalizedBudgetName.includes(normalizedProductFromKey)) {
+            return true;
+          }
+          return false;
+        });
+
       const rawComparisonData: ComparisonRow[] = budgetData.map((budgetRow: any) => {
         // Calcular budget correctamente
         const budget = isMonthFiltered
@@ -377,37 +397,10 @@ export function ComparisonTable({ budgetName, months, countries, products }: Com
         const grossSalesUSD = getGrossSalesUSDForRow(budgetRow);
         const budgetAmountUSD = budget * grossSalesUSD;
 
-        // Buscar en real2025Grouped usando match flexible
-        const matchingKeys2025 = Object.keys(real2025Grouped).filter(k => {
-          const [countryCode, normalizedProductFromKey] = k.split('-');
-          
-          if (countryCode !== budgetRow.country_code) return false;
-          
-          const normalizedBudgetName = normalizeProductName(budgetRow.product_name);
-          
-          if (normalizedBudgetName === normalizedProductFromKey) return true;
-          
-          if (normalizedBudgetName.length >= 5 && normalizedProductFromKey.includes(normalizedBudgetName)) return true;
-          if (normalizedProductFromKey.length >= 5 && normalizedBudgetName.includes(normalizedProductFromKey)) return true;
-          
-          return false;
-        });
-        
-        // Buscar en real2026Grouped usando match flexible
-        const matchingKeys2026 = Object.keys(real2026Grouped).filter(k => {
-          const [countryCode, normalizedProductFromKey] = k.split('-');
-          
-          if (countryCode !== budgetRow.country_code) return false;
-          
-          const normalizedBudgetName = normalizeProductName(budgetRow.product_name);
-          
-          if (normalizedBudgetName === normalizedProductFromKey) return true;
-          
-          if (normalizedBudgetName.length >= 5 && normalizedProductFromKey.includes(normalizedBudgetName)) return true;
-          if (normalizedProductFromKey.length >= 5 && normalizedBudgetName.includes(normalizedProductFromKey)) return true;
-          
-          return false;
-        });
+        const matchingKeys2025 = findMatchingRealKeys(budgetRow, real2025Grouped);
+        const matchingKeys2026 = findMatchingRealKeys(budgetRow, real2026Grouped);
+        matchingKeys2025.forEach((k) => consumedRealKeys.add(k));
+        matchingKeys2026.forEach((k) => consumedRealKeys.add(k));
         
         // Sumar todas las ventas que coincidan
         let real2025 = matchingKeys2025.reduce((sum, k) => sum + (real2025Grouped[k] || 0), 0);
@@ -538,9 +531,9 @@ export function ComparisonTable({ budgetName, months, countries, products }: Com
         }
       });
 
-      // Agregar filas para productos/países que tienen ventas pero no están en budget
+      // Agregar filas para ventas sin fila de budget (ya emparejadas por match flexible quedan en consumedRealKeys)
       allRealKeys.forEach((key) => {
-        if (!budgetKeys.has(key)) {
+        if (!budgetKeys.has(key) && !consumedRealKeys.has(key)) {
           const [countryCode, normalizedProduct] = key.split('-');
           
           // Verificar filtros de país
