@@ -352,6 +352,8 @@ export async function deleteSalesByYear(year: string): Promise<{ deleted: number
 
 export const SIN_INSTITUCION_KEY = '__sin_institucion__'
 export const SIN_INSTITUCION_LABEL = 'Sin institución'
+export const SIN_MEDICO_KEY = '__sin_medico__'
+export const SIN_MEDICO_LABEL = 'Sin médico'
 export const GENERAL_LLC_COMPANY = 'SouthGenetics LLC'
 
 /** @deprecated La página Médicos usa todo el histórico; no fijar año. */
@@ -537,15 +539,21 @@ export async function getMedicosFromVentas(params: {
     fechaEnd: range.fechaEnd,
     companies: params.companies?.length ? params.companies : undefined,
     llcCountries: params.llcCountries?.length ? params.llcCountries : undefined,
-    requireMedico: true,
   })
 
   const set = new Set<string>()
+  let hasSinMedico = false
   for (const row of rawRows) {
     const m = row.medico?.trim()
     if (m) set.add(m)
+    else hasSinMedico = true
   }
-  return [...set].sort((a, b) => a.localeCompare(b, 'es'))
+  if (hasSinMedico) set.add(SIN_MEDICO_LABEL)
+  return [...set].sort((a, b) => {
+    if (a === SIN_MEDICO_LABEL) return -1
+    if (b === SIN_MEDICO_LABEL) return 1
+    return a.localeCompare(b, 'es')
+  })
 }
 
 /**
@@ -584,7 +592,7 @@ export async function getLlcCountriesFromVentas(params: {
 
 /**
  * Ventas agregadas por producto, institución y médico (suma de quantity).
- * Solo filas con médico cargado.
+ * Incluye fila agregada «Sin médico» para ventas sin médico asignado.
  */
 export async function getMedicoInstitucionSales(
   params: MedicoInstitucionSalesParams
@@ -596,7 +604,6 @@ export async function getMedicoInstitucionSales(
     fechaEnd: range.fechaEnd,
     companies: params.companies?.length ? params.companies : undefined,
     llcCountries: params.llcCountries?.length ? params.llcCountries : undefined,
-    requireMedico: true,
   })
 
   const productNames = [
@@ -624,8 +631,9 @@ export async function getMedicoInstitucionSales(
   const agg = new Map<string, MedicoInstitucionSaleRow>()
 
   for (const row of rawRows) {
-    const medico = row.medico?.trim()
-    if (!medico) continue
+    const rawMedico = row.medico?.trim()
+    const isSinMedico = !rawMedico
+    const medico = isSinMedico ? SIN_MEDICO_LABEL : rawMedico
     if (medicoFilter && !medicoFilter.has(medico)) continue
 
     const test = row.test?.trim() || 'Sin producto'
@@ -645,7 +653,9 @@ export async function getMedicoInstitucionSales(
       ? product.alias?.trim() || product.name
       : test
 
-    const { key: institucionKey, label: institucionLabel } = normalizeInstitucion(row.institucion)
+    const { key: institucionKey, label: institucionLabel } = isSinMedico
+      ? { key: SIN_MEDICO_KEY, label: SIN_MEDICO_LABEL }
+      : normalizeInstitucion(row.institucion)
     const qty =
       typeof row.quantity === 'string' ? parseFloat(row.quantity) : Number(row.quantity) || 0
 

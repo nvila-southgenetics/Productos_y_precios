@@ -6,6 +6,8 @@ import { cn, formatNumber, productNameSortKey } from "@/lib/utils"
 import { Select } from "@/components/ui/select"
 import {
   SIN_INSTITUCION_KEY,
+  SIN_MEDICO_KEY,
+  SIN_MEDICO_LABEL,
   type MedicoInstitucionSaleRow,
 } from "@/lib/supabase-mcp"
 
@@ -29,6 +31,8 @@ function compareInstitutionOrder(
 ): number {
   if (a.key === SIN_INSTITUCION_KEY) return -1
   if (b.key === SIN_INSTITUCION_KEY) return 1
+  if (a.key === SIN_MEDICO_KEY) return -1
+  if (b.key === SIN_MEDICO_KEY) return 1
   return a.label.localeCompare(b.label, localeEs)
 }
 
@@ -188,6 +192,8 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
           sortTotal: rowTotal(countMap, productKeys, medico, null),
         }))
         .sort((a, b) => {
+          if (a.label === SIN_MEDICO_LABEL) return -1
+          if (b.label === SIN_MEDICO_LABEL) return 1
           if (sortByDoctorSales && b.sortTotal !== a.sortTotal) {
             return b.sortTotal - a.sortTotal
           }
@@ -197,14 +203,16 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
     }
 
     const namedInstKeys = [...instLabels.keys()]
-      .filter((k) => k !== SIN_INSTITUCION_KEY)
+      .filter((k) => k !== SIN_INSTITUCION_KEY && k !== SIN_MEDICO_KEY)
       .sort((a, b) =>
         (instLabels.get(a) ?? a).localeCompare(instLabels.get(b) ?? b, localeEs)
       )
 
-    const institutionKeys = instLabels.has(SIN_INSTITUCION_KEY)
-      ? [SIN_INSTITUCION_KEY, ...namedInstKeys]
-      : namedInstKeys
+    const institutionKeys = [
+      ...(instLabels.has(SIN_MEDICO_KEY) ? [SIN_MEDICO_KEY] : []),
+      ...(instLabels.has(SIN_INSTITUCION_KEY) ? [SIN_INSTITUCION_KEY] : []),
+      ...namedInstKeys,
+    ]
 
     const institutions = institutionKeys
       .map((key) => ({
@@ -223,7 +231,8 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
 
     const out: DisplayRow[] = []
     for (const inst of institutions) {
-      const expanded = expandedInstitutions.has(inst.key)
+      const isSinMedicoBucket = inst.key === SIN_MEDICO_KEY
+      const expanded = !isSinMedicoBucket && expandedInstitutions.has(inst.key)
       const sortedMedicos = inst.medicos
         .map((medico) => ({
           medico,
@@ -284,7 +293,7 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
   if (!productKeys.length) {
     return (
       <p className="text-sm text-white/70 text-center py-12">
-        No hay ventas con médico para los filtros seleccionados.
+        No hay ventas para los filtros seleccionados.
       </p>
     )
   }
@@ -398,6 +407,8 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
               )
               const isInstRow = row.kind === "institution"
               const instKey = row.institucionKey
+              const isSinMedicoBucket = instKey === SIN_MEDICO_KEY
+              const canExpandInst = isInstRow && instKey && !isSinMedicoBucket
               const expanded = instKey ? expandedInstitutions.has(instKey) : false
 
               return (
@@ -405,17 +416,16 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
                   key={row.id}
                   className={cn(
                     "border-b border-white/10 hover:bg-white/5",
-                    isInstRow && "bg-white/5 cursor-pointer"
+                    canExpandInst && "bg-white/5 cursor-pointer",
+                    isSinMedicoBucket && "bg-white/5"
                   )}
                   onClick={
-                    isInstRow && instKey
-                      ? () => toggleInstitution(instKey)
-                      : undefined
+                    canExpandInst ? () => toggleInstitution(instKey) : undefined
                   }
-                  role={isInstRow ? "button" : undefined}
-                  tabIndex={isInstRow ? 0 : undefined}
+                  role={canExpandInst ? "button" : undefined}
+                  tabIndex={canExpandInst ? 0 : undefined}
                   onKeyDown={
-                    isInstRow && instKey
+                    canExpandInst
                       ? (e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault()
@@ -432,7 +442,7 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
                     )}
                   >
                     <div className="flex items-center gap-1.5">
-                      {isInstRow && instKey ? (
+                      {canExpandInst ? (
                         expanded ? (
                           <ChevronDown className="h-4 w-4 shrink-0 text-white/70" />
                         ) : (
