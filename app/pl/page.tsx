@@ -12,7 +12,12 @@ import { MultiCheckboxDropdown } from "@/components/filters/MultiCheckboxDropdow
 import { getCompanies } from "@/lib/supabase-mcp"
 import { filterCompaniesByCountries, getCountryForCompany } from "@/lib/auth-constants"
 import { companyQueryFromSelection } from "@/lib/company-filter"
-import { PRODUCT_CATEGORIES_SORTED } from "@/lib/product-categories"
+import { BusinessGroupFilter } from "@/components/filters/BusinessGroupFilter"
+import {
+  PRODUCT_CATEGORIES_SORTED,
+  resolveEffectiveCategories,
+  type ProductBusinessGroup,
+} from "@/lib/product-categories"
 import {
   DIFERENCIA_AGGREGATE_PRODUCT_NAME,
   PL_COS_DIFERENCIA_PRODUCT_NAMES,
@@ -48,6 +53,7 @@ export default function PLPage() {
   const [companiesLoading, setCompaniesLoading] = useState(true)
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([])
   const [selectedCategories, setSelectedCategories] = useState<string[]>(CATEGORIES)
+  const [businessGroup, setBusinessGroup] = useState<ProductBusinessGroup>("all")
   const [productsSelected, setProductsSelected] = useState<string[]>([])
   const [selectedChannels, setSelectedChannels] = useState<string[]>(CHANNELS)
   const [products, setProducts] = useState<string[]>([])
@@ -101,6 +107,11 @@ export default function PLPage() {
     [companies, selectedCompanies, isAdmin]
   )
 
+  const effectiveCategories = useMemo(
+    () => resolveEffectiveCategories(selectedCategories, businessGroup, CATEGORIES) ?? CATEGORIES,
+    [selectedCategories, businessGroup]
+  )
+
   const salesCompanies = useMemo<string[] | null>(() => {
     if (typeof companyParam === "string") {
       return companyParam === "Todas las compañías" ? null : [companyParam]
@@ -123,7 +134,7 @@ export default function PLPage() {
     void Promise.all([fetchBudgetNames(), fetchProducts()]).then(() => {
       setProductsSelected([])
     })
-  }, [countriesFromCompanies.join("|"), selectedCategories, modelKey, year, selectedBudgetName])
+  }, [countriesFromCompanies.join("|"), effectiveCategories, businessGroup, modelKey, year, selectedBudgetName])
 
   // Inicializar el mapeo por mes cuando se activa "Combinar"
   useEffect(() => {
@@ -169,11 +180,12 @@ export default function PLPage() {
         if (!data) return
         let names = [...new Set(data.map((b: { product_name: string }) => b.product_name))] as string[]
 
-        if (selectedCategories.length && selectedCategories.length !== CATEGORIES.length) {
+        const catsFilter = resolveEffectiveCategories(selectedCategories, businessGroup, CATEGORIES)
+        if (catsFilter) {
           const { data: prods } = await supabase
             .from("products")
             .select("name")
-            .in("category", selectedCategories)
+            .in("category", catsFilter)
           const catNames = new Set(prods?.map((p: { name: string }) => p.name) || [])
           names = names.filter((n) => catNames.has(n))
         }
@@ -202,8 +214,9 @@ export default function PLPage() {
         setAliasesByName(map)
       } else {
         let q = supabase.from("products").select("name, alias, category")
-        if (selectedCategories.length && selectedCategories.length !== CATEGORIES.length) {
-          q = q.in("category", selectedCategories)
+        const catsFilter = resolveEffectiveCategories(selectedCategories, businessGroup, CATEGORIES)
+        if (catsFilter) {
+          q = q.in("category", catsFilter)
         }
         const { data } = await q
         if (!data) return
@@ -274,6 +287,8 @@ export default function PLPage() {
             <p className="text-sm text-white/60 mb-3 col-span-full">Cargando permisos de usuario…</p>
           )}
           <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+            <BusinessGroupFilter value={businessGroup} onChange={setBusinessGroup} />
+
             {/* Modelo */}
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium text-white/90">Modelo</label>
@@ -421,7 +436,7 @@ export default function PLPage() {
             year={year}
             countries={countriesForPL}
             salesCompanies={salesCompanies}
-            categories={selectedCategories}
+            categories={effectiveCategories}
             products={productsSelected}
             channels={selectedChannels}
             canEdit={canEdit}

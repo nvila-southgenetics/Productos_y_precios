@@ -16,6 +16,13 @@ import {
   type BudgetRow,
   type BudgetSummaryData,
 } from "@/lib/budget-data"
+import {
+  buildCategoryByNameMap,
+  filterProductNamesByBusinessGroup,
+  resolveEffectiveProductNames,
+  type ProductBusinessGroup,
+} from "@/lib/product-categories"
+import { fetchPlProductCatalog } from "@/lib/pl-product-catalog"
 
 export default function BudgetPage() {
   const { allowedCountries, canEdit, isAdmin, loading: permLoading } = usePermissions()
@@ -24,6 +31,8 @@ export default function BudgetPage() {
   const [budgetNames, setBudgetNames] = useState<string[]>(["budget"])
   const [selectedCountries, setSelectedCountries] = useState<string[]>([])
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
+  const [businessGroup, setBusinessGroup] = useState<ProductBusinessGroup>("all")
+  const [categoryByName, setCategoryByName] = useState<Record<string, string>>({})
   const [monthFrom, setMonthFrom] = useState<number>(1)
   const [monthTo, setMonthTo] = useState<number>(12)
   const [selectedChannels, setSelectedChannels] = useState<string[]>([])
@@ -35,7 +44,18 @@ export default function BudgetPage() {
   )
   const monthsKey = selectedMonths.join(",")
   const countriesKey = selectedCountries.join(",")
-  const productsKey = selectedProducts.join(",")
+  const productsInGroup = useMemo(
+    () => filterProductNamesByBusinessGroup(products, categoryByName, businessGroup),
+    [products, categoryByName, businessGroup]
+  )
+
+  const effectiveProducts = useMemo(
+    () =>
+      resolveEffectiveProductNames(products, selectedProducts, categoryByName, businessGroup) ?? [],
+    [products, selectedProducts, categoryByName, businessGroup]
+  )
+
+  const productsKey = effectiveProducts.join(",")
   const channelsKey = selectedChannels.join(",")
 
   const [tableRows, setTableRows] = useState<BudgetRow[]>([])
@@ -69,8 +89,24 @@ export default function BudgetPage() {
   }, [])
 
   useEffect(() => {
-    void Promise.all([fetchBudgetNames(), fetchProducts()])
+    async function loadInitial() {
+      try {
+        const catalog = await fetchPlProductCatalog()
+        setCategoryByName(buildCategoryByNameMap(catalog))
+      } catch (error) {
+        console.error("Error loading product categories:", error)
+      }
+      await Promise.all([fetchBudgetNames(), fetchProducts()])
+    }
+    void loadInitial()
   }, [selectedYear, selectedBudgetName])
+
+  useEffect(() => {
+    setSelectedProducts((prev) => {
+      const pruned = prev.filter((p) => productsInGroup.includes(p))
+      return pruned.length === prev.length ? prev : pruned
+    })
+  }, [productsInGroup])
 
   const fetchBudgetNames = async () => {
     try {
@@ -116,7 +152,7 @@ export default function BudgetPage() {
         year: selectedYear,
         budgetName: selectedBudgetName,
         countries: selectedCountries,
-        products: selectedProducts,
+        products: effectiveProducts,
         months: selectedMonths,
         channels: selectedChannels,
       })
@@ -195,6 +231,8 @@ export default function BudgetPage() {
             monthFrom={monthFrom}
             monthTo={monthTo}
             selectedChannels={selectedChannels}
+            businessGroup={businessGroup}
+            onBusinessGroupChange={setBusinessGroup}
             onYearChange={setSelectedYear}
             onBudgetNameChange={setSelectedBudgetName}
             onCountriesChange={setSelectedCountries}
@@ -204,7 +242,7 @@ export default function BudgetPage() {
               setMonthTo(toMonth)
             }}
             onChannelsChange={setSelectedChannels}
-            products={products}
+            products={productsInGroup}
             allowedCountries={allowedCountries}
             showAllCountries={isAdmin}
           />

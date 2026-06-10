@@ -43,6 +43,79 @@ export function productMatchesBusinessGroup(
   return group === "anualidades" ? isAnualidad : !isAnualidad
 }
 
+/** Categorías permitidas para un grupo de negocio. */
+export function categoriesForBusinessGroup(group: ProductBusinessGroup): string[] {
+  if (group === "all") return [...PRODUCT_CATEGORIES_SORTED]
+  if (group === "anualidades") return [...ANUALIDADES_GROUP_CATEGORIES]
+  return PRODUCT_CATEGORIES_SORTED.filter((c) => !isAnualidadesGroupCategory(c))
+}
+
+export function buildCategoryByNameMap(
+  rows: { name: string; category?: string | null }[]
+): Record<string, string> {
+  const map: Record<string, string> = {}
+  for (const row of rows) {
+    const name = row.name?.trim()
+    if (name) map[name] = row.category?.trim() ?? ""
+  }
+  return map
+}
+
+export function filterProductNamesByBusinessGroup(
+  names: string[],
+  categoryByName: Record<string, string | null | undefined>,
+  group: ProductBusinessGroup
+): string[] {
+  if (group === "all") return names
+  return names.filter((n) => productMatchesBusinessGroup(categoryByName[n], group))
+}
+
+/** Intersección categoría multi-select + grupo anualidades/test. undefined = sin filtro en API. */
+export function resolveEffectiveCategories(
+  selectedCategories: string[],
+  businessGroup: ProductBusinessGroup,
+  allCategories: readonly string[] = PRODUCT_CATEGORIES_SORTED
+): string[] | undefined {
+  const allPicked =
+    selectedCategories.length === allCategories.length &&
+    allCategories.every((c) => selectedCategories.includes(c))
+
+  let cats = allPicked ? [...allCategories] : [...selectedCategories]
+
+  if (businessGroup !== "all") {
+    const allowed = new Set(categoriesForBusinessGroup(businessGroup))
+    cats = cats.filter((c) => allowed.has(c))
+  }
+
+  const stillAllPicked =
+    cats.length === allCategories.length && allCategories.every((c) => cats.includes(c))
+
+  return stillAllPicked ? undefined : cats
+}
+
+/** Productos efectivos para APIs: respeta grupo y selección manual. undefined = todos (sin filtro). */
+export function resolveEffectiveProductNames(
+  allProducts: string[],
+  selectedProducts: string[],
+  categoryByName: Record<string, string | null | undefined>,
+  businessGroup: ProductBusinessGroup
+): string[] | undefined {
+  const inGroup = filterProductNamesByBusinessGroup(allProducts, categoryByName, businessGroup)
+
+  if (selectedProducts.length === 0) {
+    if (businessGroup === "all") return undefined
+    return inGroup
+  }
+
+  const selected = selectedProducts.filter((p) => inGroup.includes(p))
+  if (selected.length === 0) return []
+
+  if (businessGroup === "all" && selected.length === allProducts.length) return undefined
+  if (businessGroup !== "all" && selected.length === inGroup.length) return inGroup
+
+  return selected
+}
+
 export const PRODUCT_CATEGORY_COLORS: Record<string, string> = {
   "Ginecología": "bg-pink-300/20 text-pink-200 border-pink-300/30",
   "Oncología": "bg-rose-300/20 text-rose-200 border-rose-300/30",

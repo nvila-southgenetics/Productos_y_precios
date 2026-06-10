@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { ChevronDown, Search } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { cn, displayProductName } from "@/lib/utils"
@@ -28,7 +29,10 @@ export function ProductMultiSearchFilter({
 }: ProductMultiSearchFilterProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
-  const ref = useRef<HTMLDivElement>(null)
+  const [menuStyle, setMenuStyle] = useState<{ top: number; left: number; width: number } | null>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
   const safeProducts = useMemo(
     () => products.filter((p): p is string => typeof p === "string" && p.trim().length > 0),
     [products]
@@ -58,11 +62,36 @@ export function ProductMultiSearchFilter({
     return `${selectedProducts.length} productos`
   }, [allLabel, selectedProducts, safeProducts.length, aliasesByName, pendingLabel])
 
+  const updateMenuPosition = useCallback(() => {
+    if (!buttonRef.current) return
+    const rect = buttonRef.current.getBoundingClientRect()
+    setMenuStyle({
+      top: rect.bottom + 4,
+      left: rect.left,
+      width: Math.max(rect.width, 280),
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!open) {
+      setMenuStyle(null)
+      return
+    }
+    updateMenuPosition()
+    window.addEventListener("resize", updateMenuPosition)
+    window.addEventListener("scroll", updateMenuPosition, true)
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition)
+      window.removeEventListener("scroll", updateMenuPosition, true)
+    }
+  }, [open, updateMenuPosition])
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
+      const target = e.target as Node
+      if (rootRef.current?.contains(target)) return
+      if (menuRef.current?.contains(target)) return
+      setOpen(false)
     }
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
@@ -96,11 +125,99 @@ export function ProductMultiSearchFilter({
     }
   }
 
+  const menuContent = open && menuStyle && (
+    <div
+      ref={menuRef}
+      className="fixed z-[200] rounded-md border border-white/20 bg-blue-950/95 backdrop-blur-sm py-2 shadow-xl max-h-72 overflow-hidden flex flex-col"
+      style={{
+        top: menuStyle.top,
+        left: menuStyle.left,
+        width: menuStyle.width,
+        maxWidth: "min(90vw, 480px)",
+      }}
+    >
+      <div className="px-3 pb-2 border-b border-white/10 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={isAllSelected ? deselectAll : selectAll}
+            className="text-xs font-semibold text-white/80 hover:text-white transition-colors"
+          >
+            {isAllSelected ? "Deseleccionar todo" : "Seleccionar todo"}
+          </button>
+          {selectedProducts.length > 0 && (
+            <button
+              type="button"
+              onClick={deselectAll}
+              className="text-xs text-white/60 hover:text-white/80 transition-colors"
+            >
+              Reset
+            </button>
+          )}
+        </div>
+        <div className="relative">
+          <Search className="absolute left-2 top-2.5 h-4 w-4 text-white/50" />
+          <input
+            type="text"
+            placeholder="Escribir para buscar..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="w-full h-9 pl-8 pr-3 rounded-md bg-white/10 border border-white/20 text-sm text-white placeholder:text-white/50 focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/20"
+            autoFocus
+          />
+        </div>
+        {query.trim() && filtered.length > 0 && (
+          <button
+            type="button"
+            onClick={toggleSelectAllFiltered}
+            className="text-xs text-white/70 hover:text-white transition-colors text-left"
+          >
+            {filtered.every((p) => selectedSet.has(p)) ? "Deseleccionar resultados" : "Seleccionar resultados"}
+          </button>
+        )}
+      </div>
+      <div className="overflow-y-auto max-h-56">
+        {filtered.map((product) => {
+          const checked = selectedSet.has(product)
+          const alias = aliasesByName?.[product]
+          return (
+            <div
+              key={product}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-left text-white/90"
+            >
+              <span className="shrink-0 flex items-center rounded p-0.5 hover:bg-white/10 focus-within:bg-white/10">
+                <Checkbox checked={checked} onChange={() => toggleProduct(product)} />
+              </span>
+              <span
+                role="button"
+                tabIndex={0}
+                className="min-w-0 flex-1 cursor-pointer rounded px-1 py-0.5 outline-none transition-colors hover:bg-white/10 focus-visible:bg-white/10"
+                onClick={() => selectOnlyProduct(product)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    selectOnlyProduct(product)
+                  }
+                }}
+              >
+                {alias || displayProductName(product)}
+              </span>
+            </div>
+          )
+        })}
+        {filtered.length === 0 && (
+          <div className="px-3 py-2 text-sm text-white/60 text-center">No se encontraron productos</div>
+        )}
+      </div>
+    </div>
+  )
+
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2" ref={rootRef}>
       <label className="text-sm font-medium text-white/90">Producto</label>
-      <div className="relative w-full" ref={ref}>
+      <div className="relative w-full">
         <button
+          ref={buttonRef}
           type="button"
           onClick={() => !disabled && setOpen((o) => !o)}
           className={cn(
@@ -111,89 +228,16 @@ export function ProductMultiSearchFilter({
             "hover:bg-white/15"
           )}
           disabled={disabled}
+          aria-expanded={open}
         >
           <span className="truncate">{displayValue}</span>
           <ChevronDown className={cn("h-4 w-4 opacity-70 shrink-0 transition-transform", open && "rotate-180")} />
         </button>
-        {open && (
-          <div className="absolute left-0 right-0 top-full z-[100] mt-1 w-full rounded-md border border-white/20 bg-blue-950/95 backdrop-blur-sm py-2 shadow-xl max-h-72 overflow-hidden flex flex-col">
-            <div className="px-3 pb-2 border-b border-white/10 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={isAllSelected ? deselectAll : selectAll}
-                  className="text-xs font-semibold text-white/80 hover:text-white transition-colors"
-                >
-                  {isAllSelected ? "Deseleccionar todo" : "Seleccionar todo"}
-                </button>
-                {selectedProducts.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={deselectAll}
-                    className="text-xs text-white/60 hover:text-white/80 transition-colors"
-                  >
-                    Reset
-                  </button>
-                )}
-              </div>
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-white/50" />
-                <input
-                  type="text"
-                  placeholder="Escribir para buscar..."
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  className="w-full h-9 pl-8 pr-3 rounded-md bg-white/10 border border-white/20 text-sm text-white placeholder:text-white/50 focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/20"
-                  autoFocus
-                />
-              </div>
-              {query.trim() && filtered.length > 0 && (
-                <button
-                  type="button"
-                  onClick={toggleSelectAllFiltered}
-                  className="text-xs text-white/70 hover:text-white transition-colors text-left"
-                >
-                  {filtered.every((p) => selectedSet.has(p)) ? "Deseleccionar resultados" : "Seleccionar resultados"}
-                </button>
-              )}
-            </div>
-            <div className="overflow-y-auto max-h-56">
-              {filtered.map((product) => {
-                const checked = selectedSet.has(product)
-                const alias = aliasesByName?.[product]
-                return (
-                  <div
-                    key={product}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-left text-white/90"
-                  >
-                    <span className="shrink-0 flex items-center rounded p-0.5 hover:bg-white/10 focus-within:bg-white/10">
-                      <Checkbox checked={checked} onChange={() => toggleProduct(product)} />
-                    </span>
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      className="min-w-0 flex-1 cursor-pointer rounded px-1 py-0.5 outline-none transition-colors hover:bg-white/10 focus-visible:bg-white/10"
-                      onClick={() => selectOnlyProduct(product)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault()
-                          selectOnlyProduct(product)
-                        }
-                      }}
-                    >
-                      {alias || displayProductName(product)}
-                    </span>
-                  </div>
-                )
-              })}
-              {filtered.length === 0 && (
-                <div className="px-3 py-2 text-sm text-white/60 text-center">No se encontraron productos</div>
-              )}
-            </div>
-          </div>
-        )}
+
+        {typeof document !== "undefined" && menuContent
+          ? createPortal(menuContent, document.body)
+          : null}
       </div>
     </div>
   )
 }
-

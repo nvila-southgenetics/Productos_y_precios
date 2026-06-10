@@ -21,9 +21,17 @@ import {
   type MonthlySalesWithProduct,
   type VentaByDate,
 } from "@/lib/supabase-mcp"
+import { BusinessGroupFilter } from "@/components/filters/BusinessGroupFilter"
 import { usePermissions } from "@/lib/use-permissions"
 import { filterCompaniesByCountries } from "@/lib/auth-constants"
 import { companyQueryFromSelection } from "@/lib/company-filter"
+import {
+  buildCategoryByNameMap,
+  filterProductNamesByBusinessGroup,
+  resolveEffectiveProductNames,
+  type ProductBusinessGroup,
+} from "@/lib/product-categories"
+import { fetchPlProductCatalog } from "@/lib/pl-product-catalog"
 
 export default function PLImportPage() {
   const { allowedCountries, isAdmin, loading: permLoading } = usePermissions()
@@ -31,6 +39,8 @@ export default function PLImportPage() {
   const [products, setProducts] = useState<string[]>([])
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([])
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
+  const [businessGroup, setBusinessGroup] = useState<ProductBusinessGroup>("all")
+  const [categoryByName, setCategoryByName] = useState<Record<string, string>>({})
   const [selectedYear, setSelectedYear] = useState("Todos")
   const [monthFrom, setMonthFrom] = useState(1)
   const [monthTo, setMonthTo] = useState(12)
@@ -53,6 +63,23 @@ export default function PLImportPage() {
       ? companyParam
       : companyParam.join(" · ")
 
+  const productsInGroup = useMemo(
+    () => filterProductNamesByBusinessGroup(products, categoryByName, businessGroup),
+    [products, categoryByName, businessGroup]
+  )
+
+  const effectiveProducts = useMemo(
+    () => resolveEffectiveProductNames(products, selectedProducts, categoryByName, businessGroup),
+    [products, selectedProducts, categoryByName, businessGroup]
+  )
+
+  useEffect(() => {
+    setSelectedProducts((prev) => {
+      const pruned = prev.filter((p) => productsInGroup.includes(p))
+      return pruned.length === prev.length ? prev : pruned
+    })
+  }, [productsInGroup])
+
   // Calendario: ventas por fecha
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null)
   const [salesByDate, setSalesByDate] = useState<VentaByDate[]>([])
@@ -63,13 +90,15 @@ export default function PLImportPage() {
     async function loadInitialData() {
       setIsLoading(true)
       try {
-        const [companiesData, productsData] = await Promise.all([
+        const [companiesData, productsData, catalog] = await Promise.all([
           getCompanies(),
           getProductsFromSales(),
+          fetchPlProductCatalog(),
         ])
         const filtered = filterCompaniesByCountries(companiesData, allowedCountries)
         setCompanies(filtered)
         setProducts(productsData)
+        setCategoryByName(buildCategoryByNameMap(catalog))
         setSelectedCompanies(isAdmin ? [...filtered] : filtered.length ? [filtered[0]] : [])
       } catch (error) {
         console.error("Error loading initial data:", error)
@@ -96,7 +125,7 @@ export default function PLImportPage() {
     setLoadingPeriods((prev) => new Set(prev).add(periodo))
 
     try {
-      const data = await getMonthlySales(companyParam, periodo, selectedProducts.length ? selectedProducts : undefined)
+      const data = await getMonthlySales(companyParam, periodo, effectiveProducts)
       if (queryKeyRef.current !== myKey) return
       setMonthlyData((prev) => {
         // Solo actualizar si no existe
@@ -116,7 +145,7 @@ export default function PLImportPage() {
         return newSet
       })
     }
-  }, [companyParam, selectedProducts])
+  }, [companyParam, effectiveProducts])
 
   // Cargar períodos cuando cambia la compañía
   useEffect(() => {
@@ -174,7 +203,7 @@ export default function PLImportPage() {
     return () => {
       for (const id of timeouts) window.clearTimeout(id)
     }
-  }, [periods, selectedProducts, companyParam])
+  }, [periods, effectiveProducts, companyParam])
 
   // Cargar total anual cuando cambian los filtros
   useEffect(() => {
@@ -182,7 +211,7 @@ export default function PLImportPage() {
       if (!companies.length) return
       const myKey = queryKeyRef.current
       try {
-        const total = await getAnnualTotal(companyParam, selectedProducts.length ? selectedProducts : undefined)
+        const total = await getAnnualTotal(companyParam, effectiveProducts)
         if (queryKeyRef.current !== myKey) return
         setTotalData(total)
       } catch (error) {
@@ -190,14 +219,14 @@ export default function PLImportPage() {
       }
     }
     loadTotal()
-  }, [companies.length, companyParam, selectedProducts])
+  }, [companies.length, companyParam, effectiveProducts])
   
-  // Limpiar datos cuando cambia el producto
+  // Limpiar datos cuando cambia el producto o el grupo
   useEffect(() => {
     setMonthlyData({})
     loadingRef.current.clear() // Limpiar ref también
     setLoadingPeriods(new Set())
-  }, [selectedProducts])
+  }, [effectiveProducts, businessGroup])
 
   // Cargar ventas al seleccionar una fecha en el calendario
   useEffect(() => {
@@ -291,8 +320,9 @@ export default function PLImportPage() {
         </div>
 
         {/* Filtros */}
-        <div className="mb-6 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4 shadow-sm">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="relative z-40 mb-6 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 p-4 shadow-sm">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <BusinessGroupFilter value={businessGroup} onChange={setBusinessGroup} />
             <MultiCheckboxDropdown
               label="Compañía"
               options={companies.map((c): MultiSelectOption => ({ value: c, label: c }))}
@@ -303,7 +333,7 @@ export default function PLImportPage() {
               allLabel={isAdmin ? "Todas las compañías" : "Todas (mis compañías)"}
             />
             <ProductMultiSearchFilter
-              products={products}
+              products={productsInGroup}
               selectedProducts={selectedProducts}
               onSelectedProductsChange={setSelectedProducts}
               disabled={products.length === 0}

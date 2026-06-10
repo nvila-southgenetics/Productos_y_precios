@@ -6,7 +6,15 @@ import { MedicosMatrixTable } from "@/components/medicos/MedicosMatrixTable"
 import type { DateRangePreset } from "@/components/filters/DateRangeFilter"
 import { usePermissions } from "@/lib/use-permissions"
 import { filterCompaniesByCountries } from "@/lib/auth-constants"
-import { PRODUCT_CATEGORIES_SORTED } from "@/lib/product-categories"
+import {
+  buildCategoryByNameMap,
+  filterProductNamesByBusinessGroup,
+  PRODUCT_CATEGORIES_SORTED,
+  resolveEffectiveCategories,
+  resolveEffectiveProductNames,
+  type ProductBusinessGroup,
+} from "@/lib/product-categories"
+import { fetchPlProductCatalog } from "@/lib/pl-product-catalog"
 import {
   GENERAL_LLC_COMPANY,
   getCompanies,
@@ -49,6 +57,8 @@ export default function MedicosPage() {
   const [selectedProducts, setSelectedProducts] = useState<string[]>([])
   const [selectedMedicos, setSelectedMedicos] = useState<string[]>([])
   const [selectedCategories, setSelectedCategories] = useState<string[]>(PRODUCT_CATEGORIES_SORTED)
+  const [businessGroup, setBusinessGroup] = useState<ProductBusinessGroup>("all")
+  const [categoryByName, setCategoryByName] = useState<Record<string, string>>({})
   const [fechaBounds, setFechaBounds] = useState<{ min: string; max: string } | null>(null)
   const [fechaDesde, setFechaDesde] = useState("")
   const [fechaHasta, setFechaHasta] = useState("")
@@ -85,6 +95,28 @@ export default function MedicosPage() {
     return allPicked ? undefined : sel
   }, [llcSelected, llcCountries, selectedLlcCountries])
 
+  const productsInGroup = useMemo(
+    () => filterProductNamesByBusinessGroup(products, categoryByName, businessGroup),
+    [products, categoryByName, businessGroup]
+  )
+
+  const effectiveCategories = useMemo(
+    () => resolveEffectiveCategories(selectedCategories, businessGroup, PRODUCT_CATEGORIES_SORTED),
+    [selectedCategories, businessGroup]
+  )
+
+  const effectiveProducts = useMemo(
+    () => resolveEffectiveProductNames(products, selectedProducts, categoryByName, businessGroup),
+    [products, selectedProducts, categoryByName, businessGroup]
+  )
+
+  useEffect(() => {
+    setSelectedProducts((prev) => {
+      const pruned = prev.filter((p) => productsInGroup.includes(p))
+      return pruned.length === prev.length ? prev : pruned
+    })
+  }, [productsInGroup])
+
   const salesQueryParams = useMemo(
     () => ({
       fechaDesde,
@@ -116,13 +148,15 @@ export default function MedicosPage() {
   useEffect(() => {
     async function loadInitial() {
       try {
-        const [companiesData, productsData] = await Promise.all([
+        const [companiesData, productsData, catalog] = await Promise.all([
           getCompanies(),
           getProductsFromSales(),
+          fetchPlProductCatalog(),
         ])
         const filtered = filterCompaniesByCountries(companiesData, allowedCountries)
         setCompanies(filtered)
         setProducts(productsData)
+        setCategoryByName(buildCategoryByNameMap(catalog))
         setSelectedCompanies(isAdmin ? [...filtered] : filtered.length ? [...filtered] : [])
       } catch (e) {
         console.error("Error loading médicos page:", e)
@@ -190,13 +224,10 @@ export default function MedicosPage() {
       if (!companies.length || permLoading || !dateRangeReady) return
       setIsLoading(true)
       try {
-        const allCategories =
-          selectedCategories.length === PRODUCT_CATEGORIES_SORTED.length &&
-          PRODUCT_CATEGORIES_SORTED.every((c) => selectedCategories.includes(c))
         const data = await getMedicoInstitucionSales({
           ...salesQueryParams,
-          products: selectedProducts.length ? selectedProducts : undefined,
-          categories: allCategories ? undefined : selectedCategories,
+          products: effectiveProducts,
+          categories: effectiveProducts ? undefined : effectiveCategories,
           medicos: selectedMedicos.length ? selectedMedicos : undefined,
         })
         setRows(data)
@@ -213,9 +244,10 @@ export default function MedicosPage() {
     permLoading,
     dateRangeReady,
     salesQueryParams,
-    selectedProducts,
+    effectiveProducts,
     selectedMedicos,
-    selectedCategories,
+    effectiveCategories,
+    businessGroup,
   ])
 
   return (
@@ -232,13 +264,15 @@ export default function MedicosPage() {
         <MedicosFilters
           companies={companies}
           llcCountries={llcCountries}
-          products={products}
+          products={productsInGroup}
           medicos={medicos}
           selectedCompanies={selectedCompanies}
           selectedLlcCountries={selectedLlcCountries}
           selectedProducts={selectedProducts}
           selectedMedicos={selectedMedicos}
           selectedCategories={selectedCategories}
+          businessGroup={businessGroup}
+          onBusinessGroupChange={setBusinessGroup}
           fechaDesde={fechaDesde}
           fechaHasta={fechaHasta}
           fechaMin={fechaBounds?.min}

@@ -4,6 +4,8 @@ import { Select } from "@/components/ui/select"
 import { ProductMultiSearchFilter } from "@/components/dashboard/ProductMultiSearchFilter"
 import { MultiCheckboxDropdown, type MultiSelectOption } from "@/components/filters/MultiCheckboxDropdown"
 import { MonthRangeFilter } from "@/components/filters/MonthRangeFilter"
+import { BusinessGroupFilter } from "@/components/filters/BusinessGroupFilter"
+import type { ProductBusinessGroup } from "@/lib/product-categories"
 import { capitalizeFirstLetter } from "@/lib/utils"
 
 interface BudgetFiltersProps {
@@ -15,6 +17,8 @@ interface BudgetFiltersProps {
   monthFrom: number
   monthTo: number
   selectedChannels: string[]
+  businessGroup: ProductBusinessGroup
+  onBusinessGroupChange: (group: ProductBusinessGroup) => void
   onYearChange: (year: number) => void
   onBudgetNameChange: (budgetName: string) => void
   onCountriesChange: (countries: string[]) => void
@@ -62,6 +66,8 @@ export function BudgetFilters({
   monthFrom,
   monthTo,
   selectedChannels,
+  businessGroup,
+  onBusinessGroupChange,
   onYearChange,
   onBudgetNameChange,
   onCountriesChange,
@@ -83,7 +89,9 @@ export function BudgetFilters({
   const allCountriesLabel = allowedCountries?.length && allowedCountries.length > 1 ? "Todas (mis compañías)" : "Todas las compañías"
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+    <div className="relative z-40 grid grid-cols-1 md:grid-cols-6 gap-4">
+      <BusinessGroupFilter value={businessGroup} onChange={onBusinessGroupChange} />
+
       <div className="flex flex-col gap-2">
         <label className="text-sm font-medium text-white/90">Año</label>
         <Select

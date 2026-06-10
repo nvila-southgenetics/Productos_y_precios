@@ -8,7 +8,8 @@ import {
   type DateRangePreset,
   type DateRangeValue,
 } from "@/components/filters/DateRangeFilter"
-import { PRODUCT_CATEGORIES_SORTED } from "@/lib/product-categories"
+import { BusinessGroupFilter } from "@/components/filters/BusinessGroupFilter"
+import { PRODUCT_CATEGORIES_SORTED, type ProductBusinessGroup } from "@/lib/product-categories"
 import { GENERAL_LLC_COMPANY } from "@/lib/supabase-mcp"
 
 const LLC_COUNTRY_VALUE_PREFIX = "__llc_country__:"
@@ -33,6 +34,8 @@ interface MedicosFiltersProps {
   selectedProducts: string[]
   selectedMedicos: string[]
   selectedCategories: string[]
+  businessGroup: ProductBusinessGroup
+  onBusinessGroupChange: (group: ProductBusinessGroup) => void
   fechaDesde: string
   fechaHasta: string
   fechaMin?: string
@@ -57,6 +60,8 @@ export function MedicosFilters({
   selectedProducts,
   selectedMedicos,
   selectedCategories,
+  businessGroup,
+  onBusinessGroupChange,
   fechaDesde,
   fechaHasta,
   fechaMin,
@@ -196,7 +201,11 @@ export function MedicosFilters({
 
   return (
     <div className="relative z-40 rounded-lg border border-white/20 bg-white/10 p-4 shadow-sm backdrop-blur-sm">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5 xl:items-start">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6 xl:items-start">
+      <div className="min-w-0">
+      <BusinessGroupFilter value={businessGroup} onChange={onBusinessGroupChange} />
+      </div>
+
       <div className="min-w-0">
       <MultiCheckboxDropdown
         label="Compañía"
