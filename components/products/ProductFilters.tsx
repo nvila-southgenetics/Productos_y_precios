@@ -3,10 +3,13 @@
 import { Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
+import type { ProductBusinessGroup } from "@/lib/product-categories"
 
 interface ProductFiltersProps {
   searchQuery: string
   onSearchChange: (query: string) => void
+  businessGroup: ProductBusinessGroup
+  onBusinessGroupChange: (group: ProductBusinessGroup) => void
   selectedCategory: string
   onCategoryChange: (category: string) => void
   selectedTipo: string
@@ -24,6 +27,8 @@ interface ProductFiltersProps {
 export function ProductFilters({
   searchQuery,
   onSearchChange,
+  businessGroup,
+  onBusinessGroupChange,
   selectedCategory,
   onCategoryChange,
   selectedTipo,
@@ -37,6 +42,21 @@ export function ProductFilters({
 }: ProductFiltersProps) {
   return (
     <div className="flex flex-wrap gap-4 items-center">
+      <Select
+        value={businessGroup}
+        onChange={(e) => onBusinessGroupChange(e.target.value as ProductBusinessGroup)}
+        className="w-[200px] bg-white/10 border-white/20 text-white focus:border-white/30 focus:ring-white/30"
+      >
+        <option value="all" className="bg-blue-900 text-white">
+          Anualidades y test
+        </option>
+        <option value="anualidades" className="bg-blue-900 text-white">
+          Solo anualidades
+        </option>
+        <option value="test" className="bg-blue-900 text-white">
+          Solo test
+        </option>
+      </Select>
       <div className="relative flex-1 min-w-[200px]">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-white/60" />
         <Input

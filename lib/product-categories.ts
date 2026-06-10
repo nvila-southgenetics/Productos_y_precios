@@ -18,6 +18,31 @@ export const PRODUCT_CATEGORIES_SORTED = [...PRODUCT_CATEGORIES].sort((a, b) =>
   a.localeCompare(b, "es", { sensitivity: "base" })
 )
 
+/** Categorías que agrupan el negocio de anualidades (vs tests/diagnósticos). */
+export const ANUALIDADES_GROUP_CATEGORIES = [
+  "Anualidades",
+  "Procesamientos",
+  "Inscripciones",
+] as const
+
+export type ProductBusinessGroup = "all" | "anualidades" | "test"
+
+export function isAnualidadesGroupCategory(category: string | null | undefined): boolean {
+  const cat = category?.trim() ?? ""
+  if (!cat) return false
+  return (ANUALIDADES_GROUP_CATEGORIES as readonly string[]).includes(cat)
+}
+
+/** Filtro alto nivel: anualidades (3 categorías), test (resto) o ambos. */
+export function productMatchesBusinessGroup(
+  category: string | null | undefined,
+  group: ProductBusinessGroup
+): boolean {
+  if (group === "all") return true
+  const isAnualidad = isAnualidadesGroupCategory(category)
+  return group === "anualidades" ? isAnualidad : !isAnualidad
+}
+
 export const PRODUCT_CATEGORY_COLORS: Record<string, string> = {
   "Ginecología": "bg-pink-300/20 text-pink-200 border-pink-300/30",
   "Oncología": "bg-rose-300/20 text-rose-200 border-rose-300/30",

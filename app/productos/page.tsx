@@ -24,7 +24,9 @@ import { useProductCreateDialog } from "@/components/products/ProductCreateDialo
 import { COUNTRY_CODES_LIST, filterCompaniesByCountries, getCountryForCompany } from "@/lib/auth-constants"
 import {
   PRODUCT_CATEGORIES_SORTED,
+  productMatchesBusinessGroup,
   productMatchesCategoryFilter,
+  type ProductBusinessGroup,
 } from "@/lib/product-categories"
 import { filterProductsWithCountriesActivity } from "@/lib/product-country-activity"
 import { saveProductosListReturn } from "@/lib/productos-list-return"
@@ -53,6 +55,7 @@ function ProductosContent() {
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
+  const [businessGroup, setBusinessGroup] = useState<ProductBusinessGroup>("all")
   const [selectedCategory, setSelectedCategory] = useState("")
   const [selectedTipo, setSelectedTipo] = useState("")
   const [reviewFilter, setReviewFilter] = useState<"all" | "reviewed" | "not_reviewed">("all")
@@ -105,11 +108,15 @@ function ProductosContent() {
     const q = searchParams.get("q")
     const category = searchParams.get("category")
     const tipo = searchParams.get("tipo")
+    const group = searchParams.get("group")
     const review = searchParams.get("review")
     const sort = searchParams.get("sort")
     if (q !== null) setSearchQuery(q)
     if (category !== null) setSelectedCategory(category)
     if (tipo !== null) setSelectedTipo(tipo)
+    if (group === "anualidades" || group === "test" || group === "all") {
+      setBusinessGroup(group)
+    }
     if (review === "reviewed" || review === "not_reviewed" || review === "all") {
       setReviewFilter(review)
     }
@@ -176,6 +183,7 @@ function ProductosContent() {
       params.set("companies", selectedCompanies.join(","))
     }
     if (debouncedSearch) params.set("q", debouncedSearch)
+    if (businessGroup !== "all") params.set("group", businessGroup)
     if (selectedCategory) params.set("category", selectedCategory)
     if (selectedTipo) params.set("tipo", selectedTipo)
     if (reviewFilter !== "all") params.set("review", reviewFilter)
@@ -186,6 +194,7 @@ function ProductosContent() {
     selectedCompanies,
     companies.length,
     debouncedSearch,
+    businessGroup,
     selectedCategory,
     selectedTipo,
     reviewFilter,
@@ -351,6 +360,10 @@ function ProductosContent() {
       )
     }
 
+    if (businessGroup !== "all") {
+      filtered = filtered.filter((p) => productMatchesBusinessGroup(p.category, businessGroup))
+    }
+
     if (selectedCategory) {
       filtered = filtered.filter((p) =>
         productMatchesCategoryFilter(p.category, new Set([selectedCategory]))
@@ -383,7 +396,7 @@ function ProductosContent() {
     }
 
     setFilteredProducts(filtered)
-  }, [products, debouncedSearch, selectedCategory, selectedTipo, reviewFilter, sortBy, selectedCountry, salesCountByProductId])
+  }, [products, debouncedSearch, businessGroup, selectedCategory, selectedTipo, reviewFilter, sortBy, selectedCountry, salesCountByProductId])
 
   const handleDeleteProduct = async (product: ProductWithOverrides, scope: ProductDeleteScope) => {
     try {
@@ -553,6 +566,8 @@ function ProductosContent() {
           <ProductFilters
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
+            businessGroup={businessGroup}
+            onBusinessGroupChange={setBusinessGroup}
             selectedCategory={selectedCategory}
             onCategoryChange={setSelectedCategory}
             selectedTipo={selectedTipo}
