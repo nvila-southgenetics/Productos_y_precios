@@ -4,7 +4,9 @@ import { useMemo, useState } from "react"
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { cn, formatNumber, productNameSortKey } from "@/lib/utils"
 import { Select } from "@/components/ui/select"
+import { Button } from "@/components/ui/button"
 import {
+  MEDICOS_COMPARE_YEARS,
   SIN_INSTITUCION_KEY,
   SIN_MEDICO_KEY,
   SIN_MEDICO_LABEL,
@@ -14,6 +16,10 @@ import {
 interface MedicosMatrixTableProps {
   rows: MedicoInstitucionSaleRow[]
   isLoading?: boolean
+  /** Recarga por cambio de filtro: mantiene la tabla visible. */
+  isRefreshing?: boolean
+  compareMode?: boolean
+  onCompareModeChange?: (value: boolean) => void
 }
 
 type RowSortMode =
@@ -51,12 +57,13 @@ type DisplayRow = {
   indent: boolean
 }
 
-function buildCountMap(rows: MedicoInstitucionSaleRow[]) {
+function buildCountMap(rows: MedicoInstitucionSaleRow[], compareMode: boolean) {
   const countMap = new Map<string, number>()
   const productMeta = new Map<string, ProductCol>()
 
   for (const row of rows) {
-    const pk = `${row.productKey}|${row.institucionKey}|${row.medico}`
+    const yearPart = compareMode && row.year != null ? `|${row.year}` : ""
+    const pk = `${row.productKey}|${row.institucionKey}|${row.medico}${yearPart}`
     countMap.set(pk, (countMap.get(pk) ?? 0) + row.cantidad)
     if (!productMeta.has(row.productKey)) {
       productMeta.set(row.productKey, {
@@ -74,14 +81,16 @@ function qtyFor(
   countMap: Map<string, number>,
   productKey: string,
   medico: string | null,
-  institucionKey: string | null
+  institucionKey: string | null,
+  year?: number
 ): number {
+  const yearSuffix = year != null ? `|${year}` : ""
   if (medico && institucionKey) {
-    return countMap.get(`${productKey}|${institucionKey}|${medico}`) ?? 0
+    return countMap.get(`${productKey}|${institucionKey}|${medico}${yearSuffix}`) ?? 0
   }
   if (medico && !institucionKey) {
     let total = 0
-    const suffix = `|${medico}`
+    const suffix = year != null ? `|${medico}|${year}` : `|${medico}`
     for (const [k, v] of countMap) {
       if (k.startsWith(`${productKey}|`) && k.endsWith(suffix)) total += v
     }
@@ -91,7 +100,12 @@ function qtyFor(
     let total = 0
     const mid = `|${institucionKey}|`
     for (const [k, v] of countMap) {
-      if (k.startsWith(`${productKey}${mid}`)) total += v
+      if (!k.startsWith(`${productKey}${mid}`)) continue
+      if (year != null) {
+        if (k.endsWith(`|${year}`)) total += v
+      } else {
+        total += v
+      }
     }
     return total
   }
@@ -102,8 +116,22 @@ function rowTotal(
   countMap: Map<string, number>,
   productKeys: string[],
   medico: string | null,
-  institucionKey: string | null
+  institucionKey: string | null,
+  year?: number,
+  compareMode = false
 ): number {
+  if (year != null) {
+    return productKeys.reduce(
+      (sum, pk) => sum + qtyFor(countMap, pk, medico, institucionKey, year),
+      0
+    )
+  }
+  if (compareMode) {
+    return MEDICOS_COMPARE_YEARS.reduce(
+      (sum, y) => sum + rowTotal(countMap, productKeys, medico, institucionKey, y, false),
+      0
+    )
+  }
   return productKeys.reduce(
     (sum, pk) => sum + qtyFor(countMap, pk, medico, institucionKey),
     0
@@ -111,13 +139,29 @@ function rowTotal(
 }
 
 /** Suma de un producto en todas las instituciones y médicos (datos filtrados). */
-function productGrandTotal(countMap: Map<string, number>, productKey: string): number {
+function productGrandTotal(
+  countMap: Map<string, number>,
+  productKey: string,
+  year?: number
+): number {
   let total = 0
   const prefix = `${productKey}|`
   for (const [k, v] of countMap) {
-    if (k.startsWith(prefix)) total += v
+    if (!k.startsWith(prefix)) continue
+    if (year != null) {
+      if (k.endsWith(`|${year}`)) total += v
+    } else {
+      total += v
+    }
   }
   return total
+}
+
+function productCombinedTotal(countMap: Map<string, number>, productKey: string): number {
+  return MEDICOS_COMPARE_YEARS.reduce(
+    (sum, year) => sum + productGrandTotal(countMap, productKey, year),
+    0
+  )
 }
 
 function formatCell(value: number): string {
@@ -125,12 +169,21 @@ function formatCell(value: number): string {
   return formatNumber(value, "es-UY")
 }
 
-export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps) {
+export function MedicosMatrixTable({
+  rows,
+  isLoading,
+  isRefreshing = false,
+  compareMode = false,
+  onCompareModeChange,
+}: MedicosMatrixTableProps) {
   const [rowSortMode, setRowSortMode] = useState<RowSortMode>("institution_sales")
   const [columnSortMode, setColumnSortMode] = useState<ColumnSortMode>("sales_desc")
   const [expandedInstitutions, setExpandedInstitutions] = useState<Set<string>>(new Set())
 
-  const { countMap, productMeta } = useMemo(() => buildCountMap(rows), [rows])
+  const { countMap, productMeta } = useMemo(
+    () => buildCountMap(rows, compareMode),
+    [rows, compareMode]
+  )
 
   const productKeys = useMemo(() => {
     const keys = [...productMeta.keys()]
@@ -144,12 +197,12 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
       })
     }
     return keys.sort((a, b) => {
-      const totalA = rows
-        .filter((r) => r.productKey === a)
-        .reduce((s, r) => s + r.cantidad, 0)
-      const totalB = rows
-        .filter((r) => r.productKey === b)
-        .reduce((s, r) => s + r.cantidad, 0)
+      const totalA = compareMode
+        ? productCombinedTotal(countMap, a)
+        : rows.filter((r) => r.productKey === a).reduce((s, r) => s + r.cantidad, 0)
+      const totalB = compareMode
+        ? productCombinedTotal(countMap, b)
+        : rows.filter((r) => r.productKey === b).reduce((s, r) => s + r.cantidad, 0)
       if (totalB !== totalA) return totalB - totalA
       const la = productMeta.get(a)?.producto ?? a
       const lb = productMeta.get(b)?.producto ?? b
@@ -157,7 +210,7 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
         sensitivity: "base",
       })
     })
-  }, [productMeta, columnSortMode, rows])
+  }, [productMeta, columnSortMode, rows, compareMode, countMap])
 
   const displayRows: DisplayRow[] = useMemo(() => {
     if (!productKeys.length) return []
@@ -189,7 +242,7 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
           medico,
           institucionKey: null,
           indent: false,
-          sortTotal: rowTotal(countMap, productKeys, medico, null),
+          sortTotal: rowTotal(countMap, productKeys, medico, null, undefined, compareMode),
         }))
         .sort((a, b) => {
           if (a.label === SIN_MEDICO_LABEL) return -1
@@ -219,7 +272,7 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
         key,
         label: instLabels.get(key) ?? key,
         medicos: [...(medicosByInst.get(key) ?? [])],
-        instTotal: rowTotal(countMap, productKeys, null, key),
+        instTotal: rowTotal(countMap, productKeys, null, key, undefined, compareMode),
       }))
       .sort((a, b) => {
         if (sortByInstSales) {
@@ -236,7 +289,7 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
       const sortedMedicos = inst.medicos
         .map((medico) => ({
           medico,
-          total: rowTotal(countMap, productKeys, medico, inst.key),
+          total: rowTotal(countMap, productKeys, medico, inst.key, undefined, compareMode),
         }))
         .sort((a, b) => {
           if (sortByInstSales && b.total !== a.total) return b.total - a.total
@@ -265,13 +318,23 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
       }
     }
     return out
-  }, [rows, rowSortMode, productKeys, countMap, expandedInstitutions])
+  }, [rows, rowSortMode, productKeys, countMap, expandedInstitutions, compareMode])
 
   const grandTotals = useMemo(() => {
+    if (compareMode) {
+      const byProductByYear = productKeys.map((pk) =>
+        MEDICOS_COMPARE_YEARS.map((year) => productGrandTotal(countMap, pk, year))
+      )
+      const byYear = MEDICOS_COMPARE_YEARS.map((year) =>
+        productKeys.reduce((sum, pk) => sum + productGrandTotal(countMap, pk, year), 0)
+      )
+      const total = byYear.reduce((s, n) => s + n, 0)
+      return { byProductByYear, byYear, total, byProduct: null as number[] | null }
+    }
     const byProduct = productKeys.map((pk) => productGrandTotal(countMap, pk))
     const total = byProduct.reduce((s, n) => s + n, 0)
-    return { byProduct, total }
-  }, [countMap, productKeys])
+    return { byProduct, byProductByYear: null as number[][] | null, byYear: null as number[] | null, total }
+  }, [countMap, productKeys, compareMode])
 
   function toggleInstitution(key: string) {
     setExpandedInstitutions((prev) => {
@@ -302,8 +365,20 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
     "bg-white/10 border-white/20 text-white text-sm rounded-md px-2 py-1.5 focus:border-white/30"
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-end justify-center gap-x-6 gap-y-3 rounded-lg border border-white/20 bg-white/5 p-4 text-center sm:text-left">
+    <div className="relative space-y-3">
+      {isRefreshing ? (
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-start justify-center rounded-lg bg-blue-950/20 pt-6 backdrop-blur-[1px]">
+          <p className="rounded-md border border-white/20 bg-blue-950/90 px-3 py-1.5 text-xs text-white/80 shadow-lg">
+            Actualizando…
+          </p>
+        </div>
+      ) : null}
+      <div
+        className={cn(
+          "flex flex-wrap items-end justify-center gap-x-6 gap-y-3 rounded-lg border border-white/20 bg-white/5 p-4 text-center sm:text-left transition-opacity duration-200",
+          isRefreshing && "opacity-60"
+        )}
+      >
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-white/70">Orden de filas</label>
           <Select
@@ -340,71 +415,189 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
             </option>
           </Select>
         </div>
-        {(rowSortMode === "institution_sales" || rowSortMode === "institution_name") && (
+        {onCompareModeChange ? (
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-white/70">Vista</label>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onCompareModeChange(!compareMode)}
+              className={cn(
+                "min-w-[120px] border-white/20 text-white hover:bg-white/15",
+                compareMode && "border-cyan-400/60 bg-cyan-500/20 text-cyan-100"
+              )}
+            >
+              {compareMode ? "Comparar ✓" : "Comparar"}
+            </Button>
+          </div>
+        ) : null}
+        {compareMode ? (
+          <p className="w-full basis-full text-center text-xs text-white/50 sm:w-auto sm:basis-auto sm:pb-1">
+            Cada producto muestra unidades en 2025 y 2026 (respeta filtros de compañía, producto, etc.).
+          </p>
+        ) : null}
+        {(rowSortMode === "institution_sales" || rowSortMode === "institution_name") && !compareMode && (
           <p className="w-full basis-full text-center text-xs text-white/50 sm:w-auto sm:basis-auto sm:pb-1">
             Clic en una fila de institución para ver el desglose por médico.
           </p>
         )}
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-white/20 bg-white/5 backdrop-blur-sm">
+      <div
+        className={cn(
+          "overflow-x-auto rounded-lg border border-white/20 bg-white/5 backdrop-blur-sm transition-opacity duration-200",
+          isRefreshing && "opacity-60"
+        )}
+      >
         <table className="w-full min-w-max border-collapse text-sm">
           <thead>
-            <tr className="border-b border-white/20 bg-white/10">
-              <th className="sticky left-0 z-20 min-w-[200px] border-r border-white/20 bg-blue-950/95 px-3 py-2 text-left font-semibold text-white">
-                {rowSortMode === "institution_sales" || rowSortMode === "institution_name"
-                  ? "Institución / Médico"
-                  : "Médico"}
-              </th>
-              <th className="min-w-[72px] border-r border-white/20 bg-blue-950/95 px-2 py-2 text-center font-semibold text-white">
-                Total
-              </th>
-              {productKeys.map((pk) => {
-                const meta = productMeta.get(pk)
-                return (
+            {compareMode ? (
+              <>
+                <tr className="border-b border-white/20 bg-white/10">
                   <th
-                    key={pk}
-                    className="min-w-[88px] max-w-[140px] border-r border-white/20 px-2 py-2 text-center font-semibold text-white"
-                    title={meta?.producto}
+                    rowSpan={2}
+                    className="sticky left-0 z-20 min-w-[200px] border-r border-white/20 bg-blue-950/95 px-3 py-2 text-left font-semibold text-white align-middle"
                   >
-                    <span className="line-clamp-2 text-xs">{meta?.producto ?? pk}</span>
+                    {rowSortMode === "institution_sales" || rowSortMode === "institution_name"
+                      ? "Institución / Médico"
+                      : "Médico"}
                   </th>
-                )
-              })}
-            </tr>
+                  <th
+                    colSpan={MEDICOS_COMPARE_YEARS.length}
+                    className="border-r border-white/20 bg-blue-950/95 px-2 py-2 text-center font-semibold text-white"
+                  >
+                    Total
+                  </th>
+                  {productKeys.map((pk) => {
+                    const meta = productMeta.get(pk)
+                    return (
+                      <th
+                        key={pk}
+                        colSpan={MEDICOS_COMPARE_YEARS.length}
+                        className="min-w-[120px] max-w-[180px] border-r border-white/20 px-2 py-2 text-center font-semibold text-white"
+                        title={meta?.producto}
+                      >
+                        <span className="line-clamp-2 text-xs">{meta?.producto ?? pk}</span>
+                      </th>
+                    )
+                  })}
+                </tr>
+                <tr className="border-b border-white/20 bg-white/10">
+                  {productKeys.length >= 0
+                    ? [
+                        ...MEDICOS_COMPARE_YEARS.map((year) => (
+                          <th
+                            key={`total-year-${year}`}
+                            className="min-w-[52px] border-r border-white/20 bg-blue-950/90 px-1 py-1 text-center text-[11px] font-medium text-white/80"
+                          >
+                            {year}
+                          </th>
+                        )),
+                        ...productKeys.flatMap((pk) =>
+                          MEDICOS_COMPARE_YEARS.map((year) => (
+                            <th
+                              key={`${pk}-${year}`}
+                              className="min-w-[52px] border-r border-white/20 bg-blue-950/90 px-1 py-1 text-center text-[11px] font-medium text-white/80"
+                            >
+                              {year}
+                            </th>
+                          ))
+                        ),
+                      ]
+                    : null}
+                </tr>
+              </>
+            ) : (
+              <tr className="border-b border-white/20 bg-white/10">
+                <th className="sticky left-0 z-20 min-w-[200px] border-r border-white/20 bg-blue-950/95 px-3 py-2 text-left font-semibold text-white">
+                  {rowSortMode === "institution_sales" || rowSortMode === "institution_name"
+                    ? "Institución / Médico"
+                    : "Médico"}
+                </th>
+                <th className="min-w-[72px] border-r border-white/20 bg-blue-950/95 px-2 py-2 text-center font-semibold text-white">
+                  Total
+                </th>
+                {productKeys.map((pk) => {
+                  const meta = productMeta.get(pk)
+                  return (
+                    <th
+                      key={pk}
+                      className="min-w-[88px] max-w-[140px] border-r border-white/20 px-2 py-2 text-center font-semibold text-white"
+                      title={meta?.producto}
+                    >
+                      <span className="line-clamp-2 text-xs">{meta?.producto ?? pk}</span>
+                    </th>
+                  )
+                })}
+              </tr>
+            )}
           </thead>
           <tbody>
             <tr className="border-b border-white/20 bg-white/15 font-semibold">
               <td className="sticky left-0 z-10 border-r border-white/20 bg-blue-900/95 px-3 py-2 text-white">
                 Total
               </td>
-              <td
-                className={cn(
-                  "border-r border-white/20 bg-blue-900/90 px-2 py-2 text-center text-white",
-                  grandTotals.total === 0 && "text-white/40"
-                )}
-              >
-                {formatCell(grandTotals.total)}
-              </td>
-              {productKeys.map((pk, i) => (
-                <td
-                  key={`grand-${pk}`}
-                  className={cn(
-                    "border-r border-white/10 px-2 py-2 text-center text-white",
-                    grandTotals.byProduct[i] === 0 && "text-white/40"
+              {compareMode && grandTotals.byYear
+                ? grandTotals.byYear.map((qty, i) => (
+                    <td
+                      key={`grand-total-year-${MEDICOS_COMPARE_YEARS[i]}`}
+                      className={cn(
+                        "border-r border-white/20 bg-blue-900/90 px-2 py-2 text-center text-white",
+                        qty === 0 && "text-white/40"
+                      )}
+                    >
+                      {formatCell(qty)}
+                    </td>
+                  ))
+                : (
+                    <td
+                      className={cn(
+                        "border-r border-white/20 bg-blue-900/90 px-2 py-2 text-center text-white",
+                        grandTotals.total === 0 && "text-white/40"
+                      )}
+                    >
+                      {formatCell(grandTotals.total)}
+                    </td>
                   )}
-                >
-                  {formatCell(grandTotals.byProduct[i])}
-                </td>
-              ))}
+              {compareMode && grandTotals.byProductByYear
+                ? productKeys.flatMap((pk, pi) =>
+                    MEDICOS_COMPARE_YEARS.map((year, yi) => {
+                      const qty = grandTotals.byProductByYear![pi][yi]
+                      return (
+                        <td
+                          key={`grand-${pk}-${year}`}
+                          className={cn(
+                            "border-r border-white/10 px-2 py-2 text-center text-white",
+                            qty === 0 && "text-white/40"
+                          )}
+                        >
+                          {formatCell(qty)}
+                        </td>
+                      )
+                    })
+                  )
+                : productKeys.map((pk, i) => (
+                    <td
+                      key={`grand-${pk}`}
+                      className={cn(
+                        "border-r border-white/10 px-2 py-2 text-center text-white",
+                        grandTotals.byProduct![i] === 0 && "text-white/40"
+                      )}
+                    >
+                      {formatCell(grandTotals.byProduct![i])}
+                    </td>
+                  ))}
             </tr>
             {displayRows.map((row) => {
-              const total = rowTotal(
-                countMap,
-                productKeys,
-                row.medico,
-                row.institucionKey
-              )
+              const rowTotalsByYear = compareMode
+                ? MEDICOS_COMPARE_YEARS.map((year) =>
+                    rowTotal(countMap, productKeys, row.medico, row.institucionKey, year)
+                  )
+                : null
+              const total = compareMode
+                ? (rowTotalsByYear?.reduce((s, n) => s + n, 0) ?? 0)
+                : rowTotal(countMap, productKeys, row.medico, row.institucionKey, undefined, compareMode)
               const isInstRow = row.kind === "institution"
               const instKey = row.institucionKey
               const isSinMedicoBucket = instKey === SIN_MEDICO_KEY
@@ -452,28 +645,59 @@ export function MedicosMatrixTable({ rows, isLoading }: MedicosMatrixTableProps)
                       <span className={cn(isInstRow && "font-semibold")}>{row.label}</span>
                     </div>
                   </td>
-                  <td
-                    className={cn(
-                      "border-r border-white/20 bg-blue-950/70 px-2 py-2 text-center font-semibold text-white",
-                      total === 0 && "text-white/40"
-                    )}
-                  >
-                    {formatCell(total)}
-                  </td>
-                  {productKeys.map((pk) => {
-                    const qty = qtyFor(countMap, pk, row.medico, row.institucionKey)
-                    return (
-                      <td
-                        key={`${row.id}-${pk}`}
-                        className={cn(
-                          "border-r border-white/10 px-2 py-2 text-center text-white/90",
-                          qty === 0 && "text-white/40"
-                        )}
-                      >
-                        {formatCell(qty)}
-                      </td>
-                    )
-                  })}
+                  {compareMode && rowTotalsByYear
+                    ? rowTotalsByYear.map((qty, i) => (
+                        <td
+                          key={`${row.id}-total-${MEDICOS_COMPARE_YEARS[i]}`}
+                          className={cn(
+                            "border-r border-white/20 bg-blue-950/70 px-2 py-2 text-center font-semibold text-white",
+                            qty === 0 && "text-white/40"
+                          )}
+                        >
+                          {formatCell(qty)}
+                        </td>
+                      ))
+                    : (
+                        <td
+                          className={cn(
+                            "border-r border-white/20 bg-blue-950/70 px-2 py-2 text-center font-semibold text-white",
+                            total === 0 && "text-white/40"
+                          )}
+                        >
+                          {formatCell(total)}
+                        </td>
+                      )}
+                  {compareMode
+                    ? productKeys.flatMap((pk) =>
+                        MEDICOS_COMPARE_YEARS.map((year) => {
+                          const qty = qtyFor(countMap, pk, row.medico, row.institucionKey, year)
+                          return (
+                            <td
+                              key={`${row.id}-${pk}-${year}`}
+                              className={cn(
+                                "border-r border-white/10 px-2 py-2 text-center text-white/90",
+                                qty === 0 && "text-white/40"
+                              )}
+                            >
+                              {formatCell(qty)}
+                            </td>
+                          )
+                        })
+                      )
+                    : productKeys.map((pk) => {
+                        const qty = qtyFor(countMap, pk, row.medico, row.institucionKey)
+                        return (
+                          <td
+                            key={`${row.id}-${pk}`}
+                            className={cn(
+                              "border-r border-white/10 px-2 py-2 text-center text-white/90",
+                              qty === 0 && "text-white/40"
+                            )}
+                          >
+                            {formatCell(qty)}
+                          </td>
+                        )
+                      })}
                 </tr>
               )
             })}

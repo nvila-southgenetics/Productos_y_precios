@@ -380,7 +380,12 @@ export interface MedicoInstitucionSalesParams {
   categories?: string[]
   /** Vacío = todos los médicos. */
   medicos?: string[]
+  /** Agrupa cantidades por año calendario (modo comparar en Médicos). */
+  groupByYear?: boolean
 }
+
+/** Años mostrados en columnas al comparar en la hoja Médicos. */
+export const MEDICOS_COMPARE_YEARS = [2025, 2026] as const
 
 export interface MedicoInstitucionSaleRow {
   productKey: string
@@ -390,6 +395,7 @@ export interface MedicoInstitucionSaleRow {
   institucionLabel: string
   medico: string
   cantidad: number
+  year?: number
 }
 
 type VentaMedicoRow = {
@@ -659,7 +665,16 @@ export async function getMedicoInstitucionSales(
     const qty =
       typeof row.quantity === 'string' ? parseFloat(row.quantity) : Number(row.quantity) || 0
 
-    const cellKey = `${productKey}|${institucionKey}|${medico}`
+    let year: number | undefined
+    if (params.groupByYear) {
+      const y = parseInt(String(row.fecha || '').slice(0, 4), 10)
+      if (!MEDICOS_COMPARE_YEARS.includes(y as (typeof MEDICOS_COMPARE_YEARS)[number])) continue
+      year = y
+    }
+
+    const cellKey = params.groupByYear
+      ? `${productKey}|${institucionKey}|${medico}|${year}`
+      : `${productKey}|${institucionKey}|${medico}`
     const existing = agg.get(cellKey)
     if (existing) {
       existing.cantidad += qty
@@ -672,6 +687,7 @@ export async function getMedicoInstitucionSales(
         institucionLabel,
         medico,
         cantidad: qty,
+        year,
       })
     }
   }

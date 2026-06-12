@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { MedicosFilters } from "@/components/medicos/MedicosFilters"
 import { MedicosMatrixTable } from "@/components/medicos/MedicosMatrixTable"
 import type { DateRangePreset } from "@/components/filters/DateRangeFilter"
@@ -64,6 +64,12 @@ export default function MedicosPage() {
   const [fechaHasta, setFechaHasta] = useState("")
   const [rows, setRows] = useState<MedicoInstitucionSaleRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [compareMode, setCompareMode] = useState(false)
+  const matrixFetchId = useRef(0)
+  const medicosFetchId = useRef(0)
+  const llcCountriesFetchId = useRef(0)
+  const hasLoadedMatrixOnce = useRef(false)
 
   const datePresets = useMemo(
     () => (fechaBounds ? buildDatePresets(fechaBounds.min, fechaBounds.max) : []),
@@ -117,6 +123,36 @@ export default function MedicosPage() {
     })
   }, [productsInGroup])
 
+  const companiesQueryKey = useMemo(
+    () => [...companiesForQuery].sort().join("|"),
+    [companiesForQuery]
+  )
+
+  const llcCountriesQueryKey = useMemo(
+    () =>
+      llcCountriesForQuery?.length
+        ? [...llcCountriesForQuery].sort().join("|")
+        : "__all__",
+    [llcCountriesForQuery]
+  )
+
+  const productsQueryKey = useMemo(() => {
+    if (effectiveProducts === undefined) return "__all__"
+    if (effectiveProducts.length === 0) return "__none__"
+    return [...effectiveProducts].sort().join("|")
+  }, [effectiveProducts])
+
+  const categoriesQueryKey = useMemo(() => {
+    if (effectiveCategories === undefined) return "__all__"
+    if (effectiveCategories.length === 0) return "__none__"
+    return [...effectiveCategories].sort().join("|")
+  }, [effectiveCategories])
+
+  const medicosQueryKey = useMemo(
+    () => (selectedMedicos.length ? [...selectedMedicos].sort().join("|") : "__all__"),
+    [selectedMedicos]
+  )
+
   const salesQueryParams = useMemo(
     () => ({
       fechaDesde,
@@ -124,8 +160,11 @@ export default function MedicosPage() {
       companies: companiesForQuery,
       llcCountries: llcCountriesForQuery,
     }),
-    [fechaDesde, fechaHasta, companiesForQuery, llcCountriesForQuery]
+    [fechaDesde, fechaHasta, companiesQueryKey, llcCountriesQueryKey, companiesForQuery, llcCountriesForQuery]
   )
+
+  const hasLlcCompanyInList = companies.includes(GENERAL_LLC_COMPANY)
+  const llcDiscoveryKey = `${fechaDesde}|${fechaHasta}|${hasLlcCompanyInList}`
 
   useEffect(() => {
     async function loadBounds() {
@@ -166,50 +205,58 @@ export default function MedicosPage() {
   }, [allowedCountries, isAdmin, permLoading])
 
   useEffect(() => {
+    let cancelled = false
     async function loadMedicos() {
       if (!companies.length || permLoading || !dateRangeReady) return
+      const requestId = ++medicosFetchId.current
       try {
         const list = await getMedicosFromVentas(salesQueryParams)
+        if (cancelled || requestId !== medicosFetchId.current) return
         setMedicos(list)
       } catch (e) {
+        if (cancelled || requestId !== medicosFetchId.current) return
         console.error("Error loading médicos list:", e)
         setMedicos([])
       }
     }
     loadMedicos()
-  }, [companies.length, permLoading, dateRangeReady, salesQueryParams])
+    return () => {
+      cancelled = true
+    }
+  }, [companies.length, permLoading, dateRangeReady, fechaDesde, fechaHasta, companiesQueryKey, llcCountriesQueryKey])
 
   useEffect(() => {
+    let cancelled = false
     async function loadLlcCountries() {
       if (!companies.length || permLoading || !dateRangeReady) return
-      if (!companies.includes(GENERAL_LLC_COMPANY)) {
+      if (!hasLlcCompanyInList) {
         setLlcCountries([])
         setSelectedLlcCountries([])
         return
       }
 
+      const requestId = ++llcCountriesFetchId.current
       try {
         const list = await getLlcCountriesFromVentas({
-          ...salesQueryParams,
+          fechaDesde,
+          fechaHasta,
           companies: [GENERAL_LLC_COMPANY],
         })
-        const sameCountries =
-          list.length === llcCountries.length &&
-          list.every((country, index) => country === llcCountries[index])
-        if (!sameCountries) {
-          setLlcCountries(list)
-        }
+        if (cancelled || requestId !== llcCountriesFetchId.current) return
+        setLlcCountries((prev) => {
+          const same =
+            prev.length === list.length && prev.every((country, index) => country === list[index])
+          return same ? prev : list
+        })
         setSelectedLlcCountries((prev) => {
-          const prevWasAllSelected =
-            llcCountries.length > 0 &&
-            prev.length === llcCountries.length &&
-            llcCountries.every((country) => prev.includes(country))
-          if (prevWasAllSelected) return [...list]
+          if (!prev.length) return [...list]
           const stillValid = prev.filter((country) => list.includes(country))
+          if (stillValid.length === prev.length) return prev
           if (stillValid.length) return stillValid
           return [...list]
         })
       } catch (e) {
+        if (cancelled || requestId !== llcCountriesFetchId.current) return
         console.error("Error loading LLC countries:", e)
         setLlcCountries([])
         setSelectedLlcCountries([])
@@ -217,37 +264,58 @@ export default function MedicosPage() {
     }
 
     loadLlcCountries()
-  }, [companies, llcCountries, permLoading, dateRangeReady, salesQueryParams])
+    return () => {
+      cancelled = true
+    }
+  }, [companies.length, permLoading, dateRangeReady, llcDiscoveryKey, hasLlcCompanyInList, fechaDesde, fechaHasta])
 
   useEffect(() => {
+    let cancelled = false
     async function loadMatrix() {
       if (!companies.length || permLoading || !dateRangeReady) return
-      setIsLoading(true)
+      const requestId = ++matrixFetchId.current
+      if (hasLoadedMatrixOnce.current) {
+        setIsRefreshing(true)
+      } else {
+        setIsLoading(true)
+      }
       try {
         const data = await getMedicoInstitucionSales({
           ...salesQueryParams,
           products: effectiveProducts,
           categories: effectiveProducts ? undefined : effectiveCategories,
           medicos: selectedMedicos.length ? selectedMedicos : undefined,
+          groupByYear: compareMode,
         })
+        if (cancelled || requestId !== matrixFetchId.current) return
         setRows(data)
+        hasLoadedMatrixOnce.current = true
       } catch (e) {
+        if (cancelled || requestId !== matrixFetchId.current) return
         console.error("Error loading médicos matrix:", e)
         setRows([])
       } finally {
+        if (cancelled || requestId !== matrixFetchId.current) return
         setIsLoading(false)
+        setIsRefreshing(false)
       }
     }
     loadMatrix()
+    return () => {
+      cancelled = true
+    }
   }, [
     companies.length,
     permLoading,
     dateRangeReady,
-    salesQueryParams,
-    effectiveProducts,
-    selectedMedicos,
-    effectiveCategories,
-    businessGroup,
+    fechaDesde,
+    fechaHasta,
+    companiesQueryKey,
+    llcCountriesQueryKey,
+    productsQueryKey,
+    categoriesQueryKey,
+    medicosQueryKey,
+    compareMode,
   ])
 
   return (
@@ -290,7 +358,13 @@ export default function MedicosPage() {
           showAllCompanies={isAdmin}
         />
 
-        <MedicosMatrixTable rows={rows} isLoading={isLoading || permLoading || !dateRangeReady} />
+        <MedicosMatrixTable
+          rows={rows}
+          isLoading={(isLoading || permLoading || !dateRangeReady) && rows.length === 0}
+          isRefreshing={isRefreshing}
+          compareMode={compareMode}
+          onCompareModeChange={setCompareMode}
+        />
       </div>
     </div>
   )
