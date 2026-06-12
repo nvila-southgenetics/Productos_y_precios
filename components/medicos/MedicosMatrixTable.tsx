@@ -4,7 +4,6 @@ import { useMemo, useState } from "react"
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { cn, formatNumber, productNameSortKey } from "@/lib/utils"
 import { Select } from "@/components/ui/select"
-import { Button } from "@/components/ui/button"
 import {
   MEDICOS_COMPARE_YEARS,
   SIN_INSTITUCION_KEY,
@@ -418,18 +417,20 @@ export function MedicosMatrixTable({
         {onCompareModeChange ? (
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-white/70">Vista</label>
-            <Button
+            <button
               type="button"
-              variant="outline"
-              size="sm"
+              aria-pressed={compareMode}
               onClick={() => onCompareModeChange(!compareMode)}
               className={cn(
-                "min-w-[120px] border-white/20 text-white hover:bg-white/15",
-                compareMode && "border-cyan-400/60 bg-cyan-500/20 text-cyan-100"
+                "inline-flex h-10 min-w-[240px] items-center justify-center rounded-md border px-3 text-sm font-medium transition-colors",
+                "focus:outline-none focus:ring-2 focus:ring-white/30 focus:ring-offset-0",
+                compareMode
+                  ? "border-cyan-400/60 bg-cyan-500/20 text-cyan-100 hover:bg-cyan-500/25"
+                  : cn(selectClass, "hover:bg-white/15")
               )}
             >
-              {compareMode ? "Comparar ✓" : "Comparar"}
-            </Button>
+              {compareMode ? "Comparar 2025 | 2026" : "Comparar años"}
+            </button>
           </div>
         ) : null}
         {compareMode ? (
